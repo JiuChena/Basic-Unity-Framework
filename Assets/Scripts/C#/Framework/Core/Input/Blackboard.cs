@@ -1,106 +1,82 @@
+using System;
+using System.Collections.Generic;
+
 namespace CoreFramework
 {
     /// <summary>
-    /// 黑板：输入数据的共享 POCO。各 IInputProvider 写入，Strategy/Controller 读取。
-    /// 每帧开始时需调用 ResetFrameData() 清除单帧数据残留。
+    /// 可存入 Blackboard 的数据对象标记接口。
     /// </summary>
-    [System.Serializable]
-    public class Blackboard
+    public interface IBlackboardData
     {
-        // ── 持续输入（按住期间每帧为 true） ──
-        public UnityEngine.Vector2 MoveInput;
-        public UnityEngine.Vector2 LookInput;
-        public bool AttackHeld;
-        public bool TalentHeld;
-        public bool BurstHeld;
-        public bool IsShooting;
-        public bool IsAiming;
-        public bool IsSprinting;
+    }
 
-        // ── 单帧输入（按下当帧为 true，下帧自动清零） ──
-        public bool AttackPressed;
-        public bool AttackReleased;
-        public bool JumpPressed;
-        public bool CrouchPressed;
-        public bool TalentPressed;
-        public bool TalentReleased;
-        public bool BurstPressed;
-        public bool BurstReleased;
-        public bool ReloadPressed;
-        public bool InteractPressed;
-
-        // ── 角色切换与滚轮信息 ──
-        public int SwitchIndex = -1;   // 1~4 切角色，-1 无输入
-        public int ScrollDelta;        // 预留滚轮增量；当前不再用于角色切换
+    /// <summary>
+    /// 按数据类型共享运行时状态的容器。
+    /// </summary>
+    public sealed class Blackboard
+    {
+        // 数据槽映射：数据类型 -> 唯一实例。
+        private readonly Dictionary<Type, IBlackboardData> _slots = new Dictionary<Type, IBlackboardData>();
 
         /// <summary>
-        /// 每帧开始时调用，清零单帧数据（JumpPressed 等）。
-        /// 持续输入（MoveInput、AttackHeld 等）由 Provider 每帧覆盖，无需手动清零。
+        /// 注册或替换指定类型的数据槽。
         /// </summary>
-        public void ResetFrameData()
+        /// <typeparam name="T">数据槽类型。</typeparam>
+        /// <param name="data">要注册的数据实例，不能为空。</param>
+        public void Set<T>(T data) where T : class, IBlackboardData
         {
-            AttackPressed = false;
-            AttackReleased = false;
-            JumpPressed = false;
-            CrouchPressed = false;
-            TalentPressed = false;
-            TalentReleased = false;
-            BurstPressed = false;
-            BurstReleased = false;
-            ReloadPressed = false;
-            InteractPressed = false;
-            SwitchIndex = -1;
-            ScrollDelta = 0;
+            if (data == null) throw new ArgumentNullException(nameof(data));
+            _slots[typeof(T)] = data;
         }
 
         /// <summary>
-        /// 清空所有输入数据，包括持续输入和单帧输入。
-        /// 当角色本帧没有收到任何玩家或 AI 控制命令时，可用作空命令。
+        /// 获取指定数据槽，不存在时创建默认实例。
         /// </summary>
-        public void ClearAllData()
+        /// <typeparam name="T">具备无参构造的数据槽类型。</typeparam>
+        /// <returns>已有或新建的数据实例。</returns>
+        public T GetOrCreate<T>() where T : class, IBlackboardData, new()
         {
-            MoveInput = UnityEngine.Vector2.zero;
-            LookInput = UnityEngine.Vector2.zero;
-            AttackHeld = false;
-            TalentHeld = false;
-            BurstHeld = false;
-            IsShooting = false;
-            IsAiming = false;
-            IsSprinting = false;
-            ResetFrameData();
+            if (TryGet(out T data)) return data;
+
+            data = new T();
+            Set(data);
+            return data;
         }
 
         /// <summary>
-        /// 复制另一份黑板数据，常用于玩家输入分发到当前受控角色。
+        /// 尝试获取已注册的数据槽，不会创建新实例。
         /// </summary>
-        public void CopyFrom(Blackboard other)
+        /// <typeparam name="T">数据槽类型。</typeparam>
+        /// <param name="data">成功时返回数据实例，否则为 null。</param>
+        /// <returns>存在对应类型数据槽时返回 true。</returns>
+        public bool TryGet<T>(out T data) where T : class, IBlackboardData
         {
-            if (other == null)
+            if (_slots.TryGetValue(typeof(T), out IBlackboardData slot))
             {
-                ClearAllData();
-                return;
+                data = slot as T;
+                return data != null;
             }
 
-            MoveInput = other.MoveInput;
-            LookInput = other.LookInput;
-            AttackHeld = other.AttackHeld;
-            TalentHeld = other.TalentHeld;
-            BurstHeld = other.BurstHeld;
-            IsShooting = other.IsShooting;
-            IsAiming = other.IsAiming;
-            IsSprinting = other.IsSprinting;
-            AttackPressed = other.AttackPressed;
-            AttackReleased = other.AttackReleased;
-            JumpPressed = other.JumpPressed;
-            CrouchPressed = other.CrouchPressed;
-            TalentPressed = other.TalentPressed;
-            TalentReleased = other.TalentReleased;
-            BurstPressed = other.BurstPressed;
-            BurstReleased = other.BurstReleased;
-            ReloadPressed = other.ReloadPressed;
-            InteractPressed = other.InteractPressed;
-            SwitchIndex = other.SwitchIndex;
-            ScrollDelta = other.ScrollDelta;
+            data = null;
+            return false;
+        }
+
+        /// <summary>
+        /// 移除指定类型的数据槽。
+        /// </summary>
+        /// <typeparam name="T">数据槽类型。</typeparam>
+        /// <returns>存在并已移除数据槽时返回 true。</returns>
+        public bool Remove<T>() where T : class, IBlackboardData
+        {
+            return _slots.Remove(typeof(T));
+        }
+
+        /// <summary>
+        /// 清除所有数据槽引用。
+        /// </summary>
+        public void Clear()
+        {
+            _slots.Clear();
         }
     }
 }
