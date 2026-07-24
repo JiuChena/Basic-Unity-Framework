@@ -30,9 +30,39 @@ namespace CoreFramework
         public InputButton Jump { get; } = new InputButton();
 
         /// <summary>
+        /// 跳跃 — 本帧按下。
+        /// </summary>
+        public bool JumpPressed => Jump.Pressed;
+
+        /// <summary>
+        /// 跳跃 — 按住中。
+        /// </summary>
+        public bool Jumping => Jump.IsHeld;
+
+        /// <summary>
+        /// 跳跃 — 本帧抬起。
+        /// </summary>
+        public bool JumpEnd => Jump.Released;
+
+        /// <summary>
         /// 下蹲按钮状态。
         /// </summary>
         public InputButton Crouch { get; } = new InputButton();
+
+        /// <summary>
+        /// 下蹲 — 本帧按下。
+        /// </summary>
+        public bool CrouchPressed => Crouch.Pressed;
+
+        /// <summary>
+        /// 下蹲 — 按住中。
+        /// </summary>
+        public bool Crouching => Crouch.IsHeld;
+
+        /// <summary>
+        /// 下蹲 — 本帧抬起。
+        /// </summary>
+        public bool CrouchEnd => Crouch.Released;
 
         /// <summary>
         /// 清空全部移动输入状态。

@@ -17,6 +17,26 @@ namespace CoreFrameworkEditor
         private MonoScript _currentScript;
         private string _validationMessage;
 
+        // --- 折叠状态 ---
+        private bool _foldoutStrategy = true;
+        private bool _foldoutComponent = true;
+        private bool _foldoutGround = true;
+        private bool _foldoutAir = true;
+        private bool _foldoutPreview = true;
+        private bool _foldoutFloatingCapsule = true;
+
+        /// <summary>
+        /// 模块分组定义：Header 名称 → 序列化字段名列表。
+        /// </summary>
+        private static readonly Dictionary<string, string[]> ModuleGroups = new()
+        {
+            { "组件引用", new[] { "movementCollider", "cameraTransform", "inputProviderSource" } },
+            { "地面移动", new[] { "moveSpeed", "sprintMultiplier", "groundAcceleration", "groundDeceleration", "hoverHeight", "groundProbeDistance", "slopeLimit", "springStrength", "springDamping", "stepHeight", "groundLayer" } },
+            { "空中行为", new[] { "jumpSpeed", "gravityMultiplier", "airAcceleration", "airControl", "airSpeedLimit", "ledgeCheckEnabled", "maxFallHeight" } },
+            { "编辑器预览", new[] { "showHoverPreview" } },
+            { "Floating Capsule", new[] { "enableFloatingCapsule", "floatingBottomClearance" } },
+        };
+
         private void OnEnable()
         {
             RefreshStrategyPreview();
@@ -27,39 +47,57 @@ namespace CoreFrameworkEditor
             serializedObject.Update();
             var mover = (UnitMover)target;
 
+            DrawScriptHeader(mover);
+            DrawStrategyFoldout(mover);
+            DrawModuleFoldouts();
+
+            serializedObject.ApplyModifiedProperties();
+            if (GUI.changed) SceneView.RepaintAll();
+        }
+
+        // ──────────────────────────── Script 只读行 ────────────────────────────
+
+        private void DrawScriptHeader(UnitMover mover)
+        {
             EditorGUI.BeginDisabledGroup(true);
             EditorGUILayout.ObjectField("Script", MonoScript.FromMonoBehaviour(mover), typeof(MonoScript), false);
             EditorGUI.EndDisabledGroup();
             EditorGUILayout.Space();
-            EditorGUILayout.LabelField("Movement Strategy", EditorStyles.boldLabel);
+        }
+
+        // ──────────────────────────── 策略折叠 ────────────────────────────
+
+        private void DrawStrategyFoldout(UnitMover mover)
+        {
+            _foldoutStrategy = EditorGUILayout.BeginFoldoutHeaderGroup(_foldoutStrategy, "Movement Strategy");
+            if (!_foldoutStrategy)
+            {
+                EditorGUILayout.EndFoldoutHeaderGroup();
+                return;
+            }
+
+            EditorGUI.indentLevel++;
 
             // 解析当前选中的脚本
-            Type currentType = null;
             _currentScript = null;
             if (!string.IsNullOrEmpty(mover.StrategyTypeName))
             {
-                currentType = Type.GetType(mover.StrategyTypeName);
+                var currentType = Type.GetType(mover.StrategyTypeName);
                 if (currentType != null)
                     _currentScript = FindScriptFromType(currentType);
             }
 
-            // ── 策略选择行：拖拽字段 + 下拉按钮，双向同步 ──
+            // 拖拽字段 + 下拉按钮
             EditorGUILayout.BeginHorizontal();
-
-            // 拖拽字段
             var newScript = (MonoScript)EditorGUILayout.ObjectField(
-                new GUIContent("Movement Strategy", "拖入继承 MovementStrategy 的 .cs 脚本文件"),
+                new GUIContent("策略脚本", "拖入继承 MovementStrategy 的 .cs 脚本文件"),
                 _currentScript,
                 typeof(MonoScript),
                 false);
-
-            // 下拉按钮
             if (GUILayout.Button("▼", GUILayout.Width(22)))
                 ShowStrategyMenu(mover);
-
             EditorGUILayout.EndHorizontal();
 
-            // 拖拽变更检测
             if (newScript != _currentScript)
             {
                 if (newScript == null)
@@ -89,10 +127,10 @@ namespace CoreFrameworkEditor
             if (!string.IsNullOrEmpty(_validationMessage))
                 EditorGUILayout.HelpBox(_validationMessage, MessageType.Warning);
 
-            // ── 策略参数字段 ──
+            // 策略公开参数字段
             if (_strategyPreview != null && _strategyFields.Count > 0)
             {
-                EditorGUI.indentLevel++;
+                EditorGUILayout.Space(4);
                 foreach (var kvp in _strategyFields)
                 {
                     var field = kvp.Value.field;
@@ -106,18 +144,44 @@ namespace CoreFrameworkEditor
                         EditorUtility.SetDirty(mover);
                     }
                 }
-                EditorGUI.indentLevel--;
             }
 
-            EditorGUILayout.Space();
-
-            // 排除内部序列化字段
-            var excluded = new[] { "m_Script", "_rigidbody", "_strategyTypeName", "_strategyParams" };
-            DrawPropertiesExcluding(serializedObject, excluded);
-
-            serializedObject.ApplyModifiedProperties();
-            if (GUI.changed) SceneView.RepaintAll();
+            EditorGUI.indentLevel--;
+            EditorGUILayout.EndFoldoutHeaderGroup();
         }
+
+        // ──────────────────────────── 模块折叠 ────────────────────────────
+
+        private void DrawModuleFoldouts()
+        {
+            DrawPropertyFoldout("组件引用", ref _foldoutComponent);
+            DrawPropertyFoldout("地面移动", ref _foldoutGround);
+            DrawPropertyFoldout("空中行为", ref _foldoutAir);
+            DrawPropertyFoldout("Floating Capsule", ref _foldoutFloatingCapsule);
+            DrawPropertyFoldout("编辑器预览", ref _foldoutPreview);
+        }
+
+        private void DrawPropertyFoldout(string header, ref bool foldoutState)
+        {
+            if (!ModuleGroups.TryGetValue(header, out string[] fieldNames))
+                return;
+
+            foldoutState = EditorGUILayout.BeginFoldoutHeaderGroup(foldoutState, header);
+            if (foldoutState)
+            {
+                EditorGUI.indentLevel++;
+                foreach (string fieldName in fieldNames)
+                {
+                    SerializedProperty sp = serializedObject.FindProperty(fieldName);
+                    if (sp != null)
+                        EditorGUILayout.PropertyField(sp, true);
+                }
+                EditorGUI.indentLevel--;
+            }
+            EditorGUILayout.EndFoldoutHeaderGroup();
+        }
+
+        // ──────────────────────────── 策略选择器 ────────────────────────────
 
         private void ShowStrategyMenu(UnitMover mover)
         {
@@ -127,10 +191,7 @@ namespace CoreFrameworkEditor
             {
                 var captured = script;
                 bool isCurrent = _currentScript == captured;
-                menu.AddItem(new GUIContent(captured.name), isCurrent, () =>
-                {
-                    SelectStrategy(mover, captured);
-                });
+                menu.AddItem(new GUIContent(captured.name), isCurrent, () => SelectStrategy(mover, captured));
             }
             if (scripts.Count == 0)
                 menu.AddDisabledItem(new GUIContent("未找到 MovementStrategy 子类"));
@@ -185,8 +246,7 @@ namespace CoreFrameworkEditor
                 {
                     if (field.IsLiteral || field.IsInitOnly) continue;
                     var tooltip = field.GetCustomAttribute<TooltipAttribute>();
-                    var label = new GUIContent(ObjectNames.NicifyVariableName(field.Name),
-                        tooltip?.tooltip ?? "");
+                    var label = new GUIContent(ObjectNames.NicifyVariableName(field.Name), tooltip?.tooltip ?? "");
                     _strategyFields[field.Name] = (field, label);
                 }
             }

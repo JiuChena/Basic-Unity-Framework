@@ -14,6 +14,16 @@ namespace CoreFramework
         public bool IsHeld { get; private set; }
 
         /// <summary>
+        /// 本帧是否发生了按下边沿事件。
+        /// </summary>
+        public bool Pressed { get; private set; }
+
+        /// <summary>
+        /// 本帧是否发生了抬起边沿事件。
+        /// </summary>
+        public bool Released { get; private set; }
+
+        /// <summary>
         /// 按下事件累计版本号。
         /// </summary>
         public uint PressedVersion { get; private set; }
@@ -31,6 +41,8 @@ namespace CoreFramework
         /// <param name="wasReleased">本帧是否发生抬起边沿。</param>
         public void SetState(bool wasPressed, bool isHeld, bool wasReleased)
         {
+            Pressed = wasPressed;
+            Released = wasReleased;
             if (wasPressed) PressedVersion++;
             if (wasReleased) ReleasedVersion++;
             IsHeld = isHeld;
@@ -68,6 +80,8 @@ namespace CoreFramework
         public void Clear()
         {
             IsHeld = false;
+            Pressed = false;
+            Released = false;
             PressedVersion = 0;
             ReleasedVersion = 0;
         }

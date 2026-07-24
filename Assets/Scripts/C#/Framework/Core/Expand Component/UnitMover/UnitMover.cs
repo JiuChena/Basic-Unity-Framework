@@ -11,6 +11,17 @@ using UnityEditor;
 namespace CoreFramework
 {
     /// <summary>
+    /// 标记 MonoBehaviour/Object 字段必须在 Inspector 中实现指定接口。
+    /// </summary>
+    [AttributeUsage(AttributeTargets.Field)]
+    public class RequireInterfaceAttribute : PropertyAttribute
+    {
+        public readonly Type InterfaceType;
+        public RequireInterfaceAttribute(Type interfaceType) => InterfaceType = interfaceType;
+    }
+
+
+    /// <summary>
     /// 使用 Rigidbody 执行单位地面、跳跃、台阶和空中移动的通用组件。
     /// </summary>
     [ExecuteAlways]
@@ -26,9 +37,10 @@ namespace CoreFramework
         public Transform cameraTransform;
 
         [Tooltip("提供 Blackboard 的输入组件，必须实现 IInputProvider；留空时自动查找同物体组件")]
+        [RequireInterface(typeof(IInputProvider))]
         public MonoBehaviour inputProviderSource;
 
-        [Header("移动")]
+        [Header("地面移动")]
         [Tooltip("基础移动速度，单位：米/秒")]
         [Min(0f)]
         public float moveSpeed = 5f;
@@ -45,7 +57,6 @@ namespace CoreFramework
         [Min(0f)]
         public float groundDeceleration = 55f;
 
-        [Header("地面移动")]
         [Tooltip("碰撞体底部与可站立地面的目标悬浮距离，单位：米")]
         [Min(0f)]
         public float hoverHeight = 0.05f;
@@ -66,29 +77,25 @@ namespace CoreFramework
         [Min(0f)]
         public float springDamping = 14f;
 
-        [Tooltip("允许自动跨越的最大台阶高度，单位：米")]
+        [Tooltip("允许自动跨越的最大台阶高度，0 禁用台阶辅助，单位：米")]
         [Min(0f)]
         public float stepHeight = 0.3f;
 
-        [Tooltip("台阶检测在移动前方额外延伸的距离，单位：米")]
-        [Min(0f)]
-        public float stepProbePadding = 0.08f;
-
-        [Tooltip("台阶辅助能施加的最大上行速度，单位：米/秒")]
-        [Min(0f)]
-        public float maxStepUpSpeed = 4f;
-
         [Tooltip("参与地面、台阶和悬崖检测的物理层")]
         public LayerMask groundLayer = ~0;
+
+        [Header("浮动胶囊体")]
+        [Tooltip("启用后缩短实际 CapsuleCollider 的底部，顶部始终与基础胶囊体对齐")]
+        public bool enableFloatingCapsule;
+
+        [Tooltip("从基础胶囊体底部移除的碰撞高度，单位：米")]
+        [Min(0f)]
+        public float floatingBottomClearance = 0.4f;
 
         [Header("空中行为")]
         [Tooltip("跳跃时沿当前地面法线施加的初始速度，单位：米/秒")]
         [Min(0f)]
         public float jumpSpeed = 8f;
-
-        [Tooltip("跳跃后忽略地面吸附的时间，单位：秒")]
-        [Min(0f)]
-        public float jumpGroundIgnoreDuration = 0.1f;
 
         [Tooltip("应用到 Physics.gravity 的重力倍率")]
         [Min(0f)]
@@ -114,8 +121,23 @@ namespace CoreFramework
         public float maxFallHeight = 2f;
 
         [Header("编辑器预览")]
-        [Tooltip("在编辑模式和运行模式的 Scene 视图中绘制悬浮高度参考")]
+        [Tooltip("在编辑模式和运行模式的 Scene 视图中绘制浮动胶囊体尺寸预览")]
         public bool showHoverPreview = true;
+
+        [Serializable]
+        private struct CapsuleShapeSnapshot
+        {
+            public bool isInitialized;
+            public Vector3 center;
+            public float radius;
+            public float height;
+            public int direction;
+        }
+
+        // ── 内部常量（从 public 精简为私有）──
+        private const float StepProbePadding = 0.08f;
+        private const float MaxStepUpSpeed = 4f;
+        private const float JumpGroundIgnoreDuration = 0.1f;
 
         // Rigidbody 运动执行器，仅在初始化阶段缓存。
         [SerializeField] private Rigidbody _rigidbody;
@@ -151,6 +173,12 @@ namespace CoreFramework
         private bool _reportedMissingProvider;
         // 是否已经报告碰撞体配置错误。
         private bool _reportedColliderError;
+        // 首次同步时记录的原始胶囊体形状，关闭浮动时据此恢复。
+        [SerializeField, HideInInspector] private CapsuleShapeSnapshot _baseCapsuleShape;
+        // UnitMover 最近一次写入 Collider 的形状，用于识别用户随后在 Inspector 中的修改。
+        [SerializeField, HideInInspector] private CapsuleShapeSnapshot _lastAppliedCapsuleShape;
+        // 快照对应的 Collider，切换组件时不能复用旧形状。
+        [SerializeField, HideInInspector] private CapsuleCollider _snapshotCapsuleCollider;
 
         /// <summary>
         /// 当前是否站在可行走地面上。
@@ -193,6 +221,7 @@ namespace CoreFramework
         private void Awake()
         {
             ResolveComponents(Application.isPlaying);
+            SynchronizeFloatingCapsule();
             if (!Application.isPlaying) return;
 
             ConfigureRigidbody();
@@ -206,6 +235,7 @@ namespace CoreFramework
         private void Reset()
         {
             ResolveComponents(false);
+            SynchronizeFloatingCapsule();
             EnsureDefaultStrategyType();
         }
 
@@ -215,6 +245,7 @@ namespace CoreFramework
         private void OnValidate()
         {
             ResolveComponents(false);
+            SynchronizeFloatingCapsule();
             EnsureDefaultStrategyType();
         }
 
@@ -227,6 +258,8 @@ namespace CoreFramework
             if (!Application.isPlaying) return;
 #endif
             if (!HasSupportedCollider()) return;
+
+            SynchronizeFloatingCapsule();
 
             UpdateGroundState();
             ExecuteStrategy();
@@ -352,6 +385,142 @@ namespace CoreFramework
         }
 
         /// <summary>
+        /// 同步基础胶囊体与实际参与物理的胶囊体。浮动时仅从底部移除碰撞高度，顶部保持不动。
+        /// </summary>
+        private void SynchronizeFloatingCapsule()
+        {
+            if (!(movementCollider is CapsuleCollider capsule))
+            {
+                _baseCapsuleShape = default;
+                _lastAppliedCapsuleShape = default;
+                _snapshotCapsuleCollider = null;
+                return;
+            }
+
+            if (_snapshotCapsuleCollider != capsule)
+            {
+                _baseCapsuleShape = default;
+                _lastAppliedCapsuleShape = default;
+                _snapshotCapsuleCollider = capsule;
+            }
+
+            CapsuleShapeSnapshot currentShape = CaptureCapsuleShape(capsule);
+            if (!_baseCapsuleShape.isInitialized)
+            {
+                _baseCapsuleShape = currentShape;
+            }
+            else if (!_lastAppliedCapsuleShape.isInitialized
+                || !CapsuleShapesMatch(currentShape, _lastAppliedCapsuleShape))
+            {
+                // Inspector 对 Collider 的直接修改视为新的设计尺寸，而非再次累减。
+                _baseCapsuleShape = enableFloatingCapsule
+                    ? ConvertEffectiveShapeToBase(currentShape)
+                    : currentShape;
+            }
+
+            CapsuleShapeSnapshot desiredShape = enableFloatingCapsule
+                ? CreateEffectiveCapsuleShape(_baseCapsuleShape)
+                : _baseCapsuleShape;
+
+            if (!CapsuleShapesMatch(currentShape, desiredShape))
+                ApplyCapsuleShape(capsule, desiredShape);
+
+            _lastAppliedCapsuleShape = desiredShape;
+        }
+
+        /// <summary>
+        /// 从基础形状生成顶部锚定的有效碰撞胶囊体。
+        /// </summary>
+        private CapsuleShapeSnapshot CreateEffectiveCapsuleShape(CapsuleShapeSnapshot baseShape)
+        {
+            float clearance = GetClampedFloatingClearance(baseShape);
+            Vector3 localAxis = GetCapsuleLocalAxis(baseShape.direction);
+            CapsuleShapeSnapshot effectiveShape = baseShape;
+            effectiveShape.isInitialized = true;
+            effectiveShape.height = baseShape.height - clearance;
+            effectiveShape.center = baseShape.center + localAxis * (clearance * 0.5f);
+            return effectiveShape;
+        }
+
+        /// <summary>
+        /// 将用户在浮动状态下直接编辑的有效形状还原成其对应的基础形状。
+        /// </summary>
+        private CapsuleShapeSnapshot ConvertEffectiveShapeToBase(CapsuleShapeSnapshot effectiveShape)
+        {
+            float requestedClearance = Mathf.Max(0f, floatingBottomClearance);
+            float maximumClearance = Mathf.Max(
+                0f,
+                effectiveShape.height + requestedClearance - effectiveShape.radius * 2f);
+            float clearance = Mathf.Min(requestedClearance, maximumClearance);
+            Vector3 localAxis = GetCapsuleLocalAxis(effectiveShape.direction);
+            effectiveShape.isInitialized = true;
+            effectiveShape.height += clearance;
+            effectiveShape.center -= localAxis * (clearance * 0.5f);
+            return effectiveShape;
+        }
+
+        /// <summary>
+        /// 返回不使胶囊体高度小于直径的底部空腔高度。
+        /// </summary>
+        private float GetClampedFloatingClearance(CapsuleShapeSnapshot baseShape)
+        {
+            float maximumClearance = Mathf.Max(0f, baseShape.height - baseShape.radius * 2f);
+            return Mathf.Clamp(floatingBottomClearance, 0f, maximumClearance);
+        }
+
+        /// <summary>
+        /// 读取 CapsuleCollider 的可序列化局部形状。
+        /// </summary>
+        private static CapsuleShapeSnapshot CaptureCapsuleShape(CapsuleCollider capsule)
+        {
+            return new CapsuleShapeSnapshot
+            {
+                isInitialized = true,
+                center = capsule.center,
+                radius = capsule.radius,
+                height = capsule.height,
+                direction = capsule.direction
+            };
+        }
+
+        /// <summary>
+        /// 将局部形状写回实际 CapsuleCollider。
+        /// </summary>
+        private static void ApplyCapsuleShape(CapsuleCollider capsule, CapsuleShapeSnapshot shape)
+        {
+            capsule.center = shape.center;
+            capsule.radius = shape.radius;
+            capsule.height = shape.height;
+            capsule.direction = shape.direction;
+        }
+
+        /// <summary>
+        /// 比较两份局部形状，避免浮动模式因重复同步而累计缩短高度。
+        /// </summary>
+        private static bool CapsuleShapesMatch(CapsuleShapeSnapshot left, CapsuleShapeSnapshot right)
+        {
+            const float tolerance = 0.0001f;
+            return left.isInitialized == right.isInitialized
+                && left.direction == right.direction
+                && (left.center - right.center).sqrMagnitude <= tolerance * tolerance
+                && Mathf.Abs(left.radius - right.radius) <= tolerance
+                && Mathf.Abs(left.height - right.height) <= tolerance;
+        }
+
+        /// <summary>
+        /// 获取 CapsuleCollider.direction 对应的局部正轴。
+        /// </summary>
+        private static Vector3 GetCapsuleLocalAxis(int direction)
+        {
+            return direction switch
+            {
+                0 => Vector3.right,
+                1 => Vector3.up,
+                _ => Vector3.forward
+            };
+        }
+
+        /// <summary>
         /// 配置由 UnitMover 管理的 Rigidbody 运动模式。
         /// </summary>
         private void ConfigureRigidbody()
@@ -459,7 +628,7 @@ namespace CoreFramework
                 _rigidbody.AddForce(_groundNormal * velocityChange, ForceMode.VelocityChange);
 
             _isGrounded = false;
-            _groundIgnoreUntil = Time.time + jumpGroundIgnoreDuration;
+            _groundIgnoreUntil = Time.time + JumpGroundIgnoreDuration;
         }
 
         /// <summary>
@@ -516,7 +685,7 @@ namespace CoreFramework
             if (moveDirection.sqrMagnitude <= 0.0001f) return;
 
             Bounds bounds = movementCollider.bounds;
-            float forwardDistance = GetHorizontalExtent(moveDirection) + stepProbePadding;
+            float forwardDistance = GetHorizontalExtent(moveDirection) + StepProbePadding;
             Vector3 lowerOrigin = new Vector3(bounds.center.x, bounds.min.y + 0.02f, bounds.center.z);
             if (!TryGetGroundRay(lowerOrigin, moveDirection, forwardDistance, out RaycastHit obstacle)) return;
 
@@ -532,7 +701,7 @@ namespace CoreFramework
             if (requiredHeight <= 0f || requiredHeight > stepHeight + hoverHeight) return;
 
             float upwardSpeed = Vector3.Dot(_rigidbody.velocity, Vector3.up);
-            float targetSpeed = Mathf.Min(maxStepUpSpeed, requiredHeight / Time.fixedDeltaTime);
+            float targetSpeed = Mathf.Min(MaxStepUpSpeed, requiredHeight / Time.fixedDeltaTime);
             if (targetSpeed > upwardSpeed)
                 _rigidbody.AddForce(Vector3.up * (targetSpeed - upwardSpeed), ForceMode.VelocityChange);
         }
@@ -666,32 +835,51 @@ namespace CoreFramework
             out Vector3 point2,
             out float radius)
         {
+            GetCapsuleWorldPoints(
+                capsule,
+                capsule.center,
+                capsule.radius,
+                capsule.height,
+                capsule.direction,
+                out point1,
+                out point2,
+                out radius);
+        }
+
+        /// <summary>
+        /// 将指定的胶囊局部形状转换为世界空间端点，用于绘制基础和有效形状。
+        /// </summary>
+        private static void GetCapsuleWorldPoints(
+            CapsuleCollider capsule,
+            Vector3 localCenter,
+            float localRadius,
+            float localHeight,
+            int direction,
+            out Vector3 point1,
+            out Vector3 point2,
+            out float radius)
+        {
             Transform colliderTransform = capsule.transform;
             Vector3 scale = colliderTransform.lossyScale;
             Vector3 absoluteScale = new Vector3(Mathf.Abs(scale.x), Mathf.Abs(scale.y), Mathf.Abs(scale.z));
-            Vector3 localAxis = capsule.direction switch
-            {
-                0 => Vector3.right,
-                1 => Vector3.up,
-                _ => Vector3.forward
-            };
-            float axisScale = capsule.direction switch
+            Vector3 localAxis = GetCapsuleLocalAxis(direction);
+            float axisScale = direction switch
             {
                 0 => absoluteScale.x,
                 1 => absoluteScale.y,
                 _ => absoluteScale.z
             };
-            float perpendicularScale = capsule.direction switch
+            float perpendicularScale = direction switch
             {
                 0 => Mathf.Max(absoluteScale.y, absoluteScale.z),
                 1 => Mathf.Max(absoluteScale.x, absoluteScale.z),
                 _ => Mathf.Max(absoluteScale.x, absoluteScale.y)
             };
 
-            radius = capsule.radius * perpendicularScale;
-            float halfLineLength = Mathf.Max(0f, capsule.height * axisScale * 0.5f - radius);
+            radius = localRadius * perpendicularScale;
+            float halfLineLength = Mathf.Max(0f, localHeight * axisScale * 0.5f - radius);
             Vector3 axis = colliderTransform.TransformDirection(localAxis).normalized;
-            Vector3 center = colliderTransform.TransformPoint(capsule.center);
+            Vector3 center = colliderTransform.TransformPoint(localCenter);
             point1 = center + axis * halfLineLength;
             point2 = center - axis * halfLineLength;
         }
@@ -899,7 +1087,7 @@ namespace CoreFramework
         }
 
         /// <summary>
-        /// 在编辑模式和运行模式的 Scene 视图中绘制实际碰撞体与目标悬浮轮廓。
+        /// 在编辑模式和运行模式的 Scene 视图中绘制浮动胶囊体的基础与有效形状。
         /// </summary>
         private void OnDrawGizmos()
         {
@@ -937,7 +1125,7 @@ namespace CoreFramework
             Vector3 direction = Vector3.ProjectOnPlane(_desiredDirection, Vector3.up).normalized;
             if (direction.sqrMagnitude <= 0.0001f) return;
 
-            float extent = GetHorizontalExtent(direction) + stepProbePadding;
+            float extent = GetHorizontalExtent(direction) + StepProbePadding;
             Vector3 lowerOrigin = new Vector3(bounds.center.x, bounds.min.y + 0.02f, bounds.center.z);
             Gizmos.color = Color.magenta;
             Gizmos.DrawLine(lowerOrigin, lowerOrigin + direction * extent);
@@ -950,34 +1138,88 @@ namespace CoreFramework
         }
 
         /// <summary>
-        /// 绘制实际碰撞体、地面接触参考轮廓及两者之间的悬浮距离。
+        /// 绘制基础胶囊体、有效碰撞胶囊体及底部无碰撞空腔。
         /// </summary>
         private void DrawHoverPreview()
         {
-            Vector3 previewOffset = Vector3.down * hoverHeight;
+            if (movementCollider is CapsuleCollider capsule
+                && _baseCapsuleShape.isInitialized
+                && _snapshotCapsuleCollider == capsule)
+            {
+                DrawCapsuleOutline(capsule, _baseCapsuleShape, new Color(0.2f, 0.9f, 1f, 0.9f));
+                if (!enableFloatingCapsule) return;
+
+                CapsuleShapeSnapshot effectiveShape = CaptureCapsuleShape(capsule);
+                float clearance = GetClampedFloatingClearance(_baseCapsuleShape);
+                DrawCapsuleOutline(capsule, effectiveShape, new Color(1f, 0.72f, 0.1f, 0.95f));
+                DrawFloatingCapsuleGap(capsule, _baseCapsuleShape, clearance);
+                return;
+            }
+
             DrawColliderOutline(Vector3.zero, new Color(0.2f, 0.9f, 1f, 0.9f));
-            DrawColliderOutline(previewOffset, new Color(1f, 0.72f, 0.1f, 0.9f));
+        }
 
-            Bounds bounds = movementCollider.bounds;
-            Vector3 bottomCenter = new Vector3(bounds.center.x, bounds.min.y, bounds.center.z);
-            Vector3 contactCenter = bottomCenter + previewOffset;
-            Vector3 gapSize = new Vector3(bounds.size.x, hoverHeight, bounds.size.z);
-            Vector3 gapCenter = Vector3.Lerp(bottomCenter, contactCenter, 0.5f);
+        /// <summary>
+        /// 绘制基础胶囊体底部与实际碰撞体底部之间的无碰撞空腔。
+        /// </summary>
+        private void DrawFloatingCapsuleGap(
+            CapsuleCollider capsule,
+            CapsuleShapeSnapshot baseShape,
+            float clearance)
+        {
+            if (clearance <= 0.0001f) return;
 
+            Vector3 localAxis = GetCapsuleLocalAxis(baseShape.direction);
+            Vector3 baseBottom = baseShape.center - localAxis * (baseShape.height * 0.5f);
+            Vector3 effectiveBottom = baseBottom + localAxis * clearance;
+            Vector3 gapCenter = Vector3.Lerp(baseBottom, effectiveBottom, 0.5f);
+            float diameter = baseShape.radius * 2f;
+            Vector3 gapSize = baseShape.direction switch
+            {
+                0 => new Vector3(clearance, diameter, diameter),
+                1 => new Vector3(diameter, clearance, diameter),
+                _ => new Vector3(diameter, diameter, clearance)
+            };
+
+            Matrix4x4 previousMatrix = Gizmos.matrix;
+            Gizmos.matrix = capsule.transform.localToWorldMatrix;
             Gizmos.color = new Color(1f, 0.72f, 0.1f, 0.12f);
             Gizmos.DrawCube(gapCenter, gapSize);
             Gizmos.color = new Color(1f, 0.72f, 0.1f, 0.85f);
             Gizmos.DrawWireCube(gapCenter, gapSize);
-            Gizmos.DrawLine(bottomCenter, contactCenter);
+            Gizmos.matrix = previousMatrix;
 
 #if UNITY_EDITOR
+            Vector3 worldBaseBottom = capsule.transform.TransformPoint(baseBottom);
+            Vector3 worldEffectiveBottom = capsule.transform.TransformPoint(effectiveBottom);
             Handles.color = new Color(1f, 0.72f, 0.1f, 0.9f);
-            Handles.DrawDottedLine(bottomCenter, contactCenter, 4f);
+            Handles.DrawDottedLine(worldBaseBottom, worldEffectiveBottom, 4f);
             Handles.Label(
-                contactCenter + Vector3.right * 0.05f,
-                $"Hover Height: {hoverHeight:0.###} m",
+                worldEffectiveBottom + Vector3.right * 0.05f,
+                $"Floating Gap: {clearance:0.###} m\nEffective Height: {baseShape.height - clearance:0.###} m",
                 EditorStyles.miniBoldLabel);
 #endif
+        }
+
+        /// <summary>
+        /// 使用指定局部形状绘制胶囊体轮廓。
+        /// </summary>
+        private static void DrawCapsuleOutline(
+            CapsuleCollider capsule,
+            CapsuleShapeSnapshot shape,
+            Color color)
+        {
+            GetCapsuleWorldPoints(
+                capsule,
+                shape.center,
+                shape.radius,
+                shape.height,
+                shape.direction,
+                out Vector3 point1,
+                out Vector3 point2,
+                out float radius);
+            Gizmos.color = color;
+            DrawWireCapsule(point1, point2, radius);
         }
 
         /// <summary>

@@ -14,6 +14,21 @@ namespace CoreFramework
         public InputButton Interact { get; } = new InputButton();
 
         /// <summary>
+        /// 交互 — 本帧按下。
+        /// </summary>
+        public bool InteractPressed => Interact.Pressed;
+
+        /// <summary>
+        /// 交互 — 按住中。
+        /// </summary>
+        public bool Interacting => Interact.IsHeld;
+
+        /// <summary>
+        /// 交互 — 本帧抬起。
+        /// </summary>
+        public bool InteractEnd => Interact.Released;
+
+        /// <summary>
         /// 最近一次请求的角色序号，-1 表示无请求。
         /// </summary>
         public int SwitchIndex { get; private set; } = -1;

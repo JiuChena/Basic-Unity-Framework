@@ -2,6 +2,8 @@
 // Available at the Unity Asset Store - http://u3d.as/y3X 
 Shader "Cartoon"
 {
+	// 暴露给材质面板的参数。部分参数会转换为 Shader 关键字，
+	// 让当前材质不需要的光照分支可以在编译时被裁剪掉。
 	Properties
 	{
 		[HideInInspector] _AlphaCutoff("Alpha Cutoff ", Range(0, 1)) = 0.5
@@ -19,6 +21,7 @@ Shader "Cartoon"
 		_MainTex("Albedo Texture", 2D) = "white" {}
 		[NoScaleOffset][SingleLineTexture]_LightRampTexture("Light Ramp Texture", 2D) = "white" {}
 		_StepOffset("Step Offset", Range( -0.5 , 0.5)) = 0
+		_RampSmooth("Ramp Smoothness", Range(0, 0.5)) = 0.01
 		[KeywordEnum(Step,DiffuseRamp,Posterize)] _UseLightRamp("Shading Mode", Float) = 0
 		[HideInInspector]_RampDiffuseTextureLoaded("RampDiffuseTextureLoaded", Float) = 1
 		[HDR]_RimColor("Rim Color", Color) = (1,1,1,0)
@@ -51,11 +54,14 @@ Shader "Cartoon"
 		_MainLightIntesity("Main Light Intesity", Range( 0 , 6)) = 1
 		_OutlineTextureStrength("Texture Strength ", Range( 0 , 1)) = 0
 		_ShadowColor("Shadow Color", Color) = (0,0,0,0)
+		[HDR]_HColor("Highlight Color", Color) = (1,1,1,1)
 		_RimShadowColor("Rim Shadow Color", Color) = (0,0.05551431,0.9622642,0)
 		[KeywordEnum(NoSplit,MultiplyWithDiffuse,UseSecondColor)] _RimSplitColor("Rim Split Color", Float) = 0
 		_OcclusionMap("Occlusion Map", 2D) = "white" {}
 		[ASEEnd]_OcclusionStrength("Occlusion Strength ", Range( 0 , 1)) = 1
 		
+		// 曲面细分参数目前隐藏在材质面板中。启用对应构建关键字后，
+		// 下方生成的曲面细分代码仍然可以参与编译。
 		//_TessPhongStrength( "Tess Phong Strength", Range( 0, 1 ) ) = 0.5
 		//_TessValue( "Tess Max Tessellation", Range( 1, 32 ) ) = 16
 		//_TessMin( "Tess Min Distance", Float ) = 10
@@ -66,28 +72,35 @@ Shader "Cartoon"
 
 	SubShader
 	{
+		// Shader 面向 URP 不透明几何体，并为 URP 可能请求的阶段分别提供 Pass：
+		// 描边、前向光照、投射阴影和深度写入。
 		LOD 0
 		
 		Tags { "RenderPipeline"="UniversalPipeline" "RenderType"="Opaque" "Queue"="Geometry+200" }
 		
+		// 将已渲染像素标记到模板缓冲区，供后续 Pass 识别使用此材质的对象。
 		Stencil { Ref 1 Comp Always Pass Replace }
 		
 		Cull Back
 		AlphaToMask Off
 		
+		// 这里放置所有 Pass 共用的编译设置和可选曲面细分辅助函数。
+		// 这些函数只声明一次，由启用曲面细分的 Pass 复用。
 		HLSLINCLUDE
 		#pragma target 3.0
 
 		#pragma prefer_hlslcc gles
-		#pragma exclude_renderers d3d11_9x 
+		#pragma exclude_renderers d3d11_9x
 
 		#ifndef ASE_TESS_FUNCS
 		#define ASE_TESS_FUNCS
+		// 固定曲面细分模式使用的常量细分因子。
 		float4 FixedTess( float tessValue )
 		{
 			return tessValue;
 		}
 		
+		// 根据三角形与摄像机的距离降低曲面细分因子。
 		float CalcDistanceTessFactor (float4 vertex, float minDist, float maxDist, float tess, float4x4 o2w, float3 cameraPos )
 		{
 			float3 wpos = mul(o2w,vertex).xyz;
@@ -96,6 +109,8 @@ Shader "Cartoon"
 			return f;
 		}
 
+		// 将每个顶点的细分因子转换为硬件曲面细分阶段需要的
+		// 三条边细分因子和一个内部细分因子。
 		float4 CalcTriEdgeTessFactors (float3 triVertexFactors)
 		{
 			float4 tess;
@@ -106,6 +121,7 @@ Shader "Cartoon"
 			return tess;
 		}
 
+		// 根据边在屏幕上的投影长度估算曲面细分因子。
 		float CalcEdgeTessFactor (float3 wpos0, float3 wpos1, float edgeLen, float3 cameraPos, float4 scParams )
 		{
 			float dist = distance (0.5 * (wpos0+wpos1), cameraPos);
@@ -120,6 +136,8 @@ Shader "Cartoon"
 			return d;
 		}
 
+		// 当整个三角形位于摄像机视锥体外时返回 true。
+		// 在剔除模式下，被剔除的三角形不会进行曲面细分。
 		bool WorldViewFrustumCull (float3 wpos0, float3 wpos1, float3 wpos2, float cullEps, float4 planes[6] )
 		{
 			float4 planeTest;
@@ -138,6 +156,7 @@ Shader "Cartoon"
 			return !all (planeTest);
 		}
 
+		// 根据三角形三个顶点与摄像机的距离生成曲面细分因子。
 		float4 DistanceBasedTess( float4 v0, float4 v1, float4 v2, float tess, float minDist, float maxDist, float4x4 o2w, float3 cameraPos )
 		{
 			float3 f;
@@ -148,6 +167,7 @@ Shader "Cartoon"
 			return CalcTriEdgeTessFactors (f);
 		}
 
+		// 根据三条边的世界空间长度和屏幕尺寸生成曲面细分因子。
 		float4 EdgeLengthBasedTess( float4 v0, float4 v1, float4 v2, float edgeLength, float4x4 o2w, float3 cameraPos, float4 scParams )
 		{
 			float3 pos0 = mul(o2w,v0).xyz;
@@ -161,6 +181,8 @@ Shader "Cartoon"
 			return tess;
 		}
 
+		// 将基于边长的曲面细分与视锥体剔除结合，避免细分当前摄像机
+		// 不可能看到的三角形。
 		float4 EdgeLengthBasedTessCull( float4 v0, float4 v1, float4 v2, float edgeLength, float maxDisplacement, float4x4 o2w, float3 cameraPos, float4 scParams, float4 planes[6] )
 		{
 			float3 pos0 = mul(o2w,v0).xyz;
@@ -187,10 +209,13 @@ Shader "Cartoon"
 		
 		Pass
 		{
+			// 描边 Pass：在主体网格之前渲染一个外扩的背面壳体。
+			// 剔除正面后，壳体露出的部分就形成主体边缘的描边。
 			Name "Outline"
 			
 			Tags { "RenderType"="Opaque" "Queue"="Geometry" } 
 			
+			// 描边写入不透明颜色并参与深度测试，避免穿透其他无关几何体显示。
 			Blend One Zero
 			Cull Front
 			ZWrite On
@@ -209,6 +234,8 @@ Shader "Cartoon"
 			#define ASE_SRP_VERSION 100501
 
 			
+			// 描边使用轻量的顶点和片元阶段；由于描边使用独立颜色，
+			// 这里不参与主体光照计算。
 			#pragma vertex vert
 			#pragma fragment frag
 
@@ -228,6 +255,8 @@ Shader "Cartoon"
 			#pragma shader_feature_local _OUTLINETYPE_NORMAL _OUTLINETYPE_POSITION _OUTLINETYPE_UVBAKED
 
 
+			// VertexInput 接收网格属性；VertexOutput 只传递描边片元阶段需要的值，
+			// 以及实例化和雾效数据。
 			struct VertexInput
 			{
 				float4 vertex : POSITION;
@@ -254,6 +283,8 @@ Shader "Cartoon"
 				UNITY_VERTEX_OUTPUT_STEREO
 			};
 
+			// UnityPerMaterial 必须与 Unity 期望的材质常量缓冲区布局一致。
+			// 每个读取材质参数的 Pass 都会重复这一布局。
 			CBUFFER_START(UnityPerMaterial)
 			half4 _EmissionColor;
 			half4 _SpecColor;
@@ -261,6 +292,7 @@ Shader "Cartoon"
 			half4 _RimShadowColor;
 			half4 _Color;
 			half4 _ShadowColor;
+			half4 _HColor;
 			half4 _OcclusionMap_ST;
 			half4 _OutlineColor;
 			half _RimThickness;
@@ -285,6 +317,7 @@ Shader "Cartoon"
 			half _LightRampOffset;
 			half _NormalMapStrength;
 			half _StepOffset;
+			half _RampSmooth;
 			half _Cutoff;
 			half _OcclusionStrength;
 			half _OutlineTextureStrength;
@@ -306,6 +339,8 @@ Shader "Cartoon"
 
 
 			
+			// 沿选定的描边方向移动顶点。自适应厚度会根据摄像机距离缩放外扩量，
+			// 使远近物体的描边宽度更稳定、更容易辨认。
 			VertexOutput VertexFunction( VertexInput v  )
 			{
 				VertexOutput o = (VertexOutput)0;
@@ -366,6 +401,8 @@ Shader "Cartoon"
 				return o;
 			}
 
+			// 可选的 Hull/Domain 阶段会在描边外扩前细分网格。
+			// 未启用 TESSELLATION_ON 时，vert 会直接转发到 VertexFunction。
 			#if defined(TESSELLATION_ON)
 			struct VertexControl
 			{
@@ -449,6 +486,8 @@ Shader "Cartoon"
 			}
 			#endif
 
+			// 采样主纹理和遮蔽纹理来塑造描边，再依次应用 Alpha 裁剪、
+			// LOD 抖动、雾效和最终描边颜色。
 			half4 frag ( VertexOutput IN  ) : SV_Target
 			{
 				UNITY_SETUP_INSTANCE_ID( IN );
@@ -466,6 +505,7 @@ Shader "Cartoon"
 						ShadowCoords = TransformWorldToShadowCoord( WorldPosition );
 					#endif
 				#endif
+			// 描边纹理贡献会在白色与主纹理之间插值；遮蔽纹理控制描边的遮挡强度。
 				half2 uv_OcclusionMap = IN.ase_texcoord3.xy * _OcclusionMap_ST.xy + _OcclusionMap_ST.zw;
 				half4 tex2DNode362 = tex2D( _MainTex, uv_OcclusionMap );
 				half4 lerpResult1448 = lerp( float4( 1,1,1,0 ) , tex2DNode362 , _OutlineTextureStrength);
@@ -504,6 +544,8 @@ Shader "Cartoon"
 		
 		Pass
 		{
+			// Forward Pass：根据主光源、附加光源、烘焙/环境光、镜面光、边缘光和自发光，
+			// 计算最终可见的卡通表面颜色。
 			
 			Name "Forward"
 			Tags { "LightMode"="UniversalForward" "Queue"="Geometry" }
@@ -522,6 +564,8 @@ Shader "Cartoon"
             // #include "Packages/com.unity.render-pipelines.universal/Shaders/LitForwardPass.hlsl"
 			
 			
+			// 这些变体向材质暴露可选光照功能，同时保留 URP 实例化、雾效、
+			// 阴影、光照贴图和 Decal 兼容性。
 			#pragma multi_compile _ LOD_FADE_CROSSFADE
 			#pragma multi_compile_instancing
 			#pragma multi_compile _ DOTS_INSTANCING_ON
@@ -565,6 +609,8 @@ Shader "Cartoon"
 			#pragma multi_compile _ _ADDITIONAL_LIGHT_SHADOWS
 
 
+			// Forward 顶点阶段向片元阶段传递世界坐标、切线空间基、阴影坐标、
+			// 雾效数据以及光照贴图/球谐光照数据。
 			struct VertexInput
 			{
 				float4 vertex : POSITION;
@@ -603,6 +649,7 @@ Shader "Cartoon"
 			half4 _RimShadowColor;
 			half4 _Color;
 			half4 _ShadowColor;
+			half4 _HColor;
 			half4 _OcclusionMap_ST;
 			half4 _OutlineColor;
 			half _RimThickness;
@@ -627,6 +674,7 @@ Shader "Cartoon"
 			half _LightRampOffset;
 			half _NormalMapStrength;
 			half _StepOffset;
+			half _RampSmooth;
 			half _Cutoff;
 			half _OcclusionStrength;
 			half _OutlineTextureStrength;
@@ -651,11 +699,14 @@ Shader "Cartoon"
 			sampler2D _EmissionMap;
 
 
+			// 将连续的光照值量化为固定数量的卡通明暗色阶。
 			half Posterize1331( half In, half Steps )
 			{
 				return  floor(In / (1 / Steps)) * (1 / Steps);
 			}
 			
+			// 累加 URP 附加光源的漫反射贡献。包裹 Lambert 项可以柔化
+			// 卡通受光色阶与阴影色阶之间的过渡。
 			half3 AdditionalLight( float3 WorldPosition, float3 WorldNormal, half3 LightWrapVector, half SMin, half SMax, half Faloff, half4 shadowmask )
 			{
 				float3 Color = 0;
@@ -684,6 +735,7 @@ Shader "Cartoon"
 				return Color;
 			}
 			
+			// 有烘焙光照贴图时使用光照贴图数据，否则采样 URP 提供的环境球谐光照。
 			float3 ASEIndirectDiffuse( float2 uvStaticLightmap, float3 normalWS )
 			{
 			#ifdef LIGHTMAP_ON
@@ -693,6 +745,7 @@ Shader "Cartoon"
 			#endif
 			}
 			
+			// 计算附加光源的镜面高光，并根据设置选择是否进行卡通色阶化。
 			half3 AdditionalLightsSpecularMy( float3 WorldPosition, float3 WorldNormal, float3 WorldView, float3 SpecColor, float Smoothness, half Steps, half SpecFaloff )
 			{
 				float3 Color = 0;
@@ -724,6 +777,7 @@ Shader "Cartoon"
 				}
 			}
 			
+			// 在主光源高光色阶化前，先应用可调节的平滑衰减。
 			half FaloffPosterize( half IN, half SpecFaloff, half Steps )
 			{
 				float minOut = 0.5 * SpecFaloff - 0.005;
@@ -739,6 +793,8 @@ Shader "Cartoon"
 			}
 			
 			
+			// 构建切线空间到世界空间的转换基、光照贴图/球谐坐标，
+			// 以及 Forward 片元阶段需要的插值数据。
 			VertexOutput VertexFunction ( VertexInput v  )
 			{
 				VertexOutput o = (VertexOutput)0;
@@ -795,6 +851,7 @@ Shader "Cartoon"
 				return o;
 			}
 
+			// 可选曲面细分沿用 Outline Pass 的 Hull/Domain 流程。
 			#if defined(TESSELLATION_ON)
 			struct VertexControl
 			{
@@ -881,6 +938,8 @@ Shader "Cartoon"
 			}
 			#endif
 
+			// Forward 片元流程：重建法线，计算主光源/附加光源，叠加间接光、
+			// 镜面光、边缘光和自发光，最后应用 Alpha 和雾效。
 			half4 frag ( VertexOutput IN  ) : SV_Target
 			{
 				UNITY_SETUP_INSTANCE_ID( IN );
@@ -898,7 +957,8 @@ Shader "Cartoon"
 						ShadowCoords = TransformWorldToShadowCoord( WorldPosition );
 					#endif
 				#endif
-				half temp_output_371_0 = ( _StepOffset + 0.5 );
+				// 法线贴图先在切线空间解码，再利用 VertexFunction 准备的转换基
+				// 转换到世界空间。
 				half2 uv_OcclusionMap = IN.ase_texcoord3.xy * _OcclusionMap_ST.xy + _OcclusionMap_ST.zw;
 				half3 lerpResult1536 = lerp( half3(0,0,1) , UnpackNormalScale( tex2D( _BumpMap, uv_OcclusionMap ), 1.0f ) , _NormalMapStrength);
 				half3 ase_worldTangent = IN.ase_texcoord4.xyz;
@@ -910,9 +970,11 @@ Shader "Cartoon"
 				float3 tanNormal1537 = lerpResult1536;
 				half3 worldNormal1537 = normalize( float3(dot(tanToWorld0,tanNormal1537), dot(tanToWorld1,tanNormal1537), dot(tanToWorld2,tanNormal1537)) );
 				float3 BNCurrentNormal1538 = worldNormal1537;
+				// ── TCP2 风格漫反射管线 ──
+				// 核心思路：不让暗面走向黑色，阴影颜色完全由美术通过 _HColor / _ShadowColor 控制。
+				// 1. N·L 计算（保留 ASE 原有变量名以兼容后续逻辑）
 				half dotResult234 = dot( BNCurrentNormal1538 , _MainLightPosition.xyz );
 				float BNNDotL233 = dotResult234;
-				half3 temp_cast_0 = (BNNDotL233).xxx;
 				half localLightAttenuation1412 = ( 0.0 );
 				half3 WorldPos1412 = WorldPosition;
 				half DistanceAtten1412 = 0;
@@ -928,23 +990,35 @@ Shader "Cartoon"
 				    DistanceAtten1412 = mainLight.distanceAttenuation;
 				    ShadowAtten1412 = mainLight.shadowAttenuation;
 				}
-				float3 BNAttenuationColor244 = ( _MainLightColor.rgb * DistanceAtten1412 );
-				half3 break3_g166 = ( lerp( max( temp_cast_0 , float3(0,0,0) ) , saturate( ( temp_cast_0 * 0.5 ) + 0.5 ) , saturate( (_DiffuseWrap).xxx ) ) * BNAttenuationColor244 );
-				half temp_output_1188_0 = max( max( break3_g166.x , break3_g166.y ) , break3_g166.z );
-				half smoothstepResult444 = smoothstep( ( temp_output_371_0 - 0.009 ) , temp_output_371_0 , temp_output_1188_0);
-				half4 lerpResult1619 = lerp( _ShadowColor , _MainLightColor , saturate( smoothstepResult444 ));
+				// 2. Wrapped Diffuse：把 N·L 从 [-1,1] 映射到 [0,1]，_DiffuseWrap 控制包裹强度
+				half wrappedNL = lerp( max( BNNDotL233 , 0.0 ) , saturate( BNNDotL233 * 0.5 + 0.5 ) , _DiffuseWrap );
+				// 将 wrappedNL 直接作为后续 smoothstep / Ramp / Posterize 的输入（值域 [0,1]），
+				// 不再提前乘入 _MainLightColor，确保阈值不受 HDR 光强影响。
+				half temp_output_1188_0 = wrappedNL;
+				// 3. 明暗分界：_StepOffset 控制阈值，_RampSmooth 控制过渡柔和度
+				half rampThreshold = _StepOffset + 0.5;
+				half smoothstepResult444 = smoothstep( rampThreshold - _RampSmooth , rampThreshold + _RampSmooth , temp_output_1188_0);
+				// 4. 双色插值：_ShadowColor.a 控制阴影强度（TCP2 _SColor.a 机制）
+				//    alpha=0 → 阴影与亮面同色；alpha=1 → 完全采用 _ShadowColor.rgb
+				half shadowIntensity = _ShadowColor.a;
+				half3 shadowColorMixed = lerp( _HColor.rgb , _ShadowColor.rgb , shadowIntensity );
+				// 5. 亮暗插值 → 乘以光源颜色和阴影衰减
+				half4 lerpResult1619 = half4( lerp( shadowColorMixed , _HColor.rgb , saturate( smoothstepResult444 )) , 1.0 );
 				half ShadowAtten1415 = ShadowAtten1412;
-				half4 lerpResult1626 = lerp( _ShadowColor , lerpResult1619 , ShadowAtten1415);
+				half4 lerpResult1626 = half4( lerp( _ShadowColor.rgb , lerpResult1619.rgb , ShadowAtten1415 ) , 1.0 );
+				// Ramp 纹理模式：采样渐变贴图并用 _HColor 着色
 				half2 appendResult356 = (half2(( _LightRampOffset + temp_output_1188_0 ) , 0.0));
 				half2 temp_cast_1 = (0.02).xx;
 				half2 temp_cast_2 = (0.98).xx;
 				half2 clampResult358 = clamp( appendResult356 , temp_cast_1 , temp_cast_2 );
-				half4 lerpResult1617 = lerp( ( tex2D( _LightRampTexture, half2( 0.02,0 ) ) * _MainLightColor ) , ( tex2D( _LightRampTexture, clampResult358 ) * _MainLightColor ) , ShadowAtten1415);
+				half4 lerpResult1617 = half4( lerp( tex2D( _LightRampTexture, half2( 0.02,0 ) ).rgb , tex2D( _LightRampTexture, clampResult358 ).rgb , ShadowAtten1415 ) * _HColor.rgb , 1.0 );
+				// Posterize 模式：色阶化后用 _HColor/_ShadowColor 着色
 				half In1331 = pow( saturate( ( temp_output_1188_0 + ( _DiffusePosterizeOffset * -1.0 ) ) ) , _DiffusePosterizePower );
 				half Steps1331 = round( _DiffusePosterizeSteps );
 				half localPosterize1331 = Posterize1331( In1331 , Steps1331 );
-				half4 lerpResult1629 = lerp( _ShadowColor , _MainLightColor , localPosterize1331);
-				half4 lerpResult1628 = lerp( _ShadowColor , lerpResult1629 , ShadowAtten1415);
+				half3 posterizeColor = lerp( shadowColorMixed , _HColor.rgb , localPosterize1331 );
+				half4 lerpResult1629 = half4( posterizeColor , 1.0 );
+				half4 lerpResult1628 = half4( lerp( _ShadowColor.rgb , lerpResult1629.rgb , ShadowAtten1415 ) , 1.0 );
 				#if defined(_USELIGHTRAMP_STEP)
 				half4 staticSwitch372 = lerpResult1626;
 				#elif defined(_USELIGHTRAMP_DIFFUSERAMP)
@@ -963,6 +1037,8 @@ Shader "Cartoon"
 				half SMax1181 = temp_output_1203_0;
 				half Faloff1181 = 0.0;
 				half4 shadowmask1181 = float4( 1,1,1,1 );
+				// 将可选的逐像素附加光源漫反射叠加到主光源结果上。
+				// 对应 Shader 关键字关闭时，整个分支可以在编译时移除。
 				half3 localAdditionalLight1181 = AdditionalLight( WorldPosition1181 , WorldNormal1181 , LightWrapVector1181 , SMin1181 , SMax1181 , Faloff1181 , shadowmask1181 );
 				#ifdef _USEADDITIONALLIGHTSDIFFUSE_ON
 				half3 staticSwitch1143 = localAdditionalLight1181;
@@ -975,6 +1051,7 @@ Shader "Cartoon"
 				half lerpResult1655 = lerp( 1.0 , tex2D( _OcclusionMap, uv_OcclusionMap ).r , _OcclusionStrength);
 				half4 appendResult1656 = (half4(lerpResult1655 , lerpResult1655 , lerpResult1655 , 1.0));
 				half4 MainTexture364 = ( _Color * tex2DNode362 * appendResult1656 );
+				// 将主纹理/遮蔽与烘焙光或环境光结合，并乘以材质的间接光强度。
 				half3 bakedGI276 = ASEIndirectDiffuse( IN.lightmapUVOrVertexSH.xy, BNCurrentNormal1538);
 				Light ase_mainLight = GetMainLight( ShadowCoords );
 				MixRealtimeAndBakedGI(ase_mainLight, BNCurrentNormal1538, bakedGI276, half4(0,0,0,0));
@@ -993,6 +1070,8 @@ Shader "Cartoon"
 				half temp_output_588_0 = round( _SpecularPosterizeSteps );
 				half Steps1573 = temp_output_588_0;
 				half SpecFaloff1573 = _SpecularFaloff;
+				// 根据附加光源和主光源构建卡通镜面光项。
+				// 阴影遮罩和材质关键字共同决定镜面光保留的强度。
 				half3 localAdditionalLightsSpecularMy1573 = AdditionalLightsSpecularMy( WorldPosition1573 , WorldNormal1573 , WorldView1573 , SpecColor1573 , Smoothness1573 , Steps1573 , SpecFaloff1573 );
 				half3 normalizeResult222 = normalize( _MainLightPosition.xyz );
 				half3 normalizeResult238 = normalize( ( normalizeResult222 + ase_worldViewDir ) );
@@ -1033,6 +1112,8 @@ Shader "Cartoon"
 				half4 staticSwitch1646 = _RimColor;
 				#endif
 				half4 RimColor1642 = staticSwitch1646;
+				// Fresnel 风格的边缘光强调背向摄像机的轮廓边缘；
+				// 分色关键字决定边缘光颜色与漫反射颜色的关系。
 				half fresnelNdotV454 = dot( normalize( BNCurrentNormal1538 ), ase_worldViewDir );
 				half fresnelNode454 = ( 0.0 + _RimThickness * pow( max( 1.0 - fresnelNdotV454 , 0.0001 ), _RimPower ) );
 				half smoothstepResult462 = smoothstep( ( ( 1.0 - _RimSmoothness ) - 0.5 ) , 0.5 , fresnelNode454);
@@ -1075,6 +1156,8 @@ Shader "Cartoon"
 		
 		Pass
 		{
+			// ShadowCaster Pass 只向光源阴影贴图写入深度。
+			// 它重复材质的 Alpha 测试，避免镂空像素投射出完整实心轮廓。
 			Name "ShadowCaster"
 			Tags { "LightMode"="ShadowCaster" "Queue"="Geometry" }
 
@@ -1137,6 +1220,7 @@ Shader "Cartoon"
 			half4 _RimShadowColor;
 			half4 _Color;
 			half4 _ShadowColor;
+			half4 _HColor;
 			half4 _OcclusionMap_ST;
 			half4 _OutlineColor;
 			half _RimThickness;
@@ -1161,6 +1245,7 @@ Shader "Cartoon"
 			half _LightRampOffset;
 			half _NormalMapStrength;
 			half _StepOffset;
+			half _RampSmooth;
 			half _Cutoff;
 			half _OcclusionStrength;
 			half _OutlineTextureStrength;
@@ -1186,6 +1271,7 @@ Shader "Cartoon"
 #if ASE_SRP_VERSION >= 110000 
 			float3 _LightPosition;
 #endif
+			// 将网格转换到阴影贴图空间，并应用 URP 基于法线的阴影偏移。
 			VertexOutput VertexFunction( VertexInput v )
 			{
 				VertexOutput o;
@@ -1329,6 +1415,7 @@ Shader "Cartoon"
 			}
 			#endif
 
+			// 阴影片元不输出颜色；Alpha 裁剪决定当前像素是否写入阴影贴图。
 			half4 frag(VertexOutput IN  ) : SV_TARGET
 			{
 				UNITY_SETUP_INSTANCE_ID( IN );
@@ -1347,6 +1434,8 @@ Shader "Cartoon"
 					#endif
 				#endif
 
+				// 复用可见 Pass 的主纹理/遮蔽 Alpha 计算，保证透明或镂空部分
+				// 在阴影中的形状保持一致。
 				half2 uv_OcclusionMap = IN.ase_texcoord2.xy * _OcclusionMap_ST.xy + _OcclusionMap_ST.zw;
 				half4 tex2DNode362 = tex2D( _MainTex, uv_OcclusionMap );
 				half lerpResult1655 = lerp( 1.0 , tex2D( _OcclusionMap, uv_OcclusionMap ).r , _OcclusionStrength);
@@ -1377,6 +1466,8 @@ Shader "Cartoon"
 		
 		Pass
 		{
+			// DepthOnly Pass 填充摄像机深度纹理，但不写入颜色。
+			// Alpha 裁剪保证深度、屏幕空间效果和镂空几何体保持一致。
 			
 			Name "DepthOnly"
 			Tags { "LightMode"="DepthOnly" "Queue"="Geometry" }
@@ -1435,6 +1526,7 @@ Shader "Cartoon"
 			half4 _RimShadowColor;
 			half4 _Color;
 			half4 _ShadowColor;
+			half4 _HColor;
 			half4 _OcclusionMap_ST;
 			half4 _OutlineColor;
 			half _RimThickness;
@@ -1459,6 +1551,7 @@ Shader "Cartoon"
 			half _LightRampOffset;
 			half _NormalMapStrength;
 			half _StepOffset;
+			half _RampSmooth;
 			half _Cutoff;
 			half _OcclusionStrength;
 			half _OutlineTextureStrength;
@@ -1480,6 +1573,7 @@ Shader "Cartoon"
 
 
 			
+			// 将对象顶点转换到裁剪空间，并传递 Alpha 测试所需的 UV。
 			VertexOutput VertexFunction( VertexInput v  )
 			{
 				VertexOutput o = (VertexOutput)0;
@@ -1601,6 +1695,8 @@ Shader "Cartoon"
 			}
 			#endif
 
+			// 这里仅关心 Alpha 测试；ColorMask 0 会丢弃片元颜色，
+			// 但深度缓冲区仍会接收该片元的深度值。
 			half4 frag(VertexOutput IN  ) : SV_TARGET
 			{
 				UNITY_SETUP_INSTANCE_ID(IN);
