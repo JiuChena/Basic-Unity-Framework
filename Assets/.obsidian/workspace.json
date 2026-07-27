@@ -1,0 +1,202 @@
+{
+  "main": {
+    "id": "6d71c61f446e5f51",
+    "type": "split",
+    "children": [
+      {
+        "id": "51637172303617e1",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "dabf81eebbb6d030",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "Scripts/C#/Framework/Core/DataProvider/Core/README.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "README"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "6961486f20e5129e",
+    "type": "split",
+    "children": [
+      {
+        "id": "6b5ff50551d94143",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "0ca3ac6438a0a7c6",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false
+              },
+              "icon": "lucide-folder-closed",
+              "title": "文件列表"
+            }
+          },
+          {
+            "id": "41e311516eaba5f8",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "搜索"
+            }
+          },
+          {
+            "id": "a5599ad6db02340c",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "书签"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 465.50152587890625
+  },
+  "right": {
+    "id": "1707ffb4ab5972f6",
+    "type": "split",
+    "children": [
+      {
+        "id": "7e29e65ee5edc940",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "af33fe3fe2139c34",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "Scripts/C#/Framework/Core/DataProvider/Core/README.md",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "README 的反向链接列表"
+            }
+          },
+          {
+            "id": "de3d24e5328dfb61",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "Scripts/C#/Framework/Core/DataProvider/Core/README.md",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "README 的出链列表"
+            }
+          },
+          {
+            "id": "a40d572d734c21d1",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "标签"
+            }
+          },
+          {
+            "id": "358463e37b0f3536",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "添加笔记属性"
+            }
+          },
+          {
+            "id": "a685799c52276516",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "Scripts/C#/Framework/Core/DataProvider/Core/README.md",
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "README 的大纲"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:打开快速切换": false,
+      "graph:查看关系图谱": false,
+      "canvas:新建白板": false,
+      "daily-notes:打开/创建今天的日记": false,
+      "templates:插入模板": false,
+      "command-palette:打开命令面板": false,
+      "bases:新建数据库": false
+    }
+  },
+  "active": "dabf81eebbb6d030",
+  "lastOpenFiles": [
+    "Scripts/C#/Framework/Expand Component/UnitMover.meta",
+    "Scripts/C#/Framework/Expand Component/UnitMover/UnitMover.cs.meta",
+    "Scripts/C#/Framework/Expand Component/UnitMover/UnitMover.cs",
+    "Scripts/C#/Framework/Expand Component/UnitMover/RootMotionMovementStrategy.cs.meta",
+    "Scripts/C#/Framework/Expand Component/UnitMover/RootMotionMovementStrategy.cs",
+    "Scripts/C#/Framework/Expand Component/UnitMover/MovementStrategy.cs.meta",
+    "Scripts/C#/Framework/Expand Component/UnitMover/MovementStrategy.cs",
+    "Scripts/C#/Framework/Expand Component/UnitMover/KinematicMovementStrategy.cs.meta",
+    "Scripts/C#/Framework/Expand Component/UnitMover/KinematicMovementStrategy.cs",
+    "Scripts/C#/Framework/Expand Component/UnitMover/DefaultMovementStrategy.cs.meta",
+    "Scripts/C#/Framework/Expand Component/UnitMover/DefaultMovementStrategy.cs",
+    "QFramework/README.md",
+    "Scripts/C#/Framework/Core/DataProvider/Core/README.md"
+  ]
+}

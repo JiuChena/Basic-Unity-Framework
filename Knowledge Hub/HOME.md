@@ -13,7 +13,7 @@ updated: 2026-07-26
 ## 快速导航
 
 - [[modules/项目架构总览]] — 完整项目结构与模块清单
-- [[modules/输入系统整改建议]] — Input → DataProvider 重构完整设计
+- [[modules/DataProvider技能]] — DataProvider 架构与开发约束
 - [[modules/DataProvider技能]] — DataProvider 开发规范与约束
 - [[_conventions/命名规范]] — 命名与编码约定
 - [[_conventions/框架设计原则]] — 框架级设计决策记录

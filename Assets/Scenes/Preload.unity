@@ -222,7 +222,7 @@ Transform:
   m_GameObject: {fileID: 330585543}
   serializedVersion: 2
   m_LocalRotation: {x: 0.34228438, y: -0.1711374, z: 0.06355456, w: 0.92169094}
-  m_LocalPosition: {x: 5, y: 13.236, z: -13}
+  m_LocalPosition: {x: 5, y: 13.634, z: -13}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -456,7 +456,7 @@ Transform:
   m_GameObject: {fileID: 420381671}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 1.236, z: 0}
+  m_LocalPosition: {x: 0, y: 1.634, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -490,8 +490,12 @@ MonoBehaviour:
   groundLayer:
     serializedVersion: 2
     m_Bits: 1
-  enableFloatingCapsule: 0
-  floatingBottomClearance: 0.4
+  enableFloatingCapsule: 1
+  floatingBottomClearance: 0
+  floatingCapsuleDefaultCenter: {x: 0, y: 0, z: 0}
+  floatingCapsuleDefaultHeight: 2
+  floatingCapsuleDefaultRadius: 0.5
+  floatingCapsuleDefaultDirection: 1
   jumpSpeed: 8
   gravityMultiplier: 1
   airAcceleration: 15
@@ -501,7 +505,7 @@ MonoBehaviour:
   maxFallHeight: 2
   showHoverPreview: 1
   _rigidbody: {fileID: 420381677}
-  _strategyTypeName: CoreFramework.DefaultMovementStrategy, Assembly-CSharp, Version=0.0.0.0,
+  _strategyTypeName: Framework.Core.DefaultMovementStrategy, Assembly-CSharp, Version=0.0.0.0,
     Culture=neutral, PublicKeyToken=null
   _strategyParams:
   - name: 
@@ -513,19 +517,7 @@ MonoBehaviour:
   - name: rotationSpeed
     typeName: System.Single, mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089
     stringValue: 720
-  _baseCapsuleShape:
-    isInitialized: 1
-    center: {x: 0, y: 0, z: 0}
-    radius: 0.5
-    height: 2
-    direction: 1
-  _lastAppliedCapsuleShape:
-    isInitialized: 1
-    center: {x: 0, y: 0, z: 0}
-    radius: 0.5
-    height: 2
-    direction: 1
-  _snapshotCapsuleCollider: {fileID: 420381674}
+  _floatingDefaultsCaptured: 1
 --- !u!136 &420381674
 CapsuleCollider:
   m_ObjectHideFlags: 0
@@ -669,37 +661,24 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 51dcbbed735f4dccb45ba15e8750977b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _lookSensitivity: 2
-  _moveAction: Move
-  _lookAction: Look
-  _jumpAction: Jump
-  _sprintAction: Sprint
-  _crouchAction: Crouch
-  _attackAction: Attack
-  _talentAction: Talent
-  _burstAction: Burst
-  _aimAction: Aim
-  _reloadAction: Reload
-  _interactAction: Interact
-  _scrollAction: Scroll
-  _switch1Action: Switch1
-  _switch2Action: Switch2
-  _switch3Action: Switch3
-  _switch4Action: Switch4
-  _playerInput: {fileID: 420381678}
-  _moveForwardKey: 119
-  _moveBackKey: 115
-  _moveLeftKey: 97
-  _moveRightKey: 100
-  _jumpKey: 32
-  _sprintKey: 304
-  _crouchKey: 99
-  _attackKey: 323
-  _talentKey: 113
-  _burstKey: 101
-  _aimKey: 324
-  _reloadKey: 114
-  _interactKey: 102
+  _dataSource:
+    _lookSensitivity: 2
+    _moveAction: Move
+    _lookAction: Look
+    _jumpAction: Jump
+    _sprintAction: Sprint
+    _crouchAction: Crouch
+    _interactAction: Interact
+    _scrollAction: Scroll
+    _playerInput: {fileID: 0}
+    _moveForwardKey: 119
+    _moveBackKey: 115
+    _moveLeftKey: 97
+    _moveRightKey: 100
+    _jumpKey: 32
+    _sprintKey: 304
+    _crouchKey: 99
+    _interactKey: 102
 --- !u!1 &555119911
 GameObject:
   m_ObjectHideFlags: 0
@@ -765,11 +744,69 @@ Transform:
   m_GameObject: {fileID: 555119911}
   serializedVersion: 2
   m_LocalRotation: {x: 0.34228438, y: -0.1711374, z: 0.06355456, w: 0.92169094}
-  m_LocalPosition: {x: 5, y: 13.236, z: -13}
+  m_LocalPosition: {x: 5, y: 13.634, z: -13}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 1954136721}
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &707039801
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 707039803}
+  - component: {fileID: 707039802}
+  m_Layer: 0
+  m_Name: GameObject
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!143 &707039802
+CharacterController:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 707039801}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Height: 2
+  m_Radius: 0.5
+  m_SlopeLimit: 45
+  m_StepOffset: 0.3
+  m_SkinWidth: 0.08
+  m_MinMoveDistance: 0.001
+  m_Center: {x: 0, y: 0, z: 0}
+--- !u!4 &707039803
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 707039801}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -0.095079035, y: 1.7010719, z: -1.6637762}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &832575517
@@ -1017,3 +1054,4 @@ SceneRoots:
   - {fileID: 1005873272}
   - {fileID: 420381672}
   - {fileID: 555119913}
+  - {fileID: 707039803}

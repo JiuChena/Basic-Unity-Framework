@@ -34,7 +34,7 @@ namespace CoreFrameworkEditor
             { "地面移动", new[] { "moveSpeed", "sprintMultiplier", "groundAcceleration", "groundDeceleration", "hoverHeight", "groundProbeDistance", "slopeLimit", "springStrength", "springDamping", "stepHeight", "groundLayer" } },
             { "空中行为", new[] { "jumpSpeed", "gravityMultiplier", "airAcceleration", "airControl", "airSpeedLimit", "ledgeCheckEnabled", "maxFallHeight" } },
             { "编辑器预览", new[] { "showHoverPreview" } },
-            { "Floating Capsule", new[] { "enableFloatingCapsule", "floatingBottomClearance" } },
+            { "Floating Capsule", new[] { "enableFloatingCapsule", "floatingBottomClearance", "floatingCapsuleDefaultCenter", "floatingCapsuleDefaultHeight", "floatingCapsuleDefaultRadius", "floatingCapsuleDefaultDirection" } },
         };
 
         private void OnEnable()
