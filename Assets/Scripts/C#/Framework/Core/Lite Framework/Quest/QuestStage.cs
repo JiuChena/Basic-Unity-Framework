@@ -1,6 +1,6 @@
 using System;
 
-namespace CoreFramework
+namespace Framework.Core
 {
     /// <summary>
     /// 任务阶段，包含描述和多个条件（全部满足才推进）。

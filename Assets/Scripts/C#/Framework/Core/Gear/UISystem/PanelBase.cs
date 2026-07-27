@@ -1,7 +1,7 @@
 ﻿using System.Collections;
 using UnityEngine;
 
-namespace CoreFramework
+namespace Framework.Core
 {
     /// <summary>
     /// UI 面板抽象基类。生命周期：EventInit（Awake）→ ComponentInit（Start）→ OnUpdate（Update）。

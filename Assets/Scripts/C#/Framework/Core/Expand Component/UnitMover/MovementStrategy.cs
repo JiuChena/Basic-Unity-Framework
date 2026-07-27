@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace CoreFramework
+namespace Framework.Core
 {
     /// <summary>
     /// 移动策略抽象基类（纯 C# 类）。子类实现 Execute，从 Blackboard 读取输入，驱动 UnitMover 移动。
@@ -11,9 +11,9 @@ namespace CoreFramework
     public abstract class MovementStrategy
     {
         /// <summary>
-        /// 当前策略是否依赖 IInputProvider 提供的 Blackboard。
+        /// 当前策略是否依赖 IDataProvider 提供的 Blackboard。
         /// </summary>
-        public virtual bool RequiresInputProvider => true;
+        public virtual bool RequiresDataProvider => true;
 
         /// <summary>
         /// 将二维输入转换为相对指定相机的世界空间移动方向。

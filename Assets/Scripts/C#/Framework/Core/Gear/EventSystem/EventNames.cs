@@ -1,4 +1,4 @@
-namespace CoreFramework
+namespace Framework.Core
 {
     /// <summary>
     /// 事件名称常量表，所有事件字符串统一在此定义，消除裸字符串拼写错误。

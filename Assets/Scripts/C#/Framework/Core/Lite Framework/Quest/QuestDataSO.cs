@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace CoreFramework
+namespace Framework.Core
 {
     /// <summary>
     /// 任务数据配置（ScriptableObject），定义任务的阶段、条件、奖励和对话。

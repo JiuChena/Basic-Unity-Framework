@@ -1,7 +1,7 @@
 using UnityEngine;
 using System.Collections;
 
-namespace CoreFramework
+namespace Framework.Core
 {
     /// <summary>
     /// 音频管理器宿主 MonoBehaviour，驱动 Update Tick 并管理播放完成后的自动回收。

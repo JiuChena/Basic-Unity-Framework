@@ -1,7 +1,7 @@
 using UnityEngine;
 using UnityEngine.Events;
 
-namespace CoreFramework
+namespace Framework.Core
 {
     /// <summary>
     /// 交互选项的显示信息，由 InteractionReceiver 用于渲染选项 UI。

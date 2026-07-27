@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Events;
 
-namespace CoreFramework
+namespace Framework.Core
 {
     /// <summary>
     /// 定时器事件管理器，基于管理器时间与事件记录时间差来触发回调。

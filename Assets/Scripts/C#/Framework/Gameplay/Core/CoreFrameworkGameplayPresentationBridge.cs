@@ -1,4 +1,4 @@
-using CoreFramework;
+using Framework.Core;
 using UnityEngine;
 
 /// <summary>

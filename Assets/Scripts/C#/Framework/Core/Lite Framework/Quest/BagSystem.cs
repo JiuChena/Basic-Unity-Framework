@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using MessagePack;
 using UnityEngine;
 
-namespace CoreFramework
+namespace Framework.Core
 {
     /// <summary>
     /// 背包持久化数据，包含货币数量和堆叠道具字典（assetID → 数量）。

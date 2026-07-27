@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace CoreFramework
+namespace Framework.Core
 {
     /// <summary>
     /// 对话树数据配置（ScriptableObject），定义对话节点和玩家选项。

@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace CoreFramework
+namespace Framework.Core
 {
     /// <summary>
     /// 任务条件追踪器，订阅游戏事件（击杀/收集/到达/交互）自动推进所有进行中任务的条件进度。

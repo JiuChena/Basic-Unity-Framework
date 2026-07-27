@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Events;
 
-namespace CoreFramework
+namespace Framework.Core
 {
     /// <summary>
     /// 拥有者特效池。按 owner ID 和预制体实例 ID 分组缓存运行时特效对象。

@@ -1,4 +1,4 @@
-namespace CoreFramework
+namespace Framework.Core
 {
     /// <summary>
     /// 任务类型。

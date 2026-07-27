@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace CoreFramework
+namespace Framework.Core
 {
     /// <summary>
     /// 活跃音频信息，记录正在播放的 AudioSource 及其播放参数。

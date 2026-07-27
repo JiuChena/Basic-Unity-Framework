@@ -1,6 +1,6 @@
 using UnityEngine.Events;
 
-namespace CoreFramework
+namespace Framework.Core
 {
     internal class EventsContainer : IEventsContainer
     {

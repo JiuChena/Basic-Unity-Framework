@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Events;
 
-namespace CoreFramework
+namespace Framework.Core
 {
     /// <summary>
     /// 音频管理器，统一管理 AudioSource 池化、音频播放/停止及全局音量设置。

@@ -2,7 +2,7 @@
 using UnityEngine;
 using UnityEngine.Events;
 
-namespace CoreFramework
+namespace Framework.Core
 {
     /// <summary>
     /// 公共 MonoBehaviour，将外部委托统一聚合到 Update 中执行，避免每个模块各自创建 MonoBehaviour。

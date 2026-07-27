@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using MessagePack;
 using UnityEngine;
 
-namespace CoreFramework
+namespace Framework.Core
 {
     /// <summary>
     /// 通用异构数据容器，以 object 列表存储多种基本类型数据，用于兼容旧版存储格式。

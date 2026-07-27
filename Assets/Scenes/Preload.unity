@@ -476,7 +476,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   movementCollider: {fileID: 420381674}
   cameraTransform: {fileID: 330585546}
-  inputProviderSource: {fileID: 420381679}
+  dataProviderSource: {fileID: 420381679}
   moveSpeed: 5
   sprintMultiplier: 1.6
   groundAcceleration: 45
@@ -490,6 +490,8 @@ MonoBehaviour:
   groundLayer:
     serializedVersion: 2
     m_Bits: 1
+  enableFloatingCapsule: 0
+  floatingBottomClearance: 0.4
   jumpSpeed: 8
   gravityMultiplier: 1
   airAcceleration: 15
@@ -511,6 +513,19 @@ MonoBehaviour:
   - name: rotationSpeed
     typeName: System.Single, mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089
     stringValue: 720
+  _baseCapsuleShape:
+    isInitialized: 1
+    center: {x: 0, y: 0, z: 0}
+    radius: 0.5
+    height: 2
+    direction: 1
+  _lastAppliedCapsuleShape:
+    isInitialized: 1
+    center: {x: 0, y: 0, z: 0}
+    radius: 0.5
+    height: 2
+    direction: 1
+  _snapshotCapsuleCollider: {fileID: 420381674}
 --- !u!136 &420381674
 CapsuleCollider:
   m_ObjectHideFlags: 0
@@ -651,10 +666,40 @@ MonoBehaviour:
   m_GameObject: {fileID: 420381671}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 51247e2a21357834983b632e64965056, type: 3}
+  m_Script: {fileID: 11500000, guid: 51dcbbed735f4dccb45ba15e8750977b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  lookSensitivity: 2
+  _lookSensitivity: 2
+  _moveAction: Move
+  _lookAction: Look
+  _jumpAction: Jump
+  _sprintAction: Sprint
+  _crouchAction: Crouch
+  _attackAction: Attack
+  _talentAction: Talent
+  _burstAction: Burst
+  _aimAction: Aim
+  _reloadAction: Reload
+  _interactAction: Interact
+  _scrollAction: Scroll
+  _switch1Action: Switch1
+  _switch2Action: Switch2
+  _switch3Action: Switch3
+  _switch4Action: Switch4
+  _playerInput: {fileID: 420381678}
+  _moveForwardKey: 119
+  _moveBackKey: 115
+  _moveLeftKey: 97
+  _moveRightKey: 100
+  _jumpKey: 32
+  _sprintKey: 304
+  _crouchKey: 99
+  _attackKey: 323
+  _talentKey: 113
+  _burstKey: 101
+  _aimKey: 324
+  _reloadKey: 114
+  _interactKey: 102
 --- !u!1 &555119911
 GameObject:
   m_ObjectHideFlags: 0

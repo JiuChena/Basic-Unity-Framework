@@ -3,7 +3,7 @@ using System.Text;
 using TMPro;
 using UnityEngine;
 
-namespace CoreFramework
+namespace Framework.Core
 {
     /// <summary>
     /// HUD 任务追踪条，显示当前追踪任务的阶段目标进度。

@@ -1,5 +1,5 @@
 using System;
-using CoreFramework;
+using Framework.Core;
 using UnityEngine;
 using UnityEngine.Playables;
 using UnityEngine.Timeline;

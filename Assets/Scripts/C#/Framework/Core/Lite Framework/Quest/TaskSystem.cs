@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace CoreFramework
+namespace Framework.Core
 {
     /// <summary>
     /// 任务系统入口 MonoBehaviour，初始化 QuestConditionTracker 并预加载任务配置。

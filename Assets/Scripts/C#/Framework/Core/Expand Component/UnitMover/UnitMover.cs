@@ -8,7 +8,7 @@ using UnityEngine.Serialization;
 using UnityEditor;
 #endif
 
-namespace CoreFramework
+namespace Framework.Core
 {
     /// <summary>
     /// 标记 MonoBehaviour/Object 字段必须在 Inspector 中实现指定接口。
@@ -36,9 +36,9 @@ namespace CoreFramework
         [Tooltip("用于相机相对移动的参考 Transform，留空时在 Awake 缓存主相机")]
         public Transform cameraTransform;
 
-        [Tooltip("提供 Blackboard 的输入组件，必须实现 IInputProvider；留空时自动查找同物体组件")]
-        [RequireInterface(typeof(IInputProvider))]
-        public MonoBehaviour inputProviderSource;
+        [Tooltip("提供 Blackboard 的数据组件，必须实现 IDataProvider；留空时自动查找同物体组件")]
+        [RequireInterface(typeof(IDataProvider))]
+        public MonoBehaviour dataProviderSource;
 
         [Header("地面移动")]
         [Tooltip("基础移动速度，单位：米/秒")]
@@ -141,8 +141,8 @@ namespace CoreFramework
 
         // Rigidbody 运动执行器，仅在初始化阶段缓存。
         [SerializeField] private Rigidbody _rigidbody;
-        // 运行时解析出的输入提供者接口。
-        private IInputProvider _inputProvider;
+        // 运行时解析出的数据提供器接口。
+        private IDataProvider _dataProvider;
         // 当前可执行的纯 C# 移动策略。
         private MovementStrategy _strategy;
         // 策略类的程序集限定名，由编辑器保存。
@@ -225,7 +225,7 @@ namespace CoreFramework
             if (!Application.isPlaying) return;
 
             ConfigureRigidbody();
-            ResolveInputProvider();
+            ResolveDataProvider();
             CreateStrategy();
         }
 
@@ -534,20 +534,20 @@ namespace CoreFramework
         }
 
         /// <summary>
-        /// 从显式引用或同物体组件解析输入提供者接口。
+        /// 从显式引用或同物体组件解析数据提供器接口。
         /// </summary>
-        private void ResolveInputProvider()
+        private void ResolveDataProvider()
         {
-            _inputProvider = inputProviderSource as IInputProvider;
-            if (_inputProvider != null) return;
+            _dataProvider = dataProviderSource as IDataProvider;
+            if (_dataProvider != null) return;
 
             MonoBehaviour[] components = GetComponents<MonoBehaviour>();
             foreach (MonoBehaviour component in components)
             {
-                if (component is IInputProvider provider)
+                if (component is IDataProvider provider)
                 {
-                    _inputProvider = provider;
-                    inputProviderSource = component;
+                    _dataProvider = provider;
+                    dataProviderSource = component;
                     return;
                 }
             }
@@ -580,16 +580,16 @@ namespace CoreFramework
         }
 
         /// <summary>
-        /// 在物理步执行当前策略；仅输入策略要求存在 Provider。
+        /// 在物理步执行当前策略；需要数据的策略要求存在 Provider。
         /// </summary>
         private void ExecuteStrategy()
         {
             if (_strategy == null) return;
 
-            Blackboard board = _inputProvider?.Board;
-            if (board == null && _strategy.RequiresInputProvider && !_reportedMissingProvider)
+            Blackboard board = _dataProvider?.Blackboard;
+            if (board == null && _strategy.RequiresDataProvider && !_reportedMissingProvider)
             {
-                Debug.LogError($"{name} 的 UnitMover 策略需要 IInputProvider，但未找到有效输入组件。", this);
+                Debug.LogError($"{name} 的 UnitMover 策略需要 IDataProvider，但未找到有效数据组件。", this);
                 _reportedMissingProvider = true;
             }
 

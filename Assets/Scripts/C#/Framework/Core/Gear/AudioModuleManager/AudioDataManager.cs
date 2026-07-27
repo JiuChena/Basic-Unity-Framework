@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using CoreFramework;
+using Framework.Core;
 using UnityEngine;
 
 /// <summary>
@@ -15,8 +15,8 @@ public class AudioDataManager
     public static AudioDataManager Instance => instance ??= new AudioDataManager();
 
     // AudioSource → AudioType 监听者映射，用于音量设置变更时批量刷新
-    private readonly Dictionary<AudioSource, CoreFramework.AudioType> listeners =
-        new Dictionary<AudioSource, CoreFramework.AudioType>();
+    private readonly Dictionary<AudioSource, Framework.Core.AudioType> listeners =
+        new Dictionary<AudioSource, Framework.Core.AudioType>();
 
     // 复用列表，避免每帧分配
     private readonly List<AudioSource> invalidListeners = new List<AudioSource>(4);
@@ -50,7 +50,7 @@ public class AudioDataManager
     /// </summary>
     /// <param name="source">要注册的 AudioSource</param>
     /// <param name="type">音频类型</param>
-    public void AddAudioListener(AudioSource source, CoreFramework.AudioType type)
+    public void AddAudioListener(AudioSource source, Framework.Core.AudioType type)
     {
         if (source == null) return;
 
@@ -186,7 +186,7 @@ public class AudioDataManager
     {
         invalidListeners.Clear();
 
-        foreach (KeyValuePair<AudioSource, CoreFramework.AudioType> pair in listeners)
+        foreach (KeyValuePair<AudioSource, Framework.Core.AudioType> pair in listeners)
         {
             AudioSource source = pair.Key;
             if (source == null)
@@ -205,18 +205,18 @@ public class AudioDataManager
     /// <summary>
     /// 按类型对单个 AudioSource 应用静音和音量设置。
     /// </summary>
-    private void ApplySoundSettingsToSource(AudioSource source, CoreFramework.AudioType type)
+    private void ApplySoundSettingsToSource(AudioSource source, Framework.Core.AudioType type)
     {
         if (source == null) return;
 
         switch (type)
         {
-            case CoreFramework.AudioType.Music:
+            case Framework.Core.AudioType.Music:
                 source.mute = !Data.musicEnabled;
                 source.volume = Data.musicVolume;
                 break;
 
-            case CoreFramework.AudioType.Sound:
+            case Framework.Core.AudioType.Sound:
             default:
                 source.mute = !Data.soundEnabled;
                 source.volume = Data.soundVolume;

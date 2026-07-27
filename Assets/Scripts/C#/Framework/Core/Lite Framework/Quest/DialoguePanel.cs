@@ -3,7 +3,7 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
-namespace CoreFramework
+namespace Framework.Core
 {
     /// <summary>
     /// 对话 UI 面板，显示 NPC 台词和玩家选项，支持打字机效果。

@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace CoreFramework
+namespace Framework.Core
 {
     /// <summary>
     /// 交互发射器，挂载到场景中可交互的物体 / NPC 上。

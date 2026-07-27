@@ -4,7 +4,7 @@ using MessagePack.Resolvers;
 using MessagePack.Unity;
 using UnityEngine;
 
-namespace CoreFramework
+namespace Framework.Core
 {
     /// <summary>
     /// MessagePack 运行时封装，统一项目序列化选项并安全处理反序列化异常。

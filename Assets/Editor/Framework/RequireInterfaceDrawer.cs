@@ -1,6 +1,6 @@
 using UnityEngine;
 using UnityEditor;
-using CoreFramework;
+using Framework.Core;
 
 namespace CoreFrameworkEditor
 {

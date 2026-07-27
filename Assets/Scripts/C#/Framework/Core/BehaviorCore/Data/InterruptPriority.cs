@@ -1,4 +1,4 @@
-namespace CoreFramework
+namespace Framework.Core
 {
     /// <summary>
     /// 行为打断优先级。数值越大越不可被低优先级行为打断。

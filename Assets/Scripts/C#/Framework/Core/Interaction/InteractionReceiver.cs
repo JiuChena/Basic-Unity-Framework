@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-namespace CoreFramework
+namespace Framework.Core
 {
     /// <summary>
     /// 交互接收器，挂在玩家身上，统一管理范围内可交互对象与选项 UI。

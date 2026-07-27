@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace CoreFramework
+namespace Framework.Core
 {
     /// <summary>
     /// 资源生命周期作用域。Dispose 时级联释放名下所有 Lease，用于将一组资源的生命周期绑定在一起。

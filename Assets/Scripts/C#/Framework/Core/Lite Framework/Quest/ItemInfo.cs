@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace CoreFramework
+namespace Framework.Core
 {
     /// <summary>
     /// 道具类型。

@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace CoreFramework
+namespace Framework.Core
 {
     /// <summary>
     /// 可交互对象接口。挂载到 NPC、道具、门等物体上，由 InteractionEmitter 在玩家进入范围时注册到 InteractionReceiver。

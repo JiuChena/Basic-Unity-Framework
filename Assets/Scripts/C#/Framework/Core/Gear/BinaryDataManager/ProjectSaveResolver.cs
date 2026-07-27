@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using MessagePack;
 using MessagePack.Formatters;
 
-namespace CoreFramework
+namespace Framework.Core
 {
     /// <summary>
     /// 项目级 Formatter 解析器，集中注册所有自定义 MessagePack Formatter。

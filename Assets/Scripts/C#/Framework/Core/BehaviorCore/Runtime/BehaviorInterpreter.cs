@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using CoreFramework;
+using Framework.Core;
 using UnityEngine;
 using UnityEngine.Profiling;
 

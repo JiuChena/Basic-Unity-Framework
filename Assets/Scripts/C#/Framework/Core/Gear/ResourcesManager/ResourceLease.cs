@@ -2,7 +2,7 @@ using System;
 using UnityEngine;
 using Object = UnityEngine.Object;
 
-namespace CoreFramework
+namespace Framework.Core
 {
     /// <summary>
     /// 资源引用租约基类，持有对资源的独立引用计数。释放时通知 AddressableManager 递减引用。

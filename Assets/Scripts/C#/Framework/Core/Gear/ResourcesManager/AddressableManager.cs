@@ -6,7 +6,7 @@ using UnityEngine.AddressableAssets;
 using UnityEngine.ResourceManagement.AsyncOperations;
 using Object = UnityEngine.Object;
 
-namespace CoreFramework
+namespace Framework.Core
 {
     /// <summary>
     /// Addressable 资源管理器，通过 Lease/Scope 引用计数机制管理资源的异步加载与生命周期。

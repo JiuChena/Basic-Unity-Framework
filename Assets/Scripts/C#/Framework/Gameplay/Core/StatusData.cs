@@ -1,5 +1,5 @@
 using BehaviorCore;
-using CoreFramework;
+using Framework.Core;
 using UnityEngine;
 using UnityEngine.Serialization;
 

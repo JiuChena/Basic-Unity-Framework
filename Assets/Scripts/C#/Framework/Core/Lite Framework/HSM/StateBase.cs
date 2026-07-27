@@ -1,4 +1,4 @@
-namespace CoreFramework
+namespace Framework.Core
 {
     /// <summary>
     /// HSM 状态基类。子类实现 OnEnter / OnUpdate / OnExit，由 HSM 统一调度。

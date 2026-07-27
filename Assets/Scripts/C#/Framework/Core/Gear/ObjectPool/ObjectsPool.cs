@@ -3,7 +3,7 @@ using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.Events;
 
-namespace CoreFramework
+namespace Framework.Core
 {
     /// <summary>
     /// 对象池模块。缓存已实例化的 GameObject 避免重复 Instantiate/Destroy，支持基于资源依赖的自动清理。

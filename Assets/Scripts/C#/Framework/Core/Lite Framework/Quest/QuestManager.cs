@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace CoreFramework
+namespace Framework.Core
 {
     /// <summary>
     /// 任务管理器，负责任务的接取、阶段推进和完成。首次访问时懒加载 QuestSaveData。

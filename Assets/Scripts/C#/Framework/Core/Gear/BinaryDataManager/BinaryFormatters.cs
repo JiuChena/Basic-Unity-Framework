@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using MessagePack;
 using MessagePack.Formatters;
 
-namespace CoreFramework
+namespace Framework.Core
 {
     /// <summary>
     /// AudioData 的 MessagePack Formatter。

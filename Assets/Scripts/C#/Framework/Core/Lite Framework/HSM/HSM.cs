@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace CoreFramework
+namespace Framework.Core
 {
     /// <summary>
     /// 轻量层次状态机。按类型注册状态，运行时切换。

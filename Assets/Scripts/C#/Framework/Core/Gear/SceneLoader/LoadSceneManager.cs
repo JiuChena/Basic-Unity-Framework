@@ -3,7 +3,7 @@ using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.SceneManagement;
 
-namespace CoreFramework
+namespace Framework.Core
 {
     /// <summary>
     /// 场景切换管理器，封装异步场景加载，通过 EventCenter 广播加载进度。

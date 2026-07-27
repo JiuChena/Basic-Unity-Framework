@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using UnityEditor;
 using UnityEngine;
-using CoreFramework;
+using Framework.Core;
 
 namespace CoreFrameworkEditor
 {
@@ -30,7 +30,7 @@ namespace CoreFrameworkEditor
         /// </summary>
         private static readonly Dictionary<string, string[]> ModuleGroups = new()
         {
-            { "组件引用", new[] { "movementCollider", "cameraTransform", "inputProviderSource" } },
+            { "组件引用", new[] { "movementCollider", "cameraTransform", "dataProviderSource" } },
             { "地面移动", new[] { "moveSpeed", "sprintMultiplier", "groundAcceleration", "groundDeceleration", "hoverHeight", "groundProbeDistance", "slopeLimit", "springStrength", "springDamping", "stepHeight", "groundLayer" } },
             { "空中行为", new[] { "jumpSpeed", "gravityMultiplier", "airAcceleration", "airControl", "airSpeedLimit", "ledgeCheckEnabled", "maxFallHeight" } },
             { "编辑器预览", new[] { "showHoverPreview" } },

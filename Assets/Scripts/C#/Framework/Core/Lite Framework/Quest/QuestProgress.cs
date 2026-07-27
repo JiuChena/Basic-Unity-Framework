@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using MessagePack;
 
-namespace CoreFramework
+namespace Framework.Core
 {
     /// <summary>
     /// 任务进度快照，记录当前阶段和条件进度。

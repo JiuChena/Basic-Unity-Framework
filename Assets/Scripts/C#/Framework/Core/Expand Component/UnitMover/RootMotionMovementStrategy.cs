@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace CoreFramework
+namespace Framework.Core
 {
     /// <summary>
     /// Root Motion 移动策略（占位）。由 Animator 动画驱动位移，输入仅控制转向。
@@ -21,15 +21,16 @@ namespace CoreFramework
         {
             if (board == null || mover == null) return;
 
-            if (!board.TryGet(out LocomotionInputData locomotion)) return;
+            if (!board.TryGet(out MoveAttribute move)
+                || !board.TryGet(out JumpAttribute jump)) return;
 
-            Vector2 input = locomotion.Move;
+            Vector2 input = move.Value;
             Vector3 moveDir = GetCameraRelativeMoveDirection(input, mover.CameraTransform);
 
             if (moveDir.magnitude > 0.01f)
                 mover.RotateTowards(moveDir, turnSpeed);
 
-            if (locomotion.Jump.ConsumePressed(ref _jumpPressedVersion))
+            if (jump.Value.ConsumePressed(ref _jumpPressedVersion))
                 mover.Jump();
         }
     }

@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace CoreFramework
+namespace Framework.Core
 {
     /// <summary>
     /// 单个交互选项视图。

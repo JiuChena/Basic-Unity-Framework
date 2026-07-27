@@ -1,6 +1,6 @@
 using System;
 
-namespace CoreFramework
+namespace Framework.Core
 {
     /// <summary>
     /// 对话系统，管理对话树状态和节点跳转。

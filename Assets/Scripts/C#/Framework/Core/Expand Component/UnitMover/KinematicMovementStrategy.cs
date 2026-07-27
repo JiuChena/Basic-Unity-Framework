@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace CoreFramework
+namespace Framework.Core
 {
     /// <summary>
     /// 平滑目标速度策略。最终仍通过 UnitMover 的 Rigidbody 力驱动执行移动。
@@ -23,12 +23,14 @@ namespace CoreFramework
         {
             if (board == null || mover == null) return;
 
-            if (!board.TryGet(out LocomotionInputData locomotion)) return;
+            if (!board.TryGet(out MoveAttribute move)
+                || !board.TryGet(out SprintAttribute sprint)
+                || !board.TryGet(out JumpAttribute jump)) return;
 
-            Vector2 input = locomotion.Move;
+            Vector2 input = move.Value;
             Vector3 targetDir = GetCameraRelativeMoveDirection(input, mover.CameraTransform);
 
-            float speedMult = locomotion.IsSprinting && input.y > 0.1f ? mover.sprintMultiplier : 1f;
+            float speedMult = sprint.Value && input.y > 0.1f ? mover.sprintMultiplier : 1f;
             float targetSpeed = mover.moveSpeed * speedMult;
 
             if (targetDir.magnitude > 0.01f)
@@ -44,7 +46,7 @@ namespace CoreFramework
             float speedMultiplier = mover.moveSpeed > 0.001f ? _currentVelocity.magnitude / mover.moveSpeed : 0f;
             mover.Move(_currentVelocity.normalized, speedMultiplier);
 
-            if (locomotion.Jump.ConsumePressed(ref _jumpPressedVersion))
+            if (jump.Value.ConsumePressed(ref _jumpPressedVersion))
                 mover.Jump();
         }
     }

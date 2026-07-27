@@ -1,7 +1,7 @@
 using System.IO;
 using UnityEngine;
 
-namespace CoreFramework
+namespace Framework.Core
 {
     /// <summary>
     /// 二进制数据管理器，基于 MessagePack 实现持久化数据的序列化与反序列化。

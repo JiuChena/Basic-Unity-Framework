@@ -128,7 +128,7 @@ public class UnitEffectController : MonoBehaviour
         _effectViewDirty = true;
         SyncRuntimeDebugFields();
         SyncEffectViewEntries();
-        CoreFramework.TypedEventBus.Publish(new UnitEffectChangedEvent(this, instance, true));
+        Framework.Core.TypedEventBus.Publish(new UnitEffectChangedEvent(this, instance, true));
         EffectAdded?.Invoke(this, instance);
     }
 
@@ -150,7 +150,7 @@ public class UnitEffectController : MonoBehaviour
         _effectViewDirty = true;
         SyncRuntimeDebugFields();
         SyncEffectViewEntries();
-        CoreFramework.TypedEventBus.Publish(new UnitEffectChangedEvent(this, instance, false));
+        Framework.Core.TypedEventBus.Publish(new UnitEffectChangedEvent(this, instance, false));
         EffectRemoved?.Invoke(this, instance);
     }
 
