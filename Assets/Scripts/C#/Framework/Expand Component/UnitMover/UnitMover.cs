@@ -1,1233 +1,683 @@
-using System;
-using System.Collections.Generic;
-using System.Globalization;
-using System.Reflection;
-using UnityEngine;
-using UnityEngine.Serialization;
 using Framework.ExpandComponent.DataProvider;
-#if UNITY_EDITOR
-using UnityEditor;
-#endif
+using UnityEngine;
 
-namespace Framework.Core
+namespace Framework.ExpandComponent.UnitMover
 {
     /// <summary>
-    /// 标记 MonoBehaviour/Object 字段必须在 Inspector 中实现指定接口。
-    /// </summary>
-    [AttributeUsage(AttributeTargets.Field)]
-    public class RequireInterfaceAttribute : PropertyAttribute
-    {
-        public readonly Type InterfaceType;
-        public RequireInterfaceAttribute(Type interfaceType) => InterfaceType = interfaceType;
-    }
-
-
-    /// <summary>
-    /// 使用 Rigidbody 执行单位地面、跳跃、台阶和空中移动的通用组件。
+    /// 作为 Unity 生命周期与序列化引用入口，组装纯 C# 运动模块并转发固定步执行。
     /// </summary>
     [ExecuteAlways]
     [RequireComponent(typeof(Rigidbody))]
-    public class UnitMover : MonoBehaviour
+    public sealed class UnitMover : MonoBehaviour
     {
-        [Header("组件引用")]
-        [Tooltip("参与移动物理检测的 CapsuleCollider 或 BoxCollider 组件")]
-        [FormerlySerializedAs("capsuleCollider")]
-        public Collider movementCollider;
-
-        [Tooltip("用于相机相对移动的参考 Transform，留空时在 Awake 缓存主相机")]
-        public Transform cameraTransform;
-
-        [Tooltip("提供 Blackboard 的数据组件，必须实现 IDataProvider；留空时自动查找同物体组件")]
-        [RequireInterface(typeof(IDataProvider))]
-        public MonoBehaviour dataProviderSource;
-
-        [Header("地面移动")]
-        [Tooltip("基础移动速度，单位：米/秒")]
-        [Min(0f)]
-        public float moveSpeed = 5f;
-
-        [Tooltip("冲刺时应用到基础速度的倍率")]
-        [Min(0f)]
-        public float sprintMultiplier = 1.6f;
-
-        [Tooltip("地面移动时达到目标速度的最大加速度，单位：米/秒²")]
-        [Min(0f)]
-        public float groundAcceleration = 45f;
-
-        [Tooltip("地面无输入时降低水平速度的最大减速度，单位：米/秒²")]
-        [Min(0f)]
-        public float groundDeceleration = 55f;
-
-        [Tooltip("碰撞体底部与可站立地面的目标悬浮距离，单位：米")]
-        [Min(0f)]
-        public float hoverHeight = 0.05f;
-
-        [Tooltip("在目标悬浮距离之外额外向下探测的距离，单位：米")]
-        [Min(0f)]
-        public float groundProbeDistance = 0.3f;
-
-        [Tooltip("可判定为地面的最大坡度，单位：度")]
-        [Range(0f, 89f)]
-        public float slopeLimit = 45f;
-
-        [Tooltip("浮动弹簧的高度误差加速度系数")]
-        [Min(0f)]
-        public float springStrength = 90f;
-
-        [Tooltip("浮动弹簧沿地面法线速度的阻尼系数")]
-        [Min(0f)]
-        public float springDamping = 14f;
-
-        [Tooltip("允许自动跨越的最大台阶高度，0 禁用台阶辅助，单位：米")]
-        [Min(0f)]
-        public float stepHeight = 0.3f;
-
-        [Tooltip("参与地面、台阶和悬崖检测的物理层")]
-        public LayerMask groundLayer = ~0;
-
-        [Header("浮动胶囊体")]
-        [Tooltip("启用后缩短实际 CapsuleCollider 的底部，顶部始终与基础胶囊体对齐")]
-        public bool enableFloatingCapsule;
-
-        [Tooltip("从胶囊体底部移除的碰撞高度，单位：米")]
-        [Min(0f)]
-        public float floatingBottomClearance;
-
-        [Tooltip("首次挂载时自动从 CapsuleCollider 读取的默认中心")]
-        public Vector3 floatingCapsuleDefaultCenter = Vector3.zero;
-
-        [Tooltip("首次挂载时自动从 CapsuleCollider 读取的默认高度")]
-        [Min(0f)]
-        public float floatingCapsuleDefaultHeight = 2f;
-
-        [Tooltip("首次挂载时自动从 CapsuleCollider 读取的默认半径")]
-        [Min(0f)]
-        public float floatingCapsuleDefaultRadius = 0.5f;
-
-        [Tooltip("首次挂载时自动从 CapsuleCollider 读取的轴向 (0=X, 1=Y, 2=Z)")]
-        [Range(0, 2)]
-        public int floatingCapsuleDefaultDirection = 1;
-
-        [Header("空中行为")]
-        [Tooltip("跳跃时沿当前地面法线施加的初始速度，单位：米/秒")]
-        [Min(0f)]
-        public float jumpSpeed = 8f;
-
-        [Tooltip("应用到 Physics.gravity 的重力倍率")]
-        [Min(0f)]
-        public float gravityMultiplier = 1f;
-
-        [Tooltip("空中向目标速度逼近的最大加速度，单位：米/秒²")]
-        [Min(0f)]
-        public float airAcceleration = 15f;
-
-        [Tooltip("空中控制强度，0 表示无控制，1 表示完整控制")]
-        [Range(0f, 1f)]
-        public float airControl = 0.45f;
-
-        [Tooltip("空中水平速度上限，单位：米/秒")]
-        [Min(0f)]
-        public float airSpeedLimit = 6f;
-
-        [Tooltip("是否阻止单位主动走向超过最大落差的悬崖")]
-        public bool ledgeCheckEnabled = true;
-
-        [Tooltip("前方地面缺失达到此落差时视为悬崖，单位：米")]
-        [Min(0f)]
-        public float maxFallHeight = 2f;
-
-        [Header("编辑器预览")]
-        [Tooltip("在编辑模式和运行模式的 Scene 视图中绘制浮动胶囊体尺寸预览")]
-        public bool showHoverPreview = true;
-
-        [Serializable]
-        private struct CapsuleShapeSnapshot
-        {
-            public bool isInitialized;
-            public Vector3 center;
-            public float radius;
-            public float height;
-            public int direction;
-        }
-
-        // ── 内部常量（从 public 精简为私有）──
-        private const float StepProbePadding = 0.08f;
-        private const float MaxStepUpSpeed = 4f;
-        private const float JumpGroundIgnoreDuration = 0.1f;
-
-        // Rigidbody 运动执行器，仅在初始化阶段缓存。
+        // 由 UnitMover 接管并在固定步末端统一写入的刚体。
+        [Tooltip("由 UnitMover 接管速度和重力的 Rigidbody 组件")]
         [SerializeField] private Rigidbody _rigidbody;
-        // 运行时解析出的数据提供器接口。
-        private IDataProvider _dataProvider;
-        // 当前可执行的纯 C# 移动策略。
-        private MovementStrategy _strategy;
-        // 策略类的程序集限定名，由编辑器保存。
-        [SerializeField] private string _strategyTypeName;
-        // 编辑器保存的策略公开字段参数。
-        [SerializeField] private List<StrategyParam> _strategyParams = new List<StrategyParam>();
-        // Collider.Cast 使用的预分配命中缓冲区。
-        private readonly RaycastHit[] _castHits = new RaycastHit[8];
-        // 射线检测使用的预分配命中缓冲区。
-        private readonly RaycastHit[] _rayHits = new RaycastHit[8];
-        // 当前物理步由策略或外部提交的移动方向。
-        private Vector3 _desiredDirection;
-        // 当前物理步由策略或外部提交的速度倍率。
-        private float _speedMultiplier = 1f;
-        // 当前物理步是否有跳跃请求。
-        private bool _jumpRequested;
-        // 当前是否站在可行走地面上。
-        private bool _isGrounded;
-        // 当前可站立地面的法线。
-        private Vector3 _groundNormal = Vector3.up;
-        // 当前可站立地面的命中点。
-        private Vector3 _groundPoint;
-        // 当前可站立地面的碰撞距离。
-        private float _groundDistance;
-        // 跳跃后重新允许地面吸附的时间点。
-        private float _groundIgnoreUntil;
-        // 是否已经报告输入 Provider 缺失问题。
-        private bool _reportedMissingProvider;
-        // 是否已经报告碰撞体配置错误。
-        private bool _reportedColliderError;
-        // 默认参数是否已从 Collider 完成首次捕获。
-        [SerializeField, HideInInspector] private bool _floatingDefaultsCaptured;
+        // 参与接地、台阶和边缘保护查询的实际碰撞体。
+        [Tooltip("参与移动物理检测的 CapsuleCollider 或 BoxCollider 组件")]
+        [SerializeField] private Collider _movementCollider;
+        // 向 UnitMover 提供通用移动输入黑板的同对象 DataProvider 组件。
+        [Tooltip("提供 IUnitMovementInput 黑板的同对象 DataProvider；手动指定时优先使用，为空时自动查找")]
+        [SerializeField] private MonoBehaviour _dataProvider;
+        // 按功能大类聚合的可序列化纯 C# 运动配置。
+        [Tooltip("包含移动、跳跃、悬浮、台阶和边缘保护设置的模块化配置")]
+        [SerializeField] private UnitMovementProfile _profile = new UnitMovementProfile();
+        // 由开发者在 Inspector 选择的初始纯 C# 移动策略，不包含业务输入读取职责。
+        [Tooltip("运行时首次启用的纯 C# 移动策略；可在代码中通过泛型接口切换并复用缓存实例")]
+        [SerializeReference] private UnitMovementStrategy _movementStrategy
+            = new DefaultRigidbodyMovementStrategy();
+        // 当前组件专属的基础 CapsuleCollider 快照，不属于可复用运动 Profile。
+        [Tooltip("保存浮动胶囊关闭时需要恢复的基础 CapsuleCollider 形状")]
+        [SerializeField] private FloatingCapsuleAuthoringState _floatingCapsuleAuthoringState
+            = new FloatingCapsuleAuthoringState();
+        // 是否在 Scene 视图绘制浮动胶囊、接地和边缘保护诊断数据。
+        [Tooltip("是否在 Scene 窗口绘制有效胶囊体、悬浮高度和边缘保护预览")]
+        [SerializeField] private bool _showScenePreview = true;
+        // 是否绘制边缘防跌落模块实际执行的支撑和危险检测射线。
+        [Tooltip("是否在运行时的 Scene 窗口绘制边缘防跌落检测射线；绿色为安全支撑，红色为危险缺口")]
+        [SerializeField] private bool _showEdgeDetectionGizmos = true;
+
+        // 运行时唯一的纯 C# 运动管线，编辑模式不创建。
+        private UnitMovementRuntime _runtime;
+        // 编辑模式和运行时共用的形状同步模块。
+        private ColliderShapeModule _shapeModule;
+        // 记录过缺失组件错误，避免每帧重复输出日志。
+        private bool _reportedMissingDependencies;
+        // 当前被 UnitMover 缓存并消费移动输入的同对象数据 Provider。
+        private IDataProvider _movementDataProvider;
+        // 当前数据 Provider 黑板暴露的通用移动输入读取契约。
+        private IUnitMovementInput _movementInput;
+        // UnitMover 作为当前黑板消费者独立维护的跳跃按下事件游标。
+        private uint _jumpPressedVersion;
+
+        /// <summary>获取最近完成固定步的只读运动状态；未运行时返回默认状态。</summary>
+        public UnitMovementState State => _runtime != null ? _runtime.State : default;
+
+        /// <summary>获取当前是否已经创建运行时运动管线。</summary>
+        public bool IsRuntimeReady => _runtime != null;
+
+        /// <summary>获取当前激活命令来源的标识；无来源时为 null。</summary>
+        public string ActiveCommandSourceId => _runtime != null ? _runtime.ActiveCommandSourceId : null;
+
+        /// <summary>获取当前是否正在直接消费已绑定 DataProvider 的移动输入黑板。</summary>
+        public bool IsDataProviderInputActive => _movementDataProvider is Behaviour behaviour
+            && behaviour.isActiveAndEnabled
+            && _movementInput != null;
+
+        /// <summary>获取当前正在生效的移动策略名称；未运行时返回 Inspector 选择的策略名称。</summary>
+        public string ActiveMovementStrategyName => _runtime != null
+            ? _runtime.ActiveMovementStrategyName
+            : _movementStrategy != null ? _movementStrategy.DisplayName : null;
+
+        /// <summary>获取最近一次命令来源合并后的移动命令；未运行时返回默认命令。</summary>
+        public UnitMovementCommand LastCommand => _runtime != null
+            ? _runtime.LastCommand
+            : UnitMovementCommand.CreateDefault();
+
+        /// <summary>获取最近一次移动策略计算出的候选速度；未运行时返回零。</summary>
+        public Vector3 LastCandidateVelocity => _runtime != null ? _runtime.LastCandidateVelocity : Vector3.zero;
+
+        /// <summary>获取最近一次提交给 Rigidbody 的最终速度；未运行时返回零。</summary>
+        public Vector3 LastCommittedVelocity => _runtime != null ? _runtime.LastCommittedVelocity : Vector3.zero;
+
+        /// <summary>获取当前 Rigidbody 的位置与旋转约束；未配置时返回 None。</summary>
+        public RigidbodyConstraints RigidbodyConstraints => _rigidbody != null
+            ? _rigidbody.constraints
+            : RigidbodyConstraints.None;
+
+        #region Unity Lifecycle
 
         /// <summary>
-        /// 当前是否站在可行走地面上。
-        /// </summary>
-        public bool IsGrounded => _isGrounded;
-
-        /// <summary>
-        /// 当前可站立地面的法线。
-        /// </summary>
-        public Vector3 GroundNormal => _groundNormal;
-
-        /// <summary>
-        /// 当前 Rigidbody 的真实速度。
-        /// </summary>
-        public Vector3 CurrentVelocity => _rigidbody != null ? _rigidbody.velocity : Vector3.zero;
-
-        /// <summary>
-        /// 供策略获取的已缓存相机参考。
-        /// </summary>
-        public Transform CameraTransform => cameraTransform;
-
-        /// <summary>
-        /// 编辑器访问的策略类名。
-        /// </summary>
-        public string StrategyTypeName
-        {
-            get => _strategyTypeName;
-            set
-            {
-                if (_strategyTypeName == value) return;
-
-                _strategyTypeName = value;
-                if (Application.isPlaying) CreateStrategy();
-            }
-        }
-
-        /// <summary>
-        /// 缓存组件、配置刚体并创建当前策略。
+        /// 在组件初始化时解析引用、确保配置存在并同步编辑器可见的有效胶囊形状。
         /// </summary>
         private void Awake()
         {
-            ResolveComponents(Application.isPlaying);
-            SynchronizeFloatingCapsule();
-            if (!Application.isPlaying) return;
-
-            ConfigureRigidbody();
-            ResolveDataProvider();
-            CreateStrategy();
+            ResolveReferences();
+            EnsureAuthoringData();
+            SynchronizeColliderShape();
         }
 
         /// <summary>
-        /// 为新添加组件填充合理的默认引用和策略。
+        /// 仅在运行模式创建纯 C# 运动管线，编辑模式只保留形状同步和 Gizmos。
         /// </summary>
-        private void Reset()
+        private void OnEnable()
         {
-            _floatingDefaultsCaptured = false;
-            ResolveComponents(false);
-            SynchronizeFloatingCapsule();
-            EnsureDefaultStrategyType();
+            if (!Application.isPlaying) return;
+            CreateRuntime();
         }
 
         /// <summary>
-        /// 在编辑器中校验碰撞体和策略配置。
+        /// 在禁用时释放命令来源并恢复 UnitMover 接管前的刚体设置。
+        /// </summary>
+        private void OnDisable()
+        {
+            DisposeRuntime();
+        }
+
+        /// <summary>
+        /// 在销毁时确保运行时已释放，避免外部命令来源残留订阅。
+        /// </summary>
+        private void OnDestroy()
+        {
+            DisposeRuntime();
+        }
+
+        /// <summary>
+        /// 在 Inspector 修改时保持浮动胶囊顶端对齐；不执行任何刚体或运动逻辑。
         /// </summary>
         private void OnValidate()
         {
-            ResolveComponents(false);
-            SynchronizeFloatingCapsule();
-            EnsureDefaultStrategyType();
+            ResolveReferences();
+            EnsureAuthoringData();
+            SynchronizeColliderShape();
         }
 
         /// <summary>
-        /// 在固定物理步中执行策略、地面探测和刚体施力。
+        /// 在每个物理步将 Unity 时间转交给纯 C# 运动管线。
         /// </summary>
         private void FixedUpdate()
         {
-#if UNITY_EDITOR
             if (!Application.isPlaying) return;
-#endif
-            if (!HasSupportedCollider()) return;
 
-            SynchronizeFloatingCapsule();
+            if (_runtime == null)
+                CreateRuntime();
+            if (_runtime == null) return;
 
-            UpdateGroundState();
-            ExecuteStrategy();
-            ApplyJumpRequest();
-            ApplyStepAssist();
-            ApplyVerticalForces();
-            ApplyHorizontalForces();
-            ClearStepCommands();
+            SubmitDataProviderCommand();
+            _runtime.Simulate(Time.fixedDeltaTime, Time.time);
         }
 
         /// <summary>
-        /// 提交本物理步期望的世界空间移动方向与速度倍率。
+        /// 为新添加组件解析默认刚体与碰撞体引用，并创建默认模块化配置。
         /// </summary>
-        /// <param name="worldDirection">世界空间的移动方向。</param>
-        /// <param name="speedMultiplier">应用到基础速度的非负倍率。</param>
-        public virtual void Move(Vector3 worldDirection, float speedMultiplier = 1f)
+        private void Reset()
         {
-            _desiredDirection = worldDirection.sqrMagnitude > 0.0001f ? worldDirection.normalized : Vector3.zero;
-            _speedMultiplier = Mathf.Max(0f, speedMultiplier);
+            ResolveReferences();
+            EnsureAuthoringData();
+            SynchronizeColliderShape();
         }
 
         /// <summary>
-        /// 请求下一物理步执行跳跃；仅在可站立地面上生效。
-        /// </summary>
-        public virtual void Jump()
-        {
-            _jumpRequested = true;
-        }
-
-        /// <summary>
-        /// 在固定物理步中朝指定世界方向旋转刚体。
-        /// </summary>
-        /// <param name="worldDirection">期望朝向的世界空间方向。</param>
-        /// <param name="degreesPerSecond">旋转速度，单位：度/秒。</param>
-        public virtual void RotateTowards(Vector3 worldDirection, float degreesPerSecond)
-        {
-            if (_rigidbody == null || worldDirection.sqrMagnitude <= 0.0001f) return;
-
-            Quaternion targetRotation = Quaternion.LookRotation(worldDirection.normalized, Vector3.up);
-            Quaternion nextRotation = Quaternion.RotateTowards(
-                _rigidbody.rotation,
-                targetRotation,
-                Mathf.Max(0f, degreesPerSecond) * Time.fixedDeltaTime);
-            _rigidbody.MoveRotation(nextRotation);
-        }
-
-        /// <summary>
-        /// 运行时切换为指定策略，并可迁移同名同类型公开字段。
-        /// </summary>
-        /// <typeparam name="T">具有无参构造的移动策略类型。</typeparam>
-        /// <param name="keepState">是否迁移旧策略的兼容公开字段。</param>
-        public virtual void SwitchStrategy<T>(bool keepState = true) where T : MovementStrategy, new()
-        {
-            MovementStrategy nextStrategy = new T();
-            if (keepState && _strategy != null) MigrateStrategyFields(_strategy, nextStrategy);
-
-            _strategy = nextStrategy;
-            _strategyTypeName = typeof(T).AssemblyQualifiedName;
-            ApplyStrategyParams(_strategy);
-        }
-
-        /// <summary>
-        /// 编辑器读取指定策略参数。
-        /// </summary>
-        /// <param name="fieldName">策略公开字段名称。</param>
-        /// <param name="targetType">目标字段类型。</param>
-        /// <returns>已保存参数值，不存在时为 null。</returns>
-        public object GetStrategyParam(string fieldName, Type targetType)
-        {
-            if (_strategyParams == null) return null;
-
-            StrategyParam param = _strategyParams.Find(item => item.name == fieldName);
-            return param?.GetValue(targetType);
-        }
-
-        /// <summary>
-        /// 编辑器读取指定策略参数。
-        /// </summary>
-        /// <param name="fieldName">策略公开字段名称。</param>
-        /// <returns>已保存参数值，不存在时为 null。</returns>
-        public object GetStrategyParam(string fieldName)
-        {
-            return GetStrategyParam(fieldName, null);
-        }
-
-        /// <summary>
-        /// 编辑器保存指定策略公开字段的值。
-        /// </summary>
-        /// <param name="fieldName">策略公开字段名称。</param>
-        /// <param name="value">要保存的基础类型或枚举值。</param>
-        public void SetStrategyParam(string fieldName, object value)
-        {
-            if (string.IsNullOrEmpty(fieldName) || value == null) return;
-            if (_strategyParams == null) _strategyParams = new List<StrategyParam>();
-
-            StrategyParam param = _strategyParams.Find(item => item.name == fieldName);
-            if (param == null)
-            {
-                param = new StrategyParam { name = fieldName };
-                _strategyParams.Add(param);
-            }
-
-            param.SetValue(value);
-        }
-
-        /// <summary>
-        /// 缓存 Rigidbody、Collider 与可选的相机引用。
-        /// </summary>
-        /// <param name="resolveCamera">是否在运行时缓存主相机。</param>
-        private void ResolveComponents(bool resolveCamera)
-        {
-            if (_rigidbody == null) _rigidbody = GetComponent<Rigidbody>();
-            if (movementCollider == null)
-            {
-                movementCollider = GetComponent<CapsuleCollider>();
-                if (movementCollider == null) movementCollider = GetComponent<BoxCollider>();
-            }
-            if (resolveCamera && cameraTransform == null)
-            {
-                Camera mainCamera = Camera.main;
-                if (mainCamera != null) cameraTransform = mainCamera.transform;
-            }
-        }
-
-        /// <summary>
-        /// 同步基础胶囊体与实际参与物理的胶囊体。浮动时仅从底部移除碰撞高度，顶部保持不动。
-        /// </summary>
-        /// <summary>
-        /// 首次挂载时从 CapsuleCollider 抓取默认参数，后续不再自动检测。开发者通过 Inspector 手动调整默认值。
-        /// </summary>
-        private void CaptureFloatingDefaultsOnce()
-        {
-            if (_floatingDefaultsCaptured) return;
-            if (!(movementCollider is CapsuleCollider capsule)) return;
-
-            floatingCapsuleDefaultCenter = capsule.center;
-            floatingCapsuleDefaultHeight = capsule.height;
-            floatingCapsuleDefaultRadius = capsule.radius;
-            floatingCapsuleDefaultDirection = capsule.direction;
-            _floatingDefaultsCaptured = true;
-        }
-
-        /// <summary>
-        /// 将默认参数 ± clearance 的结果写回 CapsuleCollider。
-        /// </summary>
-        private void SynchronizeFloatingCapsule()
-        {
-            if (!(movementCollider is CapsuleCollider capsule)) return;
-
-            CaptureFloatingDefaultsOnce();
-
-            if (!enableFloatingCapsule)
-            {
-                // 关闭浮动 → 恢复默认参数
-                capsule.center = floatingCapsuleDefaultCenter;
-                capsule.height = floatingCapsuleDefaultHeight;
-                capsule.radius = floatingCapsuleDefaultRadius;
-                capsule.direction = floatingCapsuleDefaultDirection;
-                return;
-            }
-
-            // 浮动开启 → 默认参数 + clearance 偏移
-            float maxClearance = Mathf.Max(0f, floatingCapsuleDefaultHeight - floatingCapsuleDefaultRadius * 2f);
-            float clearance = Mathf.Clamp(floatingBottomClearance, 0f, maxClearance);
-            Vector3 localAxis = GetCapsuleLocalAxis(floatingCapsuleDefaultDirection);
-
-            capsule.center = floatingCapsuleDefaultCenter + localAxis * (clearance * 0.5f);
-            capsule.height = floatingCapsuleDefaultHeight - clearance;
-            capsule.radius = floatingCapsuleDefaultRadius;
-            capsule.direction = floatingCapsuleDefaultDirection;
-        }
-
-
-        /// <summary>
-        /// 获取 CapsuleCollider.direction 对应的局部正轴。
-        /// </summary>
-        private static Vector3 GetCapsuleLocalAxis(int direction)
-        {
-            return direction switch
-            {
-                0 => Vector3.right,
-                1 => Vector3.up,
-                _ => Vector3.forward
-            };
-        }
-
-        /// <summary>
-        /// 配置由 UnitMover 管理的 Rigidbody 运动模式。
-        /// </summary>
-        private void ConfigureRigidbody()
-        {
-            if (_rigidbody == null) return;
-
-            _rigidbody.isKinematic = false;
-            _rigidbody.useGravity = false;
-            _rigidbody.interpolation = RigidbodyInterpolation.Interpolate;
-            _rigidbody.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
-        }
-
-        /// <summary>
-        /// 从显式引用或同物体组件解析数据提供器接口。
-        /// </summary>
-        private void ResolveDataProvider()
-        {
-            _dataProvider = dataProviderSource as IDataProvider;
-            if (_dataProvider != null) return;
-
-            MonoBehaviour[] components = GetComponents<MonoBehaviour>();
-            foreach (MonoBehaviour component in components)
-            {
-                if (component is IDataProvider provider)
-                {
-                    _dataProvider = provider;
-                    dataProviderSource = component;
-                    return;
-                }
-            }
-        }
-
-        /// <summary>
-        /// 确保未配置策略时使用默认移动策略。
-        /// </summary>
-        private void EnsureDefaultStrategyType()
-        {
-            if (string.IsNullOrEmpty(_strategyTypeName))
-                _strategyTypeName = typeof(DefaultMovementStrategy).AssemblyQualifiedName;
-        }
-
-        /// <summary>
-        /// 使用保存的类型名创建策略实例并应用编辑器参数。
-        /// </summary>
-        private void CreateStrategy()
-        {
-            EnsureDefaultStrategyType();
-            Type strategyType = Type.GetType(_strategyTypeName);
-            if (!IsConcreteStrategy(strategyType))
-            {
-                strategyType = typeof(DefaultMovementStrategy);
-                _strategyTypeName = strategyType.AssemblyQualifiedName;
-            }
-
-            _strategy = Activator.CreateInstance(strategyType) as MovementStrategy;
-            ApplyStrategyParams(_strategy);
-        }
-
-        /// <summary>
-        /// 在物理步执行当前策略；需要数据的策略要求存在 Provider。
-        /// </summary>
-        private void ExecuteStrategy()
-        {
-            if (_strategy == null) return;
-
-            Blackboard board = _dataProvider?.Blackboard;
-            if (board == null && _strategy.RequiresDataProvider && !_reportedMissingProvider)
-            {
-                Debug.LogError($"{name} 的 UnitMover 策略需要 IDataProvider，但未找到有效数据组件。", this);
-                _reportedMissingProvider = true;
-            }
-
-            _strategy.Execute(board, this);
-        }
-
-        /// <summary>
-        /// 使用 Collider.Cast 更新可站立地面状态。
-        /// </summary>
-        protected virtual void UpdateGroundState()
-        {
-            _isGrounded = false;
-            _groundNormal = Vector3.up;
-            _groundDistance = float.PositiveInfinity;
-
-            if (Time.time < _groundIgnoreUntil) return;
-            if (!TryGetGroundCast(hoverHeight + groundProbeDistance, out RaycastHit hit)) return;
-            if (!IsWalkable(hit.normal)) return;
-
-            _isGrounded = true;
-            _groundNormal = hit.normal;
-            _groundPoint = hit.point;
-            _groundDistance = hit.distance;
-        }
-
-        /// <summary>
-        /// 处理当前物理步的跳跃请求。
-        /// </summary>
-        protected virtual void ApplyJumpRequest()
-        {
-            if (!_jumpRequested || !_isGrounded) return;
-
-            float normalVelocity = Vector3.Dot(_rigidbody.velocity, _groundNormal);
-            float velocityChange = Mathf.Max(0f, jumpSpeed - normalVelocity);
-            if (velocityChange > 0f)
-                _rigidbody.AddForce(_groundNormal * velocityChange, ForceMode.VelocityChange);
-
-            _isGrounded = false;
-            _groundIgnoreUntil = Time.time + JumpGroundIgnoreDuration;
-        }
-
-        /// <summary>
-        /// 沿地面法线施加浮动弹簧，离地时施加自定义重力。
-        /// </summary>
-        protected virtual void ApplyVerticalForces()
-        {
-            if (_isGrounded)
-            {
-                float heightError = hoverHeight - _groundDistance;
-                float normalVelocity = Vector3.Dot(_rigidbody.velocity, _groundNormal);
-                float acceleration = heightError * springStrength - normalVelocity * springDamping;
-                _rigidbody.AddForce(_groundNormal * acceleration, ForceMode.Acceleration);
-                return;
-            }
-
-            _rigidbody.AddForce(Physics.gravity * gravityMultiplier, ForceMode.Acceleration);
-        }
-
-        /// <summary>
-        /// 将期望方向转换为受地面、空中和悬崖限制的水平加速度。
-        /// </summary>
-        protected virtual void ApplyHorizontalForces()
-        {
-            Vector3 direction = ApplyLedgeCheck(_desiredDirection);
-            if (_isGrounded)
-                direction = Vector3.ProjectOnPlane(direction, _groundNormal).normalized;
-            else
-                direction = Vector3.ProjectOnPlane(direction, Vector3.up).normalized;
-
-            float targetSpeed = moveSpeed * _speedMultiplier;
-            if (!_isGrounded) targetSpeed = Mathf.Min(targetSpeed, airSpeedLimit);
-
-            Vector3 planeNormal = _isGrounded ? _groundNormal : Vector3.up;
-            Vector3 currentVelocity = Vector3.ProjectOnPlane(_rigidbody.velocity, planeNormal);
-            Vector3 targetVelocity = direction * targetSpeed;
-            float acceleration = GetHorizontalAcceleration(direction);
-            Vector3 velocityDelta = Vector3.MoveTowards(
-                currentVelocity,
-                targetVelocity,
-                acceleration * Time.fixedDeltaTime);
-
-            _rigidbody.AddForce(velocityDelta - currentVelocity, ForceMode.VelocityChange);
-        }
-
-        /// <summary>
-        /// 对可跨越的小台阶施加有限上行速度辅助。
-        /// </summary>
-        protected virtual void ApplyStepAssist()
-        {
-            if (!_isGrounded || stepHeight <= 0f || _desiredDirection.sqrMagnitude <= 0.0001f) return;
-
-            Vector3 moveDirection = Vector3.ProjectOnPlane(_desiredDirection, Vector3.up).normalized;
-            if (moveDirection.sqrMagnitude <= 0.0001f) return;
-
-            Bounds bounds = movementCollider.bounds;
-            float forwardDistance = GetHorizontalExtent(moveDirection) + StepProbePadding;
-            Vector3 lowerOrigin = new Vector3(bounds.center.x, bounds.min.y + 0.02f, bounds.center.z);
-            if (!TryGetGroundRay(lowerOrigin, moveDirection, forwardDistance, out RaycastHit obstacle)) return;
-
-            Vector3 upperOrigin = lowerOrigin + Vector3.up * stepHeight;
-            if (TryGetGroundRay(upperOrigin, moveDirection, forwardDistance, out _)) return;
-
-            Vector3 landingOrigin = upperOrigin + moveDirection * forwardDistance;
-            float landingDistance = stepHeight + hoverHeight + groundProbeDistance;
-            if (!TryGetGroundRay(landingOrigin, Vector3.down, landingDistance, out RaycastHit landing)) return;
-            if (!IsWalkable(landing.normal)) return;
-
-            float requiredHeight = landing.point.y + hoverHeight - bounds.min.y;
-            if (requiredHeight <= 0f || requiredHeight > stepHeight + hoverHeight) return;
-
-            float upwardSpeed = Vector3.Dot(_rigidbody.velocity, Vector3.up);
-            float targetSpeed = Mathf.Min(MaxStepUpSpeed, requiredHeight / Time.fixedDeltaTime);
-            if (targetSpeed > upwardSpeed)
-                _rigidbody.AddForce(Vector3.up * (targetSpeed - upwardSpeed), ForceMode.VelocityChange);
-        }
-
-        /// <summary>
-        /// 在启用边缘保护时移除通往悬崖的移动指令。
-        /// </summary>
-        /// <param name="desiredDirection">当前物理步的原始移动方向。</param>
-        /// <returns>允许继续执行的移动方向。</returns>
-        protected virtual Vector3 ApplyLedgeCheck(Vector3 desiredDirection)
-        {
-            if (!ledgeCheckEnabled || !_isGrounded || desiredDirection.sqrMagnitude <= 0.0001f)
-                return desiredDirection;
-
-            Vector3 horizontalDirection = Vector3.ProjectOnPlane(desiredDirection, Vector3.up).normalized;
-            if (horizontalDirection.sqrMagnitude <= 0.0001f) return desiredDirection;
-
-            Bounds bounds = movementCollider.bounds;
-            Vector3 origin = bounds.center + horizontalDirection * GetHorizontalExtent(horizontalDirection);
-            origin.y = bounds.max.y + 0.02f;
-            float checkDistance = bounds.size.y + maxFallHeight + hoverHeight;
-            if (!TryGetGroundRay(origin, Vector3.down, checkDistance, out RaycastHit hit))
-                return Vector3.zero;
-            if (!IsWalkable(hit.normal)) return Vector3.zero;
-            if (hit.point.y < bounds.min.y - maxFallHeight) return Vector3.zero;
-
-            return desiredDirection;
-        }
-
-        /// <summary>
-        /// 获取当前输入状态对应的水平速度变化加速度。
-        /// </summary>
-        /// <param name="direction">经地面限制后的移动方向。</param>
-        /// <returns>用于本物理步的加速度上限。</returns>
-        private float GetHorizontalAcceleration(Vector3 direction)
-        {
-            if (_isGrounded)
-                return direction.sqrMagnitude > 0.0001f ? groundAcceleration : groundDeceleration;
-
-            return airAcceleration * airControl;
-        }
-
-        /// <summary>
-        /// 清空本物理步的命令，避免策略未提交时残留旧状态。
-        /// </summary>
-        private void ClearStepCommands()
-        {
-            _desiredDirection = Vector3.zero;
-            _speedMultiplier = 1f;
-            _jumpRequested = false;
-        }
-
-        /// <summary>
-        /// 在实际 Collider 上执行无分配向下 Cast 并选择最近地面命中。
-        /// </summary>
-        /// <param name="distance">最大检测距离。</param>
-        /// <param name="groundHit">最近有效地面命中。</param>
-        /// <returns>找到有效地面时返回 true。</returns>
-        private bool TryGetGroundCast(float distance, out RaycastHit groundHit)
-        {
-            groundHit = default;
-            int hitCount = CastMovementCollider(Vector3.down, distance);
-            float bestDistance = float.PositiveInfinity;
-
-            for (int index = 0; index < hitCount; index++)
-            {
-                RaycastHit hit = _castHits[index];
-                if (!IsGroundCollider(hit.collider) || hit.distance >= bestDistance) continue;
-
-                bestDistance = hit.distance;
-                groundHit = hit;
-            }
-
-            return bestDistance < float.PositiveInfinity;
-        }
-
-        /// <summary>
-        /// 以实际 Capsule 或 Box 形状执行无分配 Cast。
-        /// </summary>
-        /// <param name="direction">世界空间检测方向。</param>
-        /// <param name="distance">最大检测距离。</param>
-        /// <returns>写入命中缓冲区的数量。</returns>
-        private int CastMovementCollider(Vector3 direction, float distance)
-        {
-            if (movementCollider is CapsuleCollider capsule)
-            {
-                GetCapsuleWorldPoints(capsule, out Vector3 point1, out Vector3 point2, out float radius);
-                return Physics.CapsuleCastNonAlloc(
-                    point1,
-                    point2,
-                    radius,
-                    direction,
-                    _castHits,
-                    distance,
-                    groundLayer,
-                    QueryTriggerInteraction.Ignore);
-            }
-
-            if (movementCollider is BoxCollider box)
-            {
-                Vector3 scale = box.transform.lossyScale;
-                Vector3 halfExtents = Vector3.Scale(box.size * 0.5f, new Vector3(
-                    Mathf.Abs(scale.x),
-                    Mathf.Abs(scale.y),
-                    Mathf.Abs(scale.z)));
-                Vector3 center = box.transform.TransformPoint(box.center);
-                return Physics.BoxCastNonAlloc(
-                    center,
-                    halfExtents,
-                    direction,
-                    _castHits,
-                    box.transform.rotation,
-                    distance,
-                    groundLayer,
-                    QueryTriggerInteraction.Ignore);
-            }
-
-            return 0;
-        }
-
-        /// <summary>
-        /// 将胶囊碰撞体的局部中心、轴向和尺寸转换为世界空间端点。
-        /// </summary>
-        /// <param name="capsule">待转换的胶囊碰撞体。</param>
-        /// <param name="point1">胶囊轴线一端。</param>
-        /// <param name="point2">胶囊轴线另一端。</param>
-        /// <param name="radius">世界空间胶囊半径。</param>
-        private static void GetCapsuleWorldPoints(
-            CapsuleCollider capsule,
-            out Vector3 point1,
-            out Vector3 point2,
-            out float radius)
-        {
-            GetCapsuleWorldPoints(
-                capsule,
-                capsule.center,
-                capsule.radius,
-                capsule.height,
-                capsule.direction,
-                out point1,
-                out point2,
-                out radius);
-        }
-
-        /// <summary>
-        /// 将指定的胶囊局部形状转换为世界空间端点，用于绘制基础和有效形状。
-        /// </summary>
-        private static void GetCapsuleWorldPoints(
-            CapsuleCollider capsule,
-            Vector3 localCenter,
-            float localRadius,
-            float localHeight,
-            int direction,
-            out Vector3 point1,
-            out Vector3 point2,
-            out float radius)
-        {
-            Transform colliderTransform = capsule.transform;
-            Vector3 scale = colliderTransform.lossyScale;
-            Vector3 absoluteScale = new Vector3(Mathf.Abs(scale.x), Mathf.Abs(scale.y), Mathf.Abs(scale.z));
-            Vector3 localAxis = GetCapsuleLocalAxis(direction);
-            float axisScale = direction switch
-            {
-                0 => absoluteScale.x,
-                1 => absoluteScale.y,
-                _ => absoluteScale.z
-            };
-            float perpendicularScale = direction switch
-            {
-                0 => Mathf.Max(absoluteScale.y, absoluteScale.z),
-                1 => Mathf.Max(absoluteScale.x, absoluteScale.z),
-                _ => Mathf.Max(absoluteScale.x, absoluteScale.y)
-            };
-
-            radius = localRadius * perpendicularScale;
-            float halfLineLength = Mathf.Max(0f, localHeight * axisScale * 0.5f - radius);
-            Vector3 axis = colliderTransform.TransformDirection(localAxis).normalized;
-            Vector3 center = colliderTransform.TransformPoint(localCenter);
-            point1 = center + axis * halfLineLength;
-            point2 = center - axis * halfLineLength;
-        }
-
-        /// <summary>
-        /// 执行无分配射线检测并跳过自身碰撞体。
-        /// </summary>
-        /// <param name="origin">射线起点。</param>
-        /// <param name="direction">射线方向。</param>
-        /// <param name="distance">最大检测距离。</param>
-        /// <param name="groundHit">最近有效地面命中。</param>
-        /// <returns>找到有效地面时返回 true。</returns>
-        private bool TryGetGroundRay(Vector3 origin, Vector3 direction, float distance, out RaycastHit groundHit)
-        {
-            groundHit = default;
-            int hitCount = Physics.RaycastNonAlloc(
-                origin,
-                direction,
-                _rayHits,
-                distance,
-                groundLayer,
-                QueryTriggerInteraction.Ignore);
-            float bestDistance = float.PositiveInfinity;
-
-            for (int index = 0; index < hitCount; index++)
-            {
-                RaycastHit hit = _rayHits[index];
-                if (!IsGroundCollider(hit.collider) || hit.distance >= bestDistance) continue;
-
-                bestDistance = hit.distance;
-                groundHit = hit;
-            }
-
-            return bestDistance < float.PositiveInfinity;
-        }
-
-        /// <summary>
-        /// 判断碰撞体是否属于允许检测的外部地面。
-        /// </summary>
-        /// <param name="collider">待校验碰撞体。</param>
-        /// <returns>属于地面层且不在自身层级下时返回 true。</returns>
-        private bool IsGroundCollider(Collider collider)
-        {
-            if (collider == null) return false;
-            if (collider.transform == transform || collider.transform.IsChildOf(transform)) return false;
-
-            int colliderMask = 1 << collider.gameObject.layer;
-            return (groundLayer.value & colliderMask) != 0;
-        }
-
-        /// <summary>
-        /// 判断命中法线是否在配置的可行走坡度范围内。
-        /// </summary>
-        /// <param name="normal">待检查的表面法线。</param>
-        /// <returns>可作为地面时返回 true。</returns>
-        private bool IsWalkable(Vector3 normal)
-        {
-            return Vector3.Angle(normal, Vector3.up) <= slopeLimit;
-        }
-
-        /// <summary>
-        /// 获取 Collider 在给定水平方向上的包围盒投影半径。
-        /// </summary>
-        /// <param name="direction">已归一化的水平检测方向。</param>
-        /// <returns>从中心到包围盒边缘的投影距离。</returns>
-        private float GetHorizontalExtent(Vector3 direction)
-        {
-            Vector3 extents = movementCollider.bounds.extents;
-            return Mathf.Abs(direction.x) * extents.x + Mathf.Abs(direction.z) * extents.z;
-        }
-
-        /// <summary>
-        /// 判断当前配置的 Collider 是否受 UnitMover 支持。
-        /// </summary>
-        /// <returns>配置为 CapsuleCollider 或 BoxCollider 时返回 true。</returns>
-        private bool HasSupportedCollider(bool reportError = true)
-        {
-            bool supported = movementCollider is CapsuleCollider || movementCollider is BoxCollider;
-            if (!supported && reportError && !_reportedColliderError)
-            {
-                Debug.LogError($"{name} 的 UnitMover 需要 CapsuleCollider 或 BoxCollider。", this);
-                _reportedColliderError = true;
-            }
-
-            return supported;
-        }
-
-        /// <summary>
-        /// 判断类型是否为可实例化的移动策略。
-        /// </summary>
-        /// <param name="strategyType">待校验类型。</param>
-        /// <returns>可创建策略实例时返回 true。</returns>
-        private static bool IsConcreteStrategy(Type strategyType)
-        {
-            return strategyType != null
-                && typeof(MovementStrategy).IsAssignableFrom(strategyType)
-                && !strategyType.IsAbstract;
-        }
-
-        /// <summary>
-        /// 将保存的编辑器参数应用到刚创建的策略实例。
-        /// </summary>
-        /// <param name="strategy">要初始化的策略实例。</param>
-        private void ApplyStrategyParams(MovementStrategy strategy)
-        {
-            if (strategy == null || _strategyParams == null) return;
-
-            Type strategyType = strategy.GetType();
-            foreach (StrategyParam param in _strategyParams)
-            {
-                if (param == null || string.IsNullOrEmpty(param.name)) continue;
-
-                FieldInfo field = strategyType.GetField(param.name, BindingFlags.Instance | BindingFlags.Public);
-                if (field == null || field.IsLiteral || field.IsInitOnly) continue;
-
-                object value = param.GetValue(field.FieldType);
-                if (value != null) field.SetValue(strategy, value);
-            }
-        }
-
-        /// <summary>
-        /// 复制两个策略间名称和类型都一致的公开实例字段。
-        /// </summary>
-        /// <param name="source">当前正在运行的策略。</param>
-        /// <param name="target">将要启用的新策略。</param>
-        private static void MigrateStrategyFields(MovementStrategy source, MovementStrategy target)
-        {
-            Type sourceType = source.GetType();
-            Type targetType = target.GetType();
-            foreach (FieldInfo sourceField in sourceType.GetFields(BindingFlags.Instance | BindingFlags.Public))
-            {
-                if (sourceField.IsLiteral || sourceField.IsInitOnly) continue;
-
-                FieldInfo targetField = targetType.GetField(sourceField.Name, BindingFlags.Instance | BindingFlags.Public);
-                if (targetField == null || targetField.IsLiteral || targetField.IsInitOnly) continue;
-                if (targetField.FieldType != sourceField.FieldType) continue;
-
-                targetField.SetValue(target, sourceField.GetValue(source));
-            }
-        }
-
-        /// <summary>
-        /// 策略公开字段的可序列化基础类型容器。
-        /// </summary>
-        [Serializable]
-        public class StrategyParam
-        {
-            [Tooltip("策略公开字段名称")]
-            public string name;
-
-            [Tooltip("策略公开字段的程序集限定类型名")]
-            public string typeName;
-
-            [Tooltip("使用固定区域性格式保存的字段值")]
-            public string stringValue;
-
-            /// <summary>
-            /// 将支持的基础类型或枚举写入字符串存储。
-            /// </summary>
-            /// <param name="value">要保存的非空字段值。</param>
-            public void SetValue(object value)
-            {
-                if (value == null) return;
-
-                typeName = value.GetType().AssemblyQualifiedName;
-                stringValue = value is IFormattable formattable
-                    ? formattable.ToString(null, CultureInfo.InvariantCulture)
-                    : value.ToString();
-            }
-
-            /// <summary>
-            /// 将字符串存储转换为目标字段类型。
-            /// </summary>
-            /// <param name="targetType">策略字段的实际类型。</param>
-            /// <returns>成功解析的值；不支持或无效时返回 null。</returns>
-            public object GetValue(Type targetType)
-            {
-                Type valueType = targetType ?? Type.GetType(typeName);
-                if (valueType == null || string.IsNullOrEmpty(stringValue)) return null;
-
-                if (valueType.IsEnum)
-                {
-                    try
-                    {
-                        return Enum.Parse(valueType, stringValue);
-                    }
-                    catch (ArgumentException)
-                    {
-                        return null;
-                    }
-                }
-
-                if (valueType == typeof(bool))
-                    return bool.TryParse(stringValue, out bool booleanValue) ? booleanValue : (object)null;
-                if (valueType == typeof(int))
-                    return int.TryParse(stringValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out int intValue)
-                        ? intValue : (object)null;
-                if (valueType == typeof(float))
-                    return float.TryParse(stringValue, NumberStyles.Float, CultureInfo.InvariantCulture, out float floatValue)
-                        ? floatValue : (object)null;
-                if (valueType == typeof(string)) return stringValue;
-
-                return null;
-            }
-        }
-
-        /// <summary>
-        /// 在编辑模式和运行模式的 Scene 视图中绘制浮动胶囊体的基础与有效形状。
-        /// </summary>
-        private void OnDrawGizmos()
-        {
-            if (!showHoverPreview || !HasSupportedCollider(false)) return;
-
-            DrawHoverPreview();
-        }
-
-        /// <summary>
-        /// 在选中对象时额外绘制地面、台阶和悬崖检测范围。
+        /// 在选中对象时绘制与实际 Collider 尺寸一致的浮动胶囊和边缘诊断预览。
         /// </summary>
         private void OnDrawGizmosSelected()
         {
-            if (!HasSupportedCollider(false)) return;
+            if (!_showScenePreview) return;
 
-#if UNITY_EDITOR
-            if (!Application.isPlaying) return;
-#endif
+            EnsureAuthoringData();
+            SynchronizeColliderShape();
+            DrawEffectiveColliderPreview();
+            DrawFloatingCapsuleGapPreview();
+            DrawGroundPreview();
+            DrawEdgeProtectionPreview();
+        }
 
-            Bounds bounds = movementCollider.bounds;
-            Vector3 bottomCenter = new Vector3(bounds.center.x, bounds.min.y, bounds.center.z);
+        #endregion
 
-            Gizmos.color = _isGrounded ? Color.green : Color.yellow;
-            Gizmos.DrawWireSphere(bottomCenter, Mathf.Min(bounds.extents.x, bounds.extents.z));
-            Gizmos.DrawLine(bottomCenter, bottomCenter + Vector3.down * (hoverHeight + groundProbeDistance));
+        #region Command Sources
 
-            if (_isGrounded)
-            {
-                Gizmos.color = Color.cyan;
-                Gizmos.DrawLine(_groundPoint, _groundPoint + _groundNormal);
-            }
-
-            if (_desiredDirection.sqrMagnitude <= 0.0001f) return;
-
-            Vector3 direction = Vector3.ProjectOnPlane(_desiredDirection, Vector3.up).normalized;
-            if (direction.sqrMagnitude <= 0.0001f) return;
-
-            float extent = GetHorizontalExtent(direction) + StepProbePadding;
-            Vector3 lowerOrigin = new Vector3(bounds.center.x, bounds.min.y + 0.02f, bounds.center.z);
-            Gizmos.color = Color.magenta;
-            Gizmos.DrawLine(lowerOrigin, lowerOrigin + direction * extent);
-            Gizmos.DrawLine(lowerOrigin + Vector3.up * stepHeight, lowerOrigin + Vector3.up * stepHeight + direction * extent);
-
-            Vector3 ledgeOrigin = bounds.center + direction * GetHorizontalExtent(direction);
-            ledgeOrigin.y = bounds.max.y + 0.02f;
-            Gizmos.color = Color.red;
-            Gizmos.DrawLine(ledgeOrigin, ledgeOrigin + Vector3.down * (bounds.size.y + maxFallHeight + hoverHeight));
+        /// <summary>
+        /// 注册纯 C# 命令来源，例如玩家输入、AI 导航或网络回放来源。
+        /// </summary>
+        /// <param name="id">调用方定义的唯一命令来源标识。</param>
+        /// <param name="source">不具备挂载职责的命令来源实例。</param>
+        /// <param name="activate">是否在注册后立即作为当前命令来源。</param>
+        public void RegisterCommandSource(string id, IUnitMovementCommandSource source, bool activate = false)
+        {
+            RequireRuntime();
+            _runtime.RegisterCommandSource(id, source, activate);
         }
 
         /// <summary>
-        /// 绘制基础胶囊体、有效碰撞胶囊体及底部无碰撞空腔。
+        /// 替换已有命令来源并按完整生命周期清理旧实例。
         /// </summary>
-        private void DrawHoverPreview()
+        /// <param name="id">需要替换的命令来源标识。</param>
+        /// <param name="source">新的纯 C# 命令来源实例。</param>
+        public void ReplaceCommandSource(string id, IUnitMovementCommandSource source)
         {
-            if (movementCollider is CapsuleCollider capsule && _floatingDefaultsCaptured)
-            {
-                var defaultShape = new CapsuleShapeSnapshot
-                {
-                    center = floatingCapsuleDefaultCenter,
-                    radius = floatingCapsuleDefaultRadius,
-                    height = floatingCapsuleDefaultHeight,
-                    direction = floatingCapsuleDefaultDirection
-                };
-                DrawCapsuleOutline(capsule, defaultShape, new Color(0.2f, 0.9f, 1f, 0.9f));
-                if (!enableFloatingCapsule) return;
-
-                float maxClearance = Mathf.Max(0f, floatingCapsuleDefaultHeight - floatingCapsuleDefaultRadius * 2f);
-                float clearance = Mathf.Clamp(floatingBottomClearance, 0f, maxClearance);
-                if (clearance > 0.0001f)
-                {
-                    var effectiveShape = new CapsuleShapeSnapshot
-                    {
-                        center = capsule.center,
-                        radius = capsule.radius,
-                        height = capsule.height,
-                        direction = capsule.direction
-                    };
-                    DrawCapsuleOutline(capsule, effectiveShape, new Color(1f, 0.72f, 0.1f, 0.95f));
-                    DrawFloatingCapsuleGap(capsule, defaultShape, clearance);
-                }
-                return;
-            }
-
-            DrawColliderOutline(Vector3.zero, new Color(0.2f, 0.9f, 1f, 0.9f));
+            RequireRuntime();
+            _runtime.ReplaceCommandSource(id, source);
         }
 
         /// <summary>
-        /// 绘制基础胶囊体底部与实际碰撞体底部之间的无碰撞空腔。
+        /// 激活已注册命令来源并保留其原有运行时状态。
         /// </summary>
-        private void DrawFloatingCapsuleGap(
-            CapsuleCollider capsule,
-            CapsuleShapeSnapshot baseShape,
-            float clearance)
+        /// <param name="id">需要激活的命令来源标识。</param>
+        /// <returns>是否成功找到并激活命令来源。</returns>
+        public bool ActivateCommandSource(string id)
         {
+            RequireRuntime();
+            return _runtime.ActivateCommandSource(id);
+        }
+
+        /// <summary>
+        /// 注销命令来源并在其为当前来源时自动停用。
+        /// </summary>
+        /// <param name="id">需要注销的命令来源标识。</param>
+        /// <returns>是否成功注销命令来源。</returns>
+        public bool UnregisterCommandSource(string id)
+        {
+            RequireRuntime();
+            return _runtime.UnregisterCommandSource(id);
+        }
+
+        /// <summary>
+        /// 提交只保留到下一固定步的通用移动命令，适用于简单桥接或测试。
+        /// </summary>
+        /// <param name="command">需要由运动管线消费的通用移动命令。</param>
+        public void SubmitCommand(in UnitMovementCommand command)
+        {
+            RequireRuntime();
+            _runtime.SubmitCommand(command);
+        }
+
+        #endregion
+
+        #region Movement Strategies
+
+        /// <summary>
+        /// 按具体策略类型切换当前移动策略；首次使用时创建实例，后续再次选择时复用原实例与其状态。
+        /// </summary>
+        /// <typeparam name="TStrategy">需要启用的具体纯 C# 移动策略类型。</typeparam>
+        /// <returns>当前生效且已缓存的策略实例。</returns>
+        public TStrategy UseMovementStrategy<TStrategy>()
+            where TStrategy : UnitMovementStrategy, new()
+        {
+            RequireRuntime();
+            return _runtime.UseMovementStrategy<TStrategy>();
+        }
+
+        /// <summary>
+        /// 清空指定缓存策略持有的全部运行时状态，但保留该实例供后续复用。
+        /// </summary>
+        /// <typeparam name="TStrategy">需要清空状态的具体纯 C# 移动策略类型。</typeparam>
+        /// <returns>是否已找到并清空该策略实例。</returns>
+        public bool ClearMovementStrategyState<TStrategy>()
+            where TStrategy : UnitMovementStrategy
+        {
+            RequireRuntime();
+            return _runtime.ClearMovementStrategyState<TStrategy>();
+        }
+
+        #endregion
+
+        #region Runtime Assembly
+
+        /// <summary>
+        /// 解析未显式配置的同对象刚体、支持的移动碰撞体和兼容的数据 Provider 引用。
+        /// </summary>
+        private void ResolveReferences()
+        {
+            if (_rigidbody == null) _rigidbody = GetComponent<Rigidbody>();
+            if (_movementCollider == null) _movementCollider = GetComponent<CapsuleCollider>();
+            if (_movementCollider == null) _movementCollider = GetComponent<BoxCollider>();
+            if (_dataProvider == null) _dataProvider = FindCompatibleDataProvider();
+        }
+
+        /// <summary>
+        /// 确保旧 Prefab 或新增组件在反序列化后拥有所需的模块化配置对象。
+        /// </summary>
+        private void EnsureAuthoringData()
+        {
+            if (_profile == null) _profile = new UnitMovementProfile();
+            _profile.EnsureModules();
+            if (_movementStrategy == null) _movementStrategy = new DefaultRigidbodyMovementStrategy();
+            if (_floatingCapsuleAuthoringState == null)
+                _floatingCapsuleAuthoringState = new FloatingCapsuleAuthoringState();
+        }
+
+        /// <summary>
+        /// 创建形状、物理查询、接地和运动运行时对象，并接管 Rigidbody 的必要物理设置。
+        /// </summary>
+        private void CreateRuntime()
+        {
+            if (_runtime != null) return;
+
+            ResolveReferences();
+            EnsureAuthoringData();
+            if (!HasRequiredDependencies()) return;
+
+            _shapeModule = new ColliderShapeModule(
+                _movementCollider,
+                _profile.FloatingCapsule,
+                _floatingCapsuleAuthoringState);
+            _shapeModule.Synchronize();
+
+            IUnitBody body = new RigidbodyUnitBody(_rigidbody);
+            IPhysicsQuery physicsQuery = new UnityPhysicsQuery();
+            GroundProbeModule groundProbe = new GroundProbeModule(
+                _shapeModule,
+                transform,
+                physicsQuery,
+                _profile.Ground);
+            _runtime = new UnitMovementRuntime(
+                body,
+                _shapeModule,
+                groundProbe,
+                _profile,
+                _movementStrategy);
+            ResolveMovementDataProvider();
+            _reportedMissingDependencies = false;
+        }
+
+        /// <summary>
+        /// 释放运行时模块；形状模块保留到编辑器预览同步时重新创建。
+        /// </summary>
+        private void DisposeRuntime()
+        {
+            if (_runtime == null) return;
+
+            _runtime.Dispose();
+            _runtime = null;
+            _movementDataProvider = null;
+            _movementInput = null;
+            _jumpPressedVersion = 0;
+        }
+
+        /// <summary>
+        /// 在编辑或运行时将浮动胶囊设置同步到实际 Collider，保证顶部对齐且底部留空。
+        /// </summary>
+        private void SynchronizeColliderShape()
+        {
+            if (_movementCollider == null || _profile == null || _floatingCapsuleAuthoringState == null) return;
+
+            if (_shapeModule == null
+                || _shapeModule.MovementCollider != _movementCollider
+                || _shapeModule.FloatingCapsuleSettings != _profile.FloatingCapsule)
+                _shapeModule = new ColliderShapeModule(
+                    _movementCollider,
+                    _profile.FloatingCapsule,
+                    _floatingCapsuleAuthoringState);
+
+            _shapeModule.Synchronize();
+        }
+
+        /// <summary>
+        /// 验证运行时组装所需的 Rigidbody 与支持的 Collider 是否都已配置。
+        /// </summary>
+        /// <returns>依赖是否足以创建运动运行时。</returns>
+        private bool HasRequiredDependencies()
+        {
+            bool supportedCollider = _movementCollider is CapsuleCollider || _movementCollider is BoxCollider;
+            if (_rigidbody != null && supportedCollider) return true;
+            if (_reportedMissingDependencies) return false;
+
+            Debug.LogError("UnitMover 需要 Rigidbody 与 CapsuleCollider 或 BoxCollider 才能创建运动运行时。", this);
+            _reportedMissingDependencies = true;
+            return false;
+        }
+
+        /// <summary>
+        /// 优先使用 Inspector 指定的 DataProvider；引用为空或失效时，再扫描同一 GameObject 的兼容 Provider。
+        /// 解析仅发生在 UnitMover 初始化和运行时创建时，后续物理步直接读取已缓存的黑板数据。
+        /// </summary>
+        private void ResolveMovementDataProvider()
+        {
+            _movementDataProvider = null;
+            _movementInput = null;
+            _jumpPressedVersion = 0;
+            if (TryResolveMovementDataProvider(_dataProvider)) return;
+
+            MonoBehaviour[] components = GetComponents<MonoBehaviour>();
+            for (int index = 0; index < components.Length; index++)
+            {
+                MonoBehaviour component = components[index];
+                if (component == _dataProvider) continue;
+                if (TryResolveMovementDataProvider(component)) return;
+            }
+        }
+
+        /// <summary>
+        /// 验证一个 Unity 组件是否为可用的移动数据 Provider，并在通过验证后缓存其黑板输入契约。
+        /// </summary>
+        /// <param name="component">需要验证并尝试缓存的同对象组件。</param>
+        /// <returns>组件提供了可用移动输入并已完成缓存时返回 true。</returns>
+        private bool TryResolveMovementDataProvider(MonoBehaviour component)
+        {
+            if (component == null || !component.isActiveAndEnabled) return false;
+            if (component.gameObject != gameObject) return false;
+            if (component is not IDataProvider provider) return false;
+            if (provider.Blackboard is not IUnitMovementInput movementInput) return false;
+
+            _movementDataProvider = provider;
+            _movementInput = movementInput;
+            _movementInput.InitializeJumpPressedCursor(ref _jumpPressedVersion);
+            return true;
+        }
+
+        /// <summary>
+        /// 将当前缓存的 DataProvider 黑板数据直接提交给本物理步运行时。
+        /// 该路径不依赖命令来源注册表，确保实体基础输入始终由 UnitMover 主动消费。
+        /// </summary>
+        private void SubmitDataProviderCommand()
+        {
+            // Unity 组件启用顺序不保证 DataProvider 必然早于 UnitMover。
+            // 当运行时在 Provider 尚未激活时创建，首个可用物理步必须主动完成重新绑定。
+            if (!IsDataProviderInputActive)
+                ResolveMovementDataProvider();
+            if (!IsDataProviderInputActive) return;
+
+            UnitMovementCommand command = UnitMovementCommand.CreateDefault();
+            command.WorldMoveDirection = _movementInput.WorldMoveDirection;
+            command.SpeedScale = Mathf.Max(0f, _movementInput.SpeedScale);
+            command.IsJumpHeld = _movementInput.IsJumpHeld;
+            if (_movementInput.ConsumeJumpPressed(ref _jumpPressedVersion, out bool pressed) && pressed)
+                command.RequestJump = true;
+
+            _runtime.SubmitCommand(command);
+        }
+
+        /// <summary>
+        /// 查找同一 GameObject 上第一个提供通用移动输入黑板的 DataProvider 组件。
+        /// </summary>
+        /// <returns>找到时返回其 Unity 组件引用，否则返回 null。</returns>
+        private MonoBehaviour FindCompatibleDataProvider()
+        {
+            MonoBehaviour[] components = GetComponents<MonoBehaviour>();
+            for (int index = 0; index < components.Length; index++)
+            {
+                MonoBehaviour component = components[index];
+                if (component is not IDataProvider provider) continue;
+                if (provider.Blackboard is IUnitMovementInput) return component;
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// 确保业务桥接只在 UnitMover 已启用并创建运行时后注册命令来源或模式。
+        /// </summary>
+        private void RequireRuntime()
+        {
+            if (_runtime != null) return;
+            throw new System.InvalidOperationException("UnitMover 运行时尚未就绪，请在 UnitMover.OnEnable 之后注册命令来源或运动模式。");
+        }
+
+        #endregion
+
+        #region Gizmos
+
+        /// <summary>
+        /// 绘制实际参与物理检测的当前 Collider 形状，浮动胶囊启用时显示缩短后的尺寸。
+        /// </summary>
+        private void DrawEffectiveColliderPreview()
+        {
+            if (_movementCollider == null) return;
+
+            Color previousColor = Gizmos.color;
+            Gizmos.color = new Color(0.2f, 0.85f, 1f, 0.85f);
+
+            if (_movementCollider is CapsuleCollider capsule)
+                DrawWireCapsule(capsule);
+            else
+            {
+                Bounds bounds = _movementCollider.bounds;
+                Gizmos.DrawWireCube(bounds.center, bounds.size);
+            }
+
+            Gizmos.color = previousColor;
+        }
+
+        /// <summary>
+        /// 浮动胶囊启用时在基础胶囊底部与有效碰撞底部之间绘制黄色间隙立方体。
+        /// </summary>
+        private void DrawFloatingCapsuleGapPreview()
+        {
+            if (_shapeModule == null || _profile == null) return;
+            if (!(_movementCollider is CapsuleCollider capsule)) return;
+
+            FloatingCapsuleSettings settings = _profile.FloatingCapsule;
+            FloatingCapsuleAuthoringState state = _shapeModule.AuthoringState;
+            if (settings == null || state == null) return;
+            if (!settings.Enabled || !state.Captured || !state.FloatingShapeApplied) return;
+
+            float maxClearance = Mathf.Max(0f, state.BaseHeight - state.BaseRadius * 2f);
+            float clearance = Mathf.Clamp(settings.BottomClearance, 0f, maxClearance);
             if (clearance <= 0.0001f) return;
 
-            Vector3 localAxis = GetCapsuleLocalAxis(baseShape.direction);
-            Vector3 baseBottom = baseShape.center - localAxis * (baseShape.height * 0.5f);
-            Vector3 effectiveBottom = baseBottom + localAxis * clearance;
-            Vector3 gapCenter = Vector3.Lerp(baseBottom, effectiveBottom, 0.5f);
-            float diameter = baseShape.radius * 2f;
-            Vector3 gapSize = baseShape.direction switch
+            Vector3 localAxis = ColliderShapeModule.GetCapsuleLocalAxis(capsule.direction);
+            float diameter = capsule.radius * 2f;
+            float effectiveHalfHeight = capsule.height * 0.5f;
+
+            // 当前 Collider 底部（有效碰撞底部）
+            Vector3 effectiveBottom = capsule.center - localAxis * effectiveHalfHeight;
+            // 基础胶囊底部 = 有效底部往下加 clearance
+            Vector3 baseBottom = effectiveBottom - localAxis * clearance;
+            // 间隙中心
+            Vector3 gapCenter = (effectiveBottom + baseBottom) * 0.5f;
+
+            Vector3 gapSize = capsule.direction switch
             {
                 0 => new Vector3(clearance, diameter, diameter),
                 1 => new Vector3(diameter, clearance, diameter),
                 _ => new Vector3(diameter, diameter, clearance)
             };
 
+            Color previousColor = Gizmos.color;
             Matrix4x4 previousMatrix = Gizmos.matrix;
             Gizmos.matrix = capsule.transform.localToWorldMatrix;
-            Gizmos.color = new Color(1f, 0.72f, 0.1f, 0.12f);
-            Gizmos.DrawCube(gapCenter, gapSize);
-            Gizmos.color = new Color(1f, 0.72f, 0.1f, 0.85f);
-            Gizmos.DrawWireCube(gapCenter, gapSize);
-            Gizmos.matrix = previousMatrix;
 
+            // 半透明填充
+            Gizmos.color = new Color(1f, 0.92f, 0.016f, 0.35f);
+            Gizmos.DrawCube(gapCenter, gapSize);
+
+            // 轮廓线
+            Gizmos.color = new Color(1f, 0.92f, 0.016f, 0.85f);
+            Gizmos.DrawWireCube(gapCenter, gapSize);
+
+            Gizmos.matrix = previousMatrix;
+            Gizmos.color = previousColor;
+
+            // 高度标注（世界空间文字）
+            Vector3 labelPos = capsule.transform.TransformPoint(gapCenter);
 #if UNITY_EDITOR
-            Vector3 worldBaseBottom = capsule.transform.TransformPoint(baseBottom);
-            Vector3 worldEffectiveBottom = capsule.transform.TransformPoint(effectiveBottom);
-            Handles.color = new Color(1f, 0.72f, 0.1f, 0.9f);
-            Handles.DrawDottedLine(worldBaseBottom, worldEffectiveBottom, 4f);
-            Handles.Label(
-                worldEffectiveBottom + Vector3.right * 0.05f,
-                $"Floating Gap: {clearance:0.###} m\nEffective Height: {baseShape.height - clearance:0.###} m",
-                EditorStyles.miniBoldLabel);
+            UnityEditor.Handles.color = new Color(1f, 0.92f, 0.016f, 0.9f);
+            UnityEditor.Handles.Label(labelPos, $"{clearance:0.###} m",
+                new GUIStyle(UnityEditor.EditorStyles.miniLabel)
+                {
+                    normal = { textColor = new Color(1f, 0.92f, 0.016f) },
+                    alignment = TextAnchor.MiddleCenter
+                });
 #endif
         }
 
         /// <summary>
-        /// 使用指定局部形状绘制胶囊体轮廓。
+        /// 绘制当前 Collider 底部到悬浮高度的参考线，编辑模式下也可观察有效底部变化。
         /// </summary>
-        private static void DrawCapsuleOutline(
-            CapsuleCollider capsule,
-            CapsuleShapeSnapshot shape,
-            Color color)
+        private void DrawGroundPreview()
         {
-            GetCapsuleWorldPoints(
-                capsule,
-                shape.center,
-                shape.radius,
-                shape.height,
-                shape.direction,
-                out Vector3 point1,
-                out Vector3 point2,
-                out float radius);
-            Gizmos.color = color;
-            DrawWireCapsule(point1, point2, radius);
+            if (_shapeModule == null || _profile == null) return;
+
+            Bounds bounds = _shapeModule.Bounds;
+            Vector3 origin = new Vector3(bounds.center.x, bounds.min.y, bounds.center.z);
+            Color previousColor = Gizmos.color;
+            Gizmos.color = new Color(1f, 0.85f, 0.15f, 0.75f);
+            float supportDistance = _shapeModule.GetFloatingBottomClearance()
+                + _profile.Ground.HoverHeight;
+            Gizmos.DrawLine(origin, origin + Vector3.down * supportDistance);
+            Gizmos.color = previousColor;
         }
 
         /// <summary>
-        /// 根据当前支持的碰撞体类型绘制指定世界空间偏移后的轮廓。
+        /// 绘制运行时最近一次边缘支撑、危险方向和受约束速度的诊断数据。
         /// </summary>
-        /// <param name="worldOffset">施加到碰撞体轮廓的世界空间偏移。</param>
-        /// <param name="color">轮廓绘制颜色。</param>
-        private void DrawColliderOutline(Vector3 worldOffset, Color color)
+        private void DrawEdgeProtectionPreview()
         {
-            Gizmos.color = color;
-            if (movementCollider is CapsuleCollider capsule)
+            if (!_showEdgeDetectionGizmos || _runtime == null || _shapeModule == null) return;
+
+            EdgeProtectionDebugState debugState = _runtime.EdgeDebugState;
+            if (debugState.SupportRayDistance > 0f)
             {
-                GetCapsuleWorldPoints(capsule, out Vector3 point1, out Vector3 point2, out float radius);
-                DrawWireCapsule(point1 + worldOffset, point2 + worldOffset, radius);
-                return;
+                for (int index = 0; index < debugState.SupportPoints.Length; index++)
+                    DrawEdgeDetectionRay(
+                        debugState.SupportPoints[index],
+                        debugState.SupportRayDistance,
+                        debugState.SupportResults[index]);
             }
 
-            if (movementCollider is BoxCollider box)
+            if (debugState.HazardRayDistance > 0f)
             {
-                Matrix4x4 previousMatrix = Gizmos.matrix;
-                Gizmos.matrix = Matrix4x4.TRS(
-                    box.transform.position + worldOffset,
-                    box.transform.rotation,
-                    box.transform.lossyScale);
-                Gizmos.DrawWireCube(box.center, box.size);
-                Gizmos.matrix = previousMatrix;
+                for (int index = 0; index < debugState.HazardPoints.Length; index++)
+                    DrawEdgeDetectionRay(
+                        debugState.HazardPoints[index],
+                        debugState.HazardRayDistance,
+                        !debugState.HazardResults[index]);
             }
+
+            Bounds bounds = _shapeModule.Bounds;
+            Gizmos.color = Color.red;
+            Gizmos.DrawRay(bounds.center, debugState.EdgeOutNormal * 0.75f);
+            Gizmos.color = Color.cyan;
+            Gizmos.DrawRay(bounds.center, debugState.ConstrainedVelocity.normalized * 0.75f);
         }
 
         /// <summary>
-        /// 使用两个端点和半径绘制胶囊体线框。
+        /// 以统一颜色绘制一条边缘检测向下射线及其检测终点。
         /// </summary>
-        /// <param name="point1">胶囊轴线一端。</param>
-        /// <param name="point2">胶囊轴线另一端。</param>
-        /// <param name="radius">胶囊世界空间半径。</param>
-        private static void DrawWireCapsule(Vector3 point1, Vector3 point2, float radius)
+        /// <param name="origin">射线的世界空间起点。</param>
+        /// <param name="distance">射线向下检测的最大长度。</param>
+        /// <param name="isSafe">命中可行走支撑时为 true，缺少支撑时为 false。</param>
+        private static void DrawEdgeDetectionRay(Vector3 origin, float distance, bool isSafe)
         {
-            Gizmos.DrawWireSphere(point1, radius);
-            Gizmos.DrawWireSphere(point2, radius);
+            Color color = isSafe
+                ? new Color(0.15f, 0.95f, 0.25f, 0.9f)
+                : new Color(1f, 0.15f, 0.1f, 0.9f);
+            Vector3 end = origin + Vector3.down * distance;
+            Gizmos.color = color;
+            Gizmos.DrawRay(origin, Vector3.down * distance);
+            Gizmos.DrawSphere(origin, 0.025f);
+            Gizmos.DrawSphere(end, 0.02f);
+        }
 
-            Vector3 axis = point1 - point2;
-            if (axis.sqrMagnitude <= 0.0001f) return;
+        /// <summary>
+        /// 按 CapsuleCollider 实际轴向、缩放和中心绘制线框胶囊，避免预览仍使用基础尺寸。
+        /// </summary>
+        /// <param name="capsule">需要绘制的实际 CapsuleCollider。</param>
+        private static void DrawWireCapsule(CapsuleCollider capsule)
+        {
+            Transform capsuleTransform = capsule.transform;
+            Vector3 localAxis = ColliderShapeModule.GetCapsuleLocalAxis(capsule.direction);
+            Vector3 axis = capsuleTransform.TransformDirection(localAxis).normalized;
+            Vector3 worldCenter = capsuleTransform.TransformPoint(capsule.center);
+            Vector3 lossyScale = capsuleTransform.lossyScale;
+            float axisScale = GetAxisScale(lossyScale, capsule.direction);
+            float radiusScale = GetRadiusScale(lossyScale, capsule.direction);
+            float radius = capsule.radius * radiusScale;
+            float halfSegment = Mathf.Max(0f, capsule.height * axisScale * 0.5f - radius);
+            Vector3 top = worldCenter + axis * halfSegment;
+            Vector3 bottom = worldCenter - axis * halfSegment;
 
-            axis.Normalize();
             Vector3 tangent = Vector3.Cross(axis, Vector3.up);
-            if (tangent.sqrMagnitude <= 0.0001f)
-                tangent = Vector3.Cross(axis, Vector3.right);
+            if (tangent.sqrMagnitude <= 0.000001f) tangent = Vector3.Cross(axis, Vector3.right);
             tangent.Normalize();
             Vector3 bitangent = Vector3.Cross(axis, tangent).normalized;
 
-            Gizmos.DrawLine(point1 + tangent * radius, point2 + tangent * radius);
-            Gizmos.DrawLine(point1 - tangent * radius, point2 - tangent * radius);
-            Gizmos.DrawLine(point1 + bitangent * radius, point2 + bitangent * radius);
-            Gizmos.DrawLine(point1 - bitangent * radius, point2 - bitangent * radius);
+            Gizmos.DrawWireSphere(top, radius);
+            Gizmos.DrawWireSphere(bottom, radius);
+            Gizmos.DrawLine(top + tangent * radius, bottom + tangent * radius);
+            Gizmos.DrawLine(top - tangent * radius, bottom - tangent * radius);
+            Gizmos.DrawLine(top + bitangent * radius, bottom + bitangent * radius);
+            Gizmos.DrawLine(top - bitangent * radius, bottom - bitangent * radius);
         }
+
+        /// <summary>
+        /// 获取 CapsuleCollider 主轴在世界空间上的缩放系数。
+        /// </summary>
+        /// <param name="lossyScale">Transform 的世界缩放。</param>
+        /// <param name="direction">CapsuleCollider 轴向索引。</param>
+        /// <returns>胶囊主轴的绝对缩放系数。</returns>
+        private static float GetAxisScale(Vector3 lossyScale, int direction)
+        {
+            switch (direction)
+            {
+                case 0:
+                    return Mathf.Abs(lossyScale.x);
+                case 1:
+                    return Mathf.Abs(lossyScale.y);
+                default:
+                    return Mathf.Abs(lossyScale.z);
+            }
+        }
+
+        /// <summary>
+        /// 获取 CapsuleCollider 横向半径在世界空间上的保守缩放系数。
+        /// </summary>
+        /// <param name="lossyScale">Transform 的世界缩放。</param>
+        /// <param name="direction">CapsuleCollider 轴向索引。</param>
+        /// <returns>两个横向轴中较大的绝对缩放系数。</returns>
+        private static float GetRadiusScale(Vector3 lossyScale, int direction)
+        {
+            switch (direction)
+            {
+                case 0:
+                    return Mathf.Max(Mathf.Abs(lossyScale.y), Mathf.Abs(lossyScale.z));
+                case 1:
+                    return Mathf.Max(Mathf.Abs(lossyScale.x), Mathf.Abs(lossyScale.z));
+                default:
+                    return Mathf.Max(Mathf.Abs(lossyScale.x), Mathf.Abs(lossyScale.y));
+            }
+        }
+
+        #endregion
     }
 }

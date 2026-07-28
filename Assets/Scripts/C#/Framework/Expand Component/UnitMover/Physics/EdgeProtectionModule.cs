@@ -1,0 +1,486 @@
+using UnityEngine;
+
+namespace Framework.ExpandComponent.UnitMover
+{
+    /// <summary>
+    /// 标识预测支撑截面是否足以允许继续前进。
+    /// </summary>
+    public enum SupportStatus
+    {
+        Stable,
+        Unstable,
+        Unsupported
+    }
+
+    /// <summary>
+    /// 保存仅供编辑器可视化读取的最近一次边缘保护诊断数据。
+    /// </summary>
+    public sealed class EdgeProtectionDebugState
+    {
+        // 预测支撑采样的世界位置。
+        private readonly Vector3[] _supportPoints = new Vector3[3];
+        // 预测支撑采样是否命中可行走地面。
+        private readonly bool[] _supportResults = new bool[3];
+        // 局部危险采样的世界位置。
+        private readonly Vector3[] _hazardPoints = new Vector3[8];
+        // 局部危险采样是否缺少支撑。
+        private readonly bool[] _hazardResults = new bool[8];
+        // 前缘支撑采样射线的最大长度。
+        private float _supportRayDistance;
+        // 环形危险采样射线的最大长度。
+        private float _hazardRayDistance;
+
+        /// <summary>获取预测支撑采样位置。</summary>
+        public Vector3[] SupportPoints => _supportPoints;
+
+        /// <summary>获取预测支撑采样结果。</summary>
+        public bool[] SupportResults => _supportResults;
+
+        /// <summary>获取局部危险采样位置。</summary>
+        public Vector3[] HazardPoints => _hazardPoints;
+
+        /// <summary>获取局部危险采样结果。</summary>
+        public bool[] HazardResults => _hazardResults;
+
+        /// <summary>获取前缘支撑采样射线的最大长度。</summary>
+        public float SupportRayDistance => _supportRayDistance;
+
+        /// <summary>获取环形危险采样射线的最大长度。</summary>
+        public float HazardRayDistance => _hazardRayDistance;
+
+        /// <summary>获取最近一次推导出的悬崖外法线。</summary>
+        public Vector3 EdgeOutNormal { get; internal set; }
+
+        /// <summary>获取边缘保护后的候选水平速度。</summary>
+        public Vector3 ConstrainedVelocity { get; internal set; }
+
+        /// <summary>获取最近一次预测支撑状态。</summary>
+        public SupportStatus SupportStatus { get; internal set; }
+
+        /// <summary>
+        /// 清空上一物理步的射线诊断数据，避免 Gizmos 显示已经不再执行的边缘检测。
+        /// </summary>
+        internal void ClearRayData()
+        {
+            _supportRayDistance = 0f;
+            _hazardRayDistance = 0f;
+            for (int index = 0; index < _supportPoints.Length; index++)
+            {
+                _supportPoints[index] = Vector3.zero;
+                _supportResults[index] = false;
+            }
+
+            for (int index = 0; index < _hazardPoints.Length; index++)
+            {
+                _hazardPoints[index] = Vector3.zero;
+                _hazardResults[index] = false;
+            }
+        }
+
+        /// <summary>
+        /// 记录前缘支撑采样射线的最大长度。
+        /// </summary>
+        /// <param name="distance">本次前缘支撑采样使用的最大射线长度。</param>
+        internal void SetSupportRayDistance(float distance)
+        {
+            _supportRayDistance = Mathf.Max(0f, distance);
+        }
+
+        /// <summary>
+        /// 记录环形危险采样射线的最大长度。
+        /// </summary>
+        /// <param name="distance">本次危险采样使用的最大射线长度。</param>
+        internal void SetHazardRayDistance(float distance)
+        {
+            _hazardRayDistance = Mathf.Max(0f, distance);
+        }
+    }
+
+    /// <summary>
+    /// 保存经过稳定支撑验证后可用于异常跌落回退的位置快照。
+    /// </summary>
+    public readonly struct SafePositionSnapshot
+    {
+        /// <summary>
+        /// 创建安全位置快照。
+        /// </summary>
+        /// <param name="position">稳定接地时的刚体位置。</param>
+        /// <param name="rotation">稳定接地时的刚体旋转。</param>
+        public SafePositionSnapshot(Vector3 position, Quaternion rotation)
+        {
+            Position = position;
+            Rotation = rotation;
+        }
+
+        /// <summary>安全位置的世界坐标。</summary>
+        public Vector3 Position { get; }
+
+        /// <summary>安全位置的世界旋转。</summary>
+        public Quaternion Rotation { get; }
+    }
+
+    /// <summary>
+    /// 基于预测脚底支撑约束目标速度和已有外向速度，并提供有限的异常跌落回退判断。
+    /// </summary>
+    public sealed class EdgeProtectionModule
+    {
+        // 前缘预测距离中保留的微小安全边距。
+        private const float SkinWidth = 0.02f;
+        // 局部边缘方向定位时使用的固定危险采样数量。
+        private const int HazardSampleCount = 8;
+        // 提供有效 Collider 边界和脚底半径的形状模块。
+        private readonly ColliderShapeModule _shapeModule;
+        // 复用统一地面过滤规则的接地模块。
+        private readonly GroundProbeModule _groundProbe;
+        // 边缘保护和异常回退配置。
+        private readonly EdgeProtectionSettings _settings;
+        // 供 Scene Gizmos 读取的固定缓冲诊断数据。
+        private readonly EdgeProtectionDebugState _debugState = new EdgeProtectionDebugState();
+        // 最近一次完全安全位置是否有效。
+        private bool _hasSafePosition;
+        // 最近一次完全安全位置快照。
+        private SafePositionSnapshot _safePosition;
+        // 主动跳跃后是否暂时禁止异常跌落回退。
+        private bool _recoveryDisarmedByJump;
+
+        /// <summary>
+        /// 初始化边缘保护模块。
+        /// </summary>
+        /// <param name="shapeModule">提供当前有效 Collider 尺寸的模块。</param>
+        /// <param name="groundProbe">提供统一地面判断的模块。</param>
+        /// <param name="settings">边缘保护配置。</param>
+        public EdgeProtectionModule(
+            ColliderShapeModule shapeModule,
+            GroundProbeModule groundProbe,
+            EdgeProtectionSettings settings)
+        {
+            _shapeModule = shapeModule;
+            _groundProbe = groundProbe;
+            _settings = settings;
+        }
+
+        /// <summary>获取最近一次边缘保护调试数据。</summary>
+        public EdgeProtectionDebugState DebugState => _debugState;
+
+        /// <summary>
+        /// 在稳定地面上记录安全位置，并在重新稳定接地后重新武装异常回退。
+        /// </summary>
+        /// <param name="state">当前已更新的运动状态。</param>
+        /// <param name="position">当前刚体世界位置。</param>
+        /// <param name="rotation">当前刚体世界旋转。</param>
+        public void UpdateSafePosition(in UnitMovementState state, Vector3 position, Quaternion rotation)
+        {
+            if (!state.IsStableGrounded) return;
+
+            _safePosition = new SafePositionSnapshot(position, rotation);
+            _hasSafePosition = true;
+            _recoveryDisarmedByJump = false;
+        }
+
+        /// <summary>
+        /// 标记当前离地由主动跳跃触发，避免跳跃过程被安全位置回退打断。
+        /// </summary>
+        public void NotifyJumpStarted()
+        {
+            _recoveryDisarmedByJump = true;
+        }
+
+        /// <summary>
+        /// 预测目标速度前缘的三点支撑并在必要时删除通向悬崖外侧的速度分量。
+        /// </summary>
+        /// <param name="state">当前运动状态。</param>
+        /// <param name="candidateVelocity">尚未约束的候选水平速度。</param>
+        /// <param name="currentVelocity">当前刚体水平速度。</param>
+        /// <param name="fixedDeltaTime">本物理步时长，单位：秒。</param>
+        /// <param name="constrainedCandidate">返回经过边缘保护的候选水平速度。</param>
+        /// <param name="constrainedCurrent">返回已移除外向惯性的当前水平速度。</param>
+        public void ConstrainVelocity(
+            in UnitMovementState state,
+            Vector3 candidateVelocity,
+            Vector3 currentVelocity,
+            float fixedDeltaTime,
+            out Vector3 constrainedCandidate,
+            out Vector3 constrainedCurrent)
+        {
+            constrainedCandidate = candidateVelocity;
+            constrainedCurrent = currentVelocity;
+            _debugState.ClearRayData();
+            _debugState.EdgeOutNormal = Vector3.zero;
+            _debugState.ConstrainedVelocity = candidateVelocity;
+
+            if (_settings == null || !_settings.Enabled || !state.IsStableGrounded) return;
+            if (candidateVelocity.sqrMagnitude <= 0.000001f) return;
+
+            Vector3 direction = candidateVelocity.normalized;
+            SupportStatus supportStatus = EvaluatePredictedSupport(direction, candidateVelocity, currentVelocity, fixedDeltaTime);
+            _debugState.SupportStatus = supportStatus;
+            if (supportStatus == SupportStatus.Stable) return;
+            if (TryEvaluateBridgeableGap(direction, candidateVelocity, currentVelocity, fixedDeltaTime)) return;
+
+            Vector3 edgeOutNormal = TryResolveEdgeOutNormal();
+            if (edgeOutNormal.sqrMagnitude <= 0.000001f)
+            {
+                constrainedCandidate = Vector3.zero;
+                _debugState.ConstrainedVelocity = constrainedCandidate;
+                return;
+            }
+
+            constrainedCandidate = RemoveOutwardComponent(candidateVelocity, edgeOutNormal);
+            constrainedCurrent = RemoveOutwardComponent(currentVelocity, edgeOutNormal);
+            if (HasStableSupportForVelocity(constrainedCandidate, constrainedCurrent, fixedDeltaTime))
+            {
+                _debugState.EdgeOutNormal = edgeOutNormal;
+                _debugState.ConstrainedVelocity = constrainedCandidate;
+                return;
+            }
+
+            Vector3 tangent = Vector3.Cross(Vector3.up, edgeOutNormal).normalized;
+            Vector3 tangentCandidate = SelectSupportedTangent(
+                tangent,
+                candidateVelocity,
+                constrainedCurrent,
+                fixedDeltaTime);
+            constrainedCandidate = tangentCandidate;
+            _debugState.EdgeOutNormal = edgeOutNormal;
+            _debugState.ConstrainedVelocity = constrainedCandidate;
+        }
+
+        /// <summary>
+        /// 判断当前无支撑状态是否满足异常跌落回退条件。
+        /// </summary>
+        /// <param name="state">当前运动状态。</param>
+        /// <param name="snapshot">满足条件时返回最近完全安全位置。</param>
+        /// <returns>是否应在当前物理步提前执行安全位置回退。</returns>
+        public bool TryGetFallRecovery(in UnitMovementState state, out SafePositionSnapshot snapshot)
+        {
+            snapshot = default;
+            if (_settings == null || !_settings.Enabled || !_settings.FallRecoveryEnabled || !_hasSafePosition) return false;
+            if (state.IsGrounded) return false;
+            if (_settings.RecoverUnexpectedFallsOnly && _recoveryDisarmedByJump) return false;
+            if (_shapeModule == null || _groundProbe == null) return false;
+
+            Bounds bounds = _shapeModule.Bounds;
+            Vector3 origin = bounds.center + Vector3.up * bounds.extents.y;
+            float distance = bounds.size.y + _groundProbe.HoverHeight + _settings.MaxFallHeight + SkinWidth;
+            if (_groundProbe.TryGetWalkableGround(origin, Vector3.down, distance, out _)) return false;
+
+            snapshot = _safePosition;
+            return true;
+        }
+
+        /// <summary>
+        /// 评估当前候选方向预测前缘的左、中、右三点支撑状态。
+        /// </summary>
+        /// <param name="direction">归一化后的候选水平移动方向。</param>
+        /// <param name="candidateVelocity">候选水平速度。</param>
+        /// <param name="currentVelocity">当前水平速度。</param>
+        /// <param name="fixedDeltaTime">本物理步时长，单位：秒。</param>
+        /// <returns>三点截面的稳定、非稳定或无支撑结果。</returns>
+        private SupportStatus EvaluatePredictedSupport(
+            Vector3 direction,
+            Vector3 candidateVelocity,
+            Vector3 currentVelocity,
+            float fixedDeltaTime)
+        {
+            if (_shapeModule == null || _groundProbe == null || _settings == null) return SupportStatus.Unsupported;
+
+            Bounds bounds = _shapeModule.Bounds;
+            float horizontalSpeed = Mathf.Max(candidateVelocity.magnitude, currentVelocity.magnitude);
+            float predictionDistance = horizontalSpeed * fixedDeltaTime + _shapeModule.GetHorizontalExtent(direction) + SkinWidth;
+            Vector3 right = Vector3.Cross(Vector3.up, direction).normalized;
+            float lateralOffset = Mathf.Min(_shapeModule.GetHorizontalExtent(right) * 0.7f, _shapeModule.GetFootSupportRadius());
+            Vector3 frontCenter = bounds.center + direction * predictionDistance;
+            float rayDistance = bounds.size.y + _groundProbe.HoverHeight + _settings.MaxFallHeight + SkinWidth;
+            Vector3 rayOrigin = new Vector3(frontCenter.x, bounds.max.y + SkinWidth, frontCenter.z);
+            _debugState.SetSupportRayDistance(rayDistance);
+
+            bool middleSupported = TrySampleSupport(rayOrigin, rayDistance, 1);
+            bool leftSupported = TrySampleSupport(rayOrigin - right * lateralOffset, rayDistance, 0);
+            bool rightSupported = TrySampleSupport(rayOrigin + right * lateralOffset, rayDistance, 2);
+
+            if (middleSupported && (leftSupported || rightSupported)) return SupportStatus.Stable;
+            if (middleSupported || leftSupported || rightSupported) return SupportStatus.Unstable;
+            return SupportStatus.Unsupported;
+        }
+
+        /// <summary>
+        /// 在有限短缝窗口内查找重新稳定的支撑截面并用脚底球体再次确认。
+        /// </summary>
+        /// <param name="direction">原始候选移动方向。</param>
+        /// <param name="candidateVelocity">候选水平速度。</param>
+        /// <param name="currentVelocity">当前水平速度。</param>
+        /// <param name="fixedDeltaTime">本物理步时长，单位：秒。</param>
+        /// <returns>是否确认到可安全跨越的短缝出口。</returns>
+        private bool TryEvaluateBridgeableGap(
+            Vector3 direction,
+            Vector3 candidateVelocity,
+            Vector3 currentVelocity,
+            float fixedDeltaTime)
+        {
+            if (_settings == null || _settings.MaxBridgeableGapWidth <= 0f) return false;
+            if (_shapeModule == null || _groundProbe == null) return false;
+
+            float step = Mathf.Max(0.02f, _settings.MaxBridgeableGapWidth * 0.5f);
+            Vector3 originalCenter = _shapeModule.Bounds.center;
+
+            // 仅在紧邻失去支撑后向前扫描有限距离，不进行全方向持续检测。
+            for (float offset = step; offset <= _settings.MaxBridgeableGapWidth; offset += step)
+            {
+                if (!HasStableSupportAt(originalCenter + direction * offset, direction, candidateVelocity, currentVelocity, fixedDeltaTime))
+                    continue;
+
+                Bounds bounds = _shapeModule.Bounds;
+                Vector3 sphereOrigin = new Vector3(
+                    originalCenter.x + direction.x * offset,
+                    bounds.min.y + _shapeModule.GetFootSupportRadius() + SkinWidth,
+                    originalCenter.z + direction.z * offset);
+                float sphereDistance = _shapeModule.GetFootSupportRadius() + _groundProbe.HoverHeight + SkinWidth;
+                if (_groundProbe.HasWalkableSphereSupport(
+                        sphereOrigin,
+                        _shapeModule.GetFootSupportRadius(),
+                        sphereDistance))
+                    return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// 判断指定候选速度是否仍可通过预测支撑检测。
+        /// </summary>
+        /// <param name="candidateVelocity">待验证的候选水平速度。</param>
+        /// <param name="currentVelocity">当前经过约束的水平速度。</param>
+        /// <param name="fixedDeltaTime">本物理步时长，单位：秒。</param>
+        /// <returns>候选速度是否拥有稳定支撑。</returns>
+        private bool HasStableSupportForVelocity(Vector3 candidateVelocity, Vector3 currentVelocity, float fixedDeltaTime)
+        {
+            if (candidateVelocity.sqrMagnitude <= 0.000001f) return true;
+            return EvaluatePredictedSupport(candidateVelocity.normalized, candidateVelocity, currentVelocity, fixedDeltaTime)
+                == SupportStatus.Stable;
+        }
+
+        /// <summary>
+        /// 以指定中心点评估短缝出口处的三点支撑状态。
+        /// </summary>
+        /// <param name="center">预测出口的 Collider 中心。</param>
+        /// <param name="direction">原始候选移动方向。</param>
+        /// <param name="candidateVelocity">候选水平速度。</param>
+        /// <param name="currentVelocity">当前水平速度。</param>
+        /// <param name="fixedDeltaTime">本物理步时长，单位：秒。</param>
+        /// <returns>出口截面是否满足稳定支撑规则。</returns>
+        private bool HasStableSupportAt(
+            Vector3 center,
+            Vector3 direction,
+            Vector3 candidateVelocity,
+            Vector3 currentVelocity,
+            float fixedDeltaTime)
+        {
+            Bounds bounds = _shapeModule.Bounds;
+            float horizontalSpeed = Mathf.Max(candidateVelocity.magnitude, currentVelocity.magnitude);
+            float predictionDistance = horizontalSpeed * fixedDeltaTime + _shapeModule.GetHorizontalExtent(direction) + SkinWidth;
+            Vector3 right = Vector3.Cross(Vector3.up, direction).normalized;
+            float lateralOffset = Mathf.Min(_shapeModule.GetHorizontalExtent(right) * 0.7f, _shapeModule.GetFootSupportRadius());
+            Vector3 frontCenter = center + direction * predictionDistance;
+            float rayDistance = bounds.size.y + _groundProbe.HoverHeight + _settings.MaxFallHeight + SkinWidth;
+            Vector3 rayOrigin = new Vector3(frontCenter.x, bounds.max.y + SkinWidth, frontCenter.z);
+
+            bool middleSupported = _groundProbe.TryGetWalkableGround(rayOrigin, Vector3.down, rayDistance, out _);
+            bool leftSupported = _groundProbe.TryGetWalkableGround(rayOrigin - right * lateralOffset, Vector3.down, rayDistance, out _);
+            bool rightSupported = _groundProbe.TryGetWalkableGround(rayOrigin + right * lateralOffset, Vector3.down, rayDistance, out _);
+            return middleSupported && (leftSupported || rightSupported);
+        }
+
+        /// <summary>
+        /// 执行一次预测支撑采样并保存结果供 Gizmos 显示。
+        /// </summary>
+        /// <param name="origin">向下采样射线的起点。</param>
+        /// <param name="distance">采样射线最大长度。</param>
+        /// <param name="index">诊断缓冲区索引。</param>
+        /// <returns>该采样点是否存在可行走支撑。</returns>
+        private bool TrySampleSupport(Vector3 origin, float distance, int index)
+        {
+            bool supported = _groundProbe.TryGetWalkableGround(origin, Vector3.down, distance, out _);
+            _debugState.SupportPoints[index] = origin;
+            _debugState.SupportResults[index] = supported;
+            return supported;
+        }
+
+        /// <summary>
+        /// 仅在确认无稳定支撑后局部扫描脚底周围，估算指向无支撑区域的边缘外法线。
+        /// </summary>
+        /// <returns>有足够危险样本时返回归一化外法线，否则返回零向量。</returns>
+        private Vector3 TryResolveEdgeOutNormal()
+        {
+            if (_shapeModule == null || _groundProbe == null || _settings == null) return Vector3.zero;
+
+            Bounds bounds = _shapeModule.Bounds;
+            float radialDistance = _shapeModule.GetFootSupportRadius();
+            float rayDistance = bounds.size.y + _groundProbe.HoverHeight + _settings.MaxFallHeight + SkinWidth;
+            Vector3 rayBase = new Vector3(bounds.center.x, bounds.max.y + SkinWidth, bounds.center.z);
+            _debugState.SetHazardRayDistance(rayDistance);
+            Vector3 hazardSum = Vector3.zero;
+            int hazardCount = 0;
+
+            // 危险采样仅在前缘支撑已失败时执行，避免常态全周扫描开销。
+            for (int index = 0; index < HazardSampleCount; index++)
+            {
+                float angle = index * 360f / HazardSampleCount;
+                Vector3 direction = Quaternion.Euler(0f, angle, 0f) * Vector3.forward;
+                Vector3 origin = rayBase + direction * radialDistance;
+                bool supported = _groundProbe.TryGetWalkableGround(origin, Vector3.down, rayDistance, out _);
+
+                _debugState.HazardPoints[index] = origin;
+                _debugState.HazardResults[index] = !supported;
+                if (supported) continue;
+
+                hazardSum += direction;
+                hazardCount++;
+            }
+
+            if (hazardCount < 2 || hazardSum.sqrMagnitude <= 0.000001f) return Vector3.zero;
+            return Vector3.ProjectOnPlane(hazardSum, Vector3.up).normalized;
+        }
+
+        /// <summary>
+        /// 从速度中移除沿悬崖外法线的正向分量，保留返回平台或沿边运动的分量。
+        /// </summary>
+        /// <param name="velocity">需要约束的水平速度。</param>
+        /// <param name="edgeOutNormal">指向无支撑区域的归一化方向。</param>
+        /// <returns>移除外向速度分量后的结果。</returns>
+        private static Vector3 RemoveOutwardComponent(Vector3 velocity, Vector3 edgeOutNormal)
+        {
+            float outwardSpeed = Vector3.Dot(velocity, edgeOutNormal);
+            return outwardSpeed > 0f ? velocity - edgeOutNormal * outwardSpeed : velocity;
+        }
+
+        /// <summary>
+        /// 在两个沿边候选速度中选择与原始输入最相符且通过支撑验证的方向。
+        /// </summary>
+        /// <param name="tangent">归一化后的边缘切线方向。</param>
+        /// <param name="originalCandidateVelocity">未经边缘约束的原始候选速度，用于保留输入方向偏好。</param>
+        /// <param name="currentVelocity">当前经过外向分量剔除的速度。</param>
+        /// <param name="fixedDeltaTime">本物理步时长，单位：秒。</param>
+        /// <returns>通过验证的沿边候选速度；均失败时返回零向量。</returns>
+        private Vector3 SelectSupportedTangent(
+            Vector3 tangent,
+            Vector3 originalCandidateVelocity,
+            Vector3 currentVelocity,
+            float fixedDeltaTime)
+        {
+            float speed = originalCandidateVelocity.magnitude;
+            Vector3 positiveCandidate = tangent * speed;
+            Vector3 negativeCandidate = -tangent * speed;
+            bool positiveSupported = HasStableSupportForVelocity(positiveCandidate, currentVelocity, fixedDeltaTime);
+            bool negativeSupported = HasStableSupportForVelocity(negativeCandidate, currentVelocity, fixedDeltaTime);
+
+            if (positiveSupported && !negativeSupported) return positiveCandidate;
+            if (!positiveSupported && negativeSupported) return negativeCandidate;
+            if (!positiveSupported) return Vector3.zero;
+
+            return Vector3.Dot(positiveCandidate, originalCandidateVelocity)
+                >= Vector3.Dot(negativeCandidate, originalCandidateVelocity)
+                ? positiveCandidate
+                : negativeCandidate;
+        }
+    }
+}

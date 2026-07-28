@@ -55,6 +55,7 @@ classDiagram
 - `DataSourceHandler` 是非 `MonoBehaviour` 的纯 C# 类；它通过 `Initialize(GameObject)` 自行获取所需组件并保存运行时引用。
 - `DataSourceHandler<TBlackboard>` 在 `Process` 时校验黑板类型，并将处理入口收敛为 `ProcessData(TBlackboard)`。
 - Provider 仅序列化并声明处理器、创建专用黑板；基类在 `Awake` 初始化处理器，并在 `OnDestroy` 释放它。基类不规定更新时机，具体 Provider 或外部系统决定何时调用 `Tick`。
+- `DataProviderBase<TBlackboard>` 提供可选的 `DebugData(TBlackboard)` 钩子：仅在编辑器或开发构建的 `Tick` 后调用，默认无操作。具体 Provider 可覆写它输出本次更新后的最新黑板数据；调试日志必须由子类自身开关和限频，禁止基础类强制输出。
 - `DataSourceHandler` 只允许初始化一次；`Process` 会拒绝未初始化或已释放的处理器。需要订阅事件的处理器应在 `OnDispose` 中解除订阅。
 - `PlayerDataSourceHandler` 是当前的设备输入示例。业务层可按同样方式实现 `EnemyDataSourceHandler`、`NpcDataSourceHandler`，但不得把业务决策放回基础类。
 
@@ -71,3 +72,4 @@ classDiagram
 2. 实现 `DataSourceHandler<TBlackboard>`，在 `OnInitialize` 内获取组件，在 `ProcessData` 内写入该黑板。
 3. 实现 `DataProviderBase<TBlackboard>`，声明类型化 `Blackboard` 与处理器实例；不实现注册逻辑，也不在 Provider 内读取数据源，并由具体 Provider 选择 `Tick` 的调度位置。
 4. 消费者优先使用黑板的类型化属性；仅在泛型扩展点使用 `Get<T>` 或 `TryGet<T>`。
+5. 需要排查数据链路时覆写 `DebugData(TBlackboard)`；`PlayerDataProvider` 已提供 `_enableDataDebug` 和输出间隔示例，不应在正式运行构建中依赖 Console 日志。
