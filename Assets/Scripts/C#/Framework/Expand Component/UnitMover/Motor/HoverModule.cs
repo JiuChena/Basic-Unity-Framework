@@ -9,7 +9,7 @@ namespace Framework.ExpandComponent.UnitMover
     {
         // 接地探测距离和悬浮弹簧配置。
         private readonly GroundSettings _settings;
-        // 统一计算有效胶囊的目标支撑距离。
+        // 统一计算有效支撑形状的目标支撑距离。
         private readonly GroundProbeModule _groundProbe;
 
         /// <summary>
@@ -34,7 +34,7 @@ namespace Framework.ExpandComponent.UnitMover
         {
             if (_settings == null || !state.IsGrounded) return velocity;
 
-            // 浮动胶囊的底部留空属于物理支撑目标，不能仅作为外形修改后被弹簧重新压回地面。
+            // 浮动胶囊的支撑留空属于物理支撑目标，不能仅作为外形修改后被弹簧重新压回地面。
             float targetDistance = _groundProbe != null
                 ? _groundProbe.DesiredGroundDistance
                 : _settings.HoverHeight;

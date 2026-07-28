@@ -60,8 +60,12 @@ namespace Framework.ExpandComponent.UnitMover.Editor
             DrawEdgeProtectionPanel();
             DrawPreviewPanel();
 
-            serializedObject.ApplyModifiedProperties();
-            if (GUI.changed) SceneView.RepaintAll();
+            bool propertiesChanged = serializedObject.ApplyModifiedProperties();
+            if (propertiesChanged)
+                mover.SynchronizeColliderShape();
+
+            if (GUI.changed || propertiesChanged)
+                SceneView.RepaintAll();
         }
 
         /// <summary>
@@ -290,7 +294,12 @@ namespace Framework.ExpandComponent.UnitMover.Editor
                 EditorGUI.indentLevel++;
                 SerializedProperty enabled = floatingCapsule.FindPropertyRelative("_enabled");
                 EditorGUILayout.PropertyField(enabled);
-                if (enabled.boolValue) DrawRelativeProperty(floatingCapsule, "_bottomClearance");
+                if (enabled.boolValue)
+                {
+                    DrawRelativeProperty(floatingCapsule, "_bottomClearance");
+                    DrawRelativeProperty(floatingCapsule, "_footBoxHeight");
+                    DrawRelativeProperty(floatingCapsule, "_footBoxSupportWidthScale");
+                }
 
                 EditorGUILayout.Space(3f);
                 DrawRelativeProperty(ground, "_groundLayer");
@@ -363,7 +372,7 @@ namespace Framework.ExpandComponent.UnitMover.Editor
         }
 
         /// <summary>
-        /// 绘制编辑模式下有效胶囊体与运行时边缘诊断 Gizmos 的开关。
+        /// 绘制编辑模式下浮动、接地与运行时边缘诊断 Gizmos 的开关。
         /// </summary>
         private void DrawPreviewPanel()
         {

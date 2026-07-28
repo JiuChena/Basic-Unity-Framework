@@ -30,8 +30,8 @@ namespace Framework.ExpandComponent.UnitMover
         [Tooltip("保存浮动胶囊关闭时需要恢复的基础 CapsuleCollider 形状")]
         [SerializeField] private FloatingCapsuleAuthoringState _floatingCapsuleAuthoringState
             = new FloatingCapsuleAuthoringState();
-        // 是否在 Scene 视图绘制浮动胶囊、接地和边缘保护诊断数据。
-        [Tooltip("是否在 Scene 窗口绘制有效胶囊体、悬浮高度和边缘保护预览")]
+        // 是否在 Scene 视图绘制浮动间隙、接地和边缘保护诊断数据。
+        [Tooltip("是否在 Scene 窗口绘制浮动间隙、悬浮高度和边缘保护预览")]
         [SerializeField] private bool _showScenePreview = true;
         // 是否绘制边缘防跌落模块实际执行的支撑和危险检测射线。
         [Tooltip("是否在运行时的 Scene 窗口绘制边缘防跌落检测射线；绿色为安全支撑，红色为危险缺口")]
@@ -158,15 +158,13 @@ namespace Framework.ExpandComponent.UnitMover
         }
 
         /// <summary>
-        /// 在选中对象时绘制与实际 Collider 尺寸一致的浮动胶囊和边缘诊断预览。
+        /// 在选中对象时绘制浮动间隙、接地和边缘诊断预览。
+        /// 此回调只读取状态，不能创建、更新或删除任何 Collider 组件。
         /// </summary>
         private void OnDrawGizmosSelected()
         {
             if (!_showScenePreview) return;
 
-            EnsureAuthoringData();
-            SynchronizeColliderShape();
-            DrawEffectiveColliderPreview();
             DrawFloatingCapsuleGapPreview();
             DrawGroundPreview();
             DrawEdgeProtectionPreview();
@@ -299,6 +297,7 @@ namespace Framework.ExpandComponent.UnitMover
 
             _shapeModule = new ColliderShapeModule(
                 _movementCollider,
+                gameObject,
                 _profile.FloatingCapsule,
                 _floatingCapsuleAuthoringState);
             _shapeModule.Synchronize();
@@ -337,7 +336,7 @@ namespace Framework.ExpandComponent.UnitMover
         /// <summary>
         /// 在编辑或运行时将浮动胶囊设置同步到实际 Collider，保证顶部对齐且底部留空。
         /// </summary>
-        private void SynchronizeColliderShape()
+        public void SynchronizeColliderShape()
         {
             if (_movementCollider == null || _profile == null || _floatingCapsuleAuthoringState == null) return;
 
@@ -346,6 +345,7 @@ namespace Framework.ExpandComponent.UnitMover
                 || _shapeModule.FloatingCapsuleSettings != _profile.FloatingCapsule)
                 _shapeModule = new ColliderShapeModule(
                     _movementCollider,
+                    gameObject,
                     _profile.FloatingCapsule,
                     _floatingCapsuleAuthoringState);
 
@@ -456,27 +456,6 @@ namespace Framework.ExpandComponent.UnitMover
         #endregion
 
         #region Gizmos
-
-        /// <summary>
-        /// 绘制实际参与物理检测的当前 Collider 形状，浮动胶囊启用时显示缩短后的尺寸。
-        /// </summary>
-        private void DrawEffectiveColliderPreview()
-        {
-            if (_movementCollider == null) return;
-
-            Color previousColor = Gizmos.color;
-            Gizmos.color = new Color(0.2f, 0.85f, 1f, 0.85f);
-
-            if (_movementCollider is CapsuleCollider capsule)
-                DrawWireCapsule(capsule);
-            else
-            {
-                Bounds bounds = _movementCollider.bounds;
-                Gizmos.DrawWireCube(bounds.center, bounds.size);
-            }
-
-            Gizmos.color = previousColor;
-        }
 
         /// <summary>
         /// 浮动胶囊启用时在基础胶囊底部与有效碰撞底部之间绘制黄色间隙立方体。
@@ -607,75 +586,6 @@ namespace Framework.ExpandComponent.UnitMover
             Gizmos.DrawRay(origin, Vector3.down * distance);
             Gizmos.DrawSphere(origin, 0.025f);
             Gizmos.DrawSphere(end, 0.02f);
-        }
-
-        /// <summary>
-        /// 按 CapsuleCollider 实际轴向、缩放和中心绘制线框胶囊，避免预览仍使用基础尺寸。
-        /// </summary>
-        /// <param name="capsule">需要绘制的实际 CapsuleCollider。</param>
-        private static void DrawWireCapsule(CapsuleCollider capsule)
-        {
-            Transform capsuleTransform = capsule.transform;
-            Vector3 localAxis = ColliderShapeModule.GetCapsuleLocalAxis(capsule.direction);
-            Vector3 axis = capsuleTransform.TransformDirection(localAxis).normalized;
-            Vector3 worldCenter = capsuleTransform.TransformPoint(capsule.center);
-            Vector3 lossyScale = capsuleTransform.lossyScale;
-            float axisScale = GetAxisScale(lossyScale, capsule.direction);
-            float radiusScale = GetRadiusScale(lossyScale, capsule.direction);
-            float radius = capsule.radius * radiusScale;
-            float halfSegment = Mathf.Max(0f, capsule.height * axisScale * 0.5f - radius);
-            Vector3 top = worldCenter + axis * halfSegment;
-            Vector3 bottom = worldCenter - axis * halfSegment;
-
-            Vector3 tangent = Vector3.Cross(axis, Vector3.up);
-            if (tangent.sqrMagnitude <= 0.000001f) tangent = Vector3.Cross(axis, Vector3.right);
-            tangent.Normalize();
-            Vector3 bitangent = Vector3.Cross(axis, tangent).normalized;
-
-            Gizmos.DrawWireSphere(top, radius);
-            Gizmos.DrawWireSphere(bottom, radius);
-            Gizmos.DrawLine(top + tangent * radius, bottom + tangent * radius);
-            Gizmos.DrawLine(top - tangent * radius, bottom - tangent * radius);
-            Gizmos.DrawLine(top + bitangent * radius, bottom + bitangent * radius);
-            Gizmos.DrawLine(top - bitangent * radius, bottom - bitangent * radius);
-        }
-
-        /// <summary>
-        /// 获取 CapsuleCollider 主轴在世界空间上的缩放系数。
-        /// </summary>
-        /// <param name="lossyScale">Transform 的世界缩放。</param>
-        /// <param name="direction">CapsuleCollider 轴向索引。</param>
-        /// <returns>胶囊主轴的绝对缩放系数。</returns>
-        private static float GetAxisScale(Vector3 lossyScale, int direction)
-        {
-            switch (direction)
-            {
-                case 0:
-                    return Mathf.Abs(lossyScale.x);
-                case 1:
-                    return Mathf.Abs(lossyScale.y);
-                default:
-                    return Mathf.Abs(lossyScale.z);
-            }
-        }
-
-        /// <summary>
-        /// 获取 CapsuleCollider 横向半径在世界空间上的保守缩放系数。
-        /// </summary>
-        /// <param name="lossyScale">Transform 的世界缩放。</param>
-        /// <param name="direction">CapsuleCollider 轴向索引。</param>
-        /// <returns>两个横向轴中较大的绝对缩放系数。</returns>
-        private static float GetRadiusScale(Vector3 lossyScale, int direction)
-        {
-            switch (direction)
-            {
-                case 0:
-                    return Mathf.Max(Mathf.Abs(lossyScale.y), Mathf.Abs(lossyScale.z));
-                case 1:
-                    return Mathf.Max(Mathf.Abs(lossyScale.x), Mathf.Abs(lossyScale.z));
-                default:
-                    return Mathf.Max(Mathf.Abs(lossyScale.x), Mathf.Abs(lossyScale.y));
-            }
         }
 
         #endregion

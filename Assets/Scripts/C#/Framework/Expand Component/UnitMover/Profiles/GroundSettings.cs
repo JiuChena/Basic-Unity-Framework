@@ -16,7 +16,7 @@ namespace Framework.ExpandComponent.UnitMover
         [SerializeField] private LayerMask _groundLayer = ~0;
         [Tooltip("允许作为可行走地面的最大坡度，单位：度")]
         [Range(0f, 89f)] [SerializeField] private float _slopeLimit = 45f;
-        [Tooltip("有效胶囊底部额外保持的悬浮距离，单位：米，最大为 0.5 米")]
+        [Tooltip("有效支撑形状底部额外保持的悬浮距离，单位：米，最大为 0.5 米")]
         [Range(0f, MaximumHoverHeight)] [SerializeField] private float _hoverHeight = 0.05f;
         [Tooltip("悬浮距离之外额外用于接地检测的长度，单位：米")]
         [Min(0f)] [SerializeField] private float _probeDistance = 0.3f;

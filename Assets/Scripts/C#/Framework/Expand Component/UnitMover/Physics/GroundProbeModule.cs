@@ -45,7 +45,7 @@ namespace Framework.ExpandComponent.UnitMover
     /// </summary>
     public sealed class GroundProbeModule
     {
-        // 实际参与运动检测的 Collider。
+        // 主体运动碰撞体，用于在形状模块不可用时的回退。
         private readonly Collider _movementCollider;
         // 宿主根节点，用于排除自身和子物体碰撞体。
         private readonly Transform _ownerRoot;
@@ -80,7 +80,7 @@ namespace Framework.ExpandComponent.UnitMover
             _settings = settings;
         }
 
-        /// <summary>获取有效胶囊底部到地面应保持的总支撑距离。</summary>
+        /// <summary>获取有效支撑形状底部到地面应保持的总支撑距离。</summary>
         public float DesiredGroundDistance => _settings == null
             ? 0f
             : (_shapeModule != null ? _shapeModule.GetFloatingBottomClearance() : 0f)
@@ -95,7 +95,7 @@ namespace Framework.ExpandComponent.UnitMover
         public float HoverHeight => DesiredGroundDistance;
 
         /// <summary>
-        /// 使用 BoxCollider 的方体 Cast 或 CapsuleCollider 的脚底球体 Cast，获取距离最近的可行走地面。
+        /// 使用当前支撑形状的方体 Cast 或脚底球体 Cast，获取距离最近的可行走地面。
         /// </summary>
         /// <returns>经过层、Trigger、自身和坡度过滤后的地面接触结果。</returns>
         public GroundContact ProbeGround()
@@ -103,10 +103,13 @@ namespace Framework.ExpandComponent.UnitMover
             if (_movementCollider == null || _settings == null) return new GroundContact(false, default);
 
             float distance = GroundCheckDistance;
-            if (_movementCollider is BoxCollider box)
+            Collider supportCollider = _shapeModule != null
+                ? _shapeModule.SupportCollider
+                : _movementCollider;
+            if (supportCollider is BoxCollider box)
                 return ProbeBoxGround(box, distance);
 
-            return ProbeCapsuleGround(distance);
+            return ProbeCapsuleGround(supportCollider as CapsuleCollider, distance);
         }
 
         /// <summary>
@@ -119,12 +122,12 @@ namespace Framework.ExpandComponent.UnitMover
         {
             if (_physicsQuery == null) return new GroundContact(false, default);
 
-            Vector3 lossyScale = box.transform.lossyScale;
-            Vector3 absoluteScale = new Vector3(
-                Mathf.Abs(lossyScale.x),
-                Mathf.Abs(lossyScale.y),
-                Mathf.Abs(lossyScale.z));
-            Vector3 halfExtents = Vector3.Scale(box.size * 0.5f, absoluteScale);
+            Vector3 halfExtents = _shapeModule != null
+                ? _shapeModule.GetSupportProbeHalfExtents(box)
+                : Vector3.Scale(box.size * 0.5f, new Vector3(
+                    Mathf.Abs(box.transform.lossyScale.x),
+                    Mathf.Abs(box.transform.lossyScale.y),
+                    Mathf.Abs(box.transform.lossyScale.z)));
             Vector3 center = box.transform.TransformPoint(box.center);
             int hitCount = _physicsQuery.BoxCastNonAlloc(
                 center,
@@ -144,11 +147,11 @@ namespace Framework.ExpandComponent.UnitMover
         /// </summary>
         /// <param name="distance">胶囊底部额外向下检测的距离，单位：米。</param>
         /// <returns>经过统一过滤后的地面接触结果。</returns>
-        private GroundContact ProbeCapsuleGround(float distance)
+        private GroundContact ProbeCapsuleGround(CapsuleCollider capsule, float distance)
         {
-            if (_physicsQuery == null) return new GroundContact(false, default);
+            if (_physicsQuery == null || capsule == null) return new GroundContact(false, default);
 
-            Bounds bounds = _movementCollider.bounds;
+            Bounds bounds = capsule.bounds;
             float supportRadius = Mathf.Max(0.001f, Mathf.Min(bounds.extents.x, bounds.extents.z));
             float centerToSphereBottom = Mathf.Max(0f, bounds.extents.y - supportRadius);
             Vector3 bottomSphereCenter = bounds.center - Vector3.up * centerToSphereBottom;
