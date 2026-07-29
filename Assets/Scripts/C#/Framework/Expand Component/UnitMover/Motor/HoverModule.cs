@@ -39,9 +39,19 @@ namespace Framework.ExpandComponent.UnitMover
                 ? _groundProbe.DesiredGroundDistance
                 : _settings.HoverHeight;
             float heightError = targetDistance - state.GroundDistance;
-            float normalVelocity = Vector3.Dot(velocity, state.GroundNormal);
-            float acceleration = heightError * _settings.SpringStrength - normalVelocity * _settings.SpringDamping;
-            return velocity + state.GroundNormal * acceleration * fixedDeltaTime;
+            if (Mathf.Abs(heightError) <= 0.0001f) return velocity;
+
+            // 脚底低于目标距离时向上托起；高于目标距离时沿相反方向拉回。
+            Vector3 correctionDirection = heightError > 0f
+                ? state.GroundNormal
+                : -state.GroundNormal;
+            float springAcceleration = Mathf.Abs(heightError) * _settings.SpringStrength;
+
+            // 阻尼始终在本次校正方向上计算，抵消沿该方向的已有速度以避免越过目标高度。
+            float velocityAlongCorrection = Vector3.Dot(velocity, correctionDirection);
+            float dampingAcceleration = -velocityAlongCorrection * _settings.SpringDamping;
+            float correctionAcceleration = springAcceleration + dampingAcceleration;
+            return velocity + correctionDirection * correctionAcceleration * fixedDeltaTime;
         }
     }
 }

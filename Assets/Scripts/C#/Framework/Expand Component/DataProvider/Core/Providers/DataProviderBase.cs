@@ -22,18 +22,11 @@ namespace Framework.ExpandComponent.DataProvider
         protected abstract DataSourceHandler<TBlackboard> DataSource { get; }
 
         /// <summary>
-        /// 初始化当前 Provider 的数据源处理器。
+        /// 预初始化当前 Provider 的数据源处理器，减少首个 Tick 的工作量。
         /// </summary>
         protected virtual void Awake()
         {
-            if (Blackboard == null)
-                throw new System.InvalidOperationException($"{GetType().Name} must provide a Blackboard instance.");
-
-            _initializedDataSource = DataSource;
-            if (_initializedDataSource == null)
-                throw new System.InvalidOperationException($"{GetType().Name} must provide a DataSourceHandler instance.");
-
-            _initializedDataSource.Initialize(gameObject);
+            EnsureDataSourceInitialized();
         }
 
         /// <summary>
@@ -41,13 +34,33 @@ namespace Framework.ExpandComponent.DataProvider
         /// </summary>
         public virtual void Tick()
         {
-            if (_initializedDataSource == null)
-                throw new System.InvalidOperationException($"{GetType().Name} must be initialized before Tick is called.");
+            // Unity 生命周期遗漏或脚本重载后，首个数据消费必须仍能完成初始化。
+            EnsureDataSourceInitialized();
 
             _initializedDataSource.Process(Blackboard);
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
             DebugData(Blackboard);
 #endif
+        }
+
+        /// <summary>
+        /// 确保当前数据源处理器已与所属 GameObject 完成一次且仅一次初始化。
+        /// </summary>
+        private void EnsureDataSourceInitialized()
+        {
+            if (_initializedDataSource != null) return;
+
+            // Provider 必须先提供类型化 Blackboard，才能安全写入数据。
+            if (Blackboard == null)
+                throw new System.InvalidOperationException($"{GetType().Name} must provide a Blackboard instance.");
+
+            // 在处理器初始化成功后再写入缓存，避免失败状态被误当作可用。
+            DataSourceHandler<TBlackboard> dataSource = DataSource;
+            if (dataSource == null)
+                throw new System.InvalidOperationException($"{GetType().Name} must provide a DataSourceHandler instance.");
+
+            dataSource.Initialize(gameObject);
+            _initializedDataSource = dataSource;
         }
 
         /// <summary>

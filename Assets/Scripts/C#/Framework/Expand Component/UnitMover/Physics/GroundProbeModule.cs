@@ -190,28 +190,6 @@ namespace Framework.ExpandComponent.UnitMover
         }
 
         /// <summary>
-        /// 从指定位置沿指定方向查询任意实体障碍物，用于台阶前缘检测。
-        /// </summary>
-        /// <param name="origin">查询起点。</param>
-        /// <param name="direction">查询方向。</param>
-        /// <param name="distance">最大查询距离。</param>
-        /// <param name="hit">找到时返回最近的实体命中。</param>
-        /// <returns>是否找到非自身的实体碰撞体。</returns>
-        public bool TryGetSolid(Vector3 origin, Vector3 direction, float distance, out RaycastHit hit)
-        {
-            hit = default;
-            if (_physicsQuery == null || _settings == null || distance <= 0f) return false;
-
-            int hitCount = _physicsQuery.RaycastNonAlloc(
-                origin,
-                direction,
-                distance,
-                _settings.GroundLayer.value,
-                _queryHits);
-            return TrySelectSolidHit(_queryHits, hitCount, out hit);
-        }
-
-        /// <summary>
         /// 以脚底球体确认指定位置下方是否存在可覆盖的可行走支撑。
         /// </summary>
         /// <param name="origin">球体检测起点。</param>
@@ -271,47 +249,11 @@ namespace Framework.ExpandComponent.UnitMover
         }
 
         /// <summary>
-        /// 从命中缓冲区挑选最近的非自身实体障碍物。
-        /// </summary>
-        /// <param name="hits">待过滤的命中缓冲区。</param>
-        /// <param name="hitCount">缓冲区内有效命中数量。</param>
-        /// <param name="selectedHit">找到时返回最近的实体命中。</param>
-        /// <returns>是否找到符合规则的实体命中。</returns>
-        private bool TrySelectSolidHit(RaycastHit[] hits, int hitCount, out RaycastHit selectedHit)
-        {
-            selectedHit = default;
-            float nearestDistance = float.PositiveInfinity;
-
-            // 台阶障碍不要求坡面可行走，但仍必须排除 Trigger、自身和非地面层。
-            for (int index = 0; index < hitCount; index++)
-            {
-                RaycastHit candidate = hits[index];
-                if (!IsValidSolidCollider(candidate.collider)) continue;
-                if (candidate.distance >= nearestDistance) continue;
-
-                nearestDistance = candidate.distance;
-                selectedHit = candidate;
-            }
-
-            return nearestDistance < float.PositiveInfinity;
-        }
-
-        /// <summary>
         /// 验证碰撞体是否能够作为地面支撑的一部分。
         /// </summary>
         /// <param name="collider">需要验证的命中碰撞体。</param>
         /// <returns>碰撞体是否位于地面层、非 Trigger 且非自身层级。</returns>
         private bool IsValidGroundCollider(Collider collider)
-        {
-            return IsValidSolidCollider(collider);
-        }
-
-        /// <summary>
-        /// 验证碰撞体是否可作为非 Trigger 的实体障碍物。
-        /// </summary>
-        /// <param name="collider">需要验证的命中碰撞体。</param>
-        /// <returns>碰撞体是否符合实体障碍物规则。</returns>
-        private bool IsValidSolidCollider(Collider collider)
         {
             if (collider == null || collider.isTrigger || _settings == null) return false;
             if (((1 << collider.gameObject.layer) & _settings.GroundLayer.value) == 0) return false;

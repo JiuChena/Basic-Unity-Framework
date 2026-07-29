@@ -15,12 +15,8 @@ namespace Framework.ExpandComponent.UnitMover
         private readonly ColliderShapeModule _shapeModule;
         // 提供接地和统一地面过滤的模块。
         private readonly GroundProbeModule _groundProbe;
-        // 提供低台阶向上速度建议的模块。
-        private readonly StepAssistModule _stepAssist;
         // 维护跳跃缓冲、土狼时间和截断状态的模块。
         private readonly JumpModule _jumpModule;
-        // 供起跳速度和跳跃截断读取的普通跳跃配置。
-        private readonly JumpSettings _jumpSettings;
         // 在接地时施加悬浮弹簧修正的模块。
         private readonly HoverModule _hoverModule;
         // 在空中施加重力并限制下落速度的模块。
@@ -60,13 +56,19 @@ namespace Framework.ExpandComponent.UnitMover
         /// <param name="body">统一提交刚体结果的边界。</param>
         /// <param name="shapeModule">当前有效 Collider 形状模块。</param>
         /// <param name="groundProbe">地面查询模块。</param>
-        /// <param name="profile">聚合所有能力配置的运动 Profile。</param>
+        /// <param name="profile">聚合策略与接地参数的运动 Profile。</param>
+        /// <param name="jumpModule">保存跳跃配置和瞬态状态的模块。</param>
+        /// <param name="gravityModule">保存重力配置和运行时重力基准的模块。</param>
+        /// <param name="edgeProtectionModule">保存边缘保护配置和安全位置状态的模块。</param>
         /// <param name="initialMovementStrategy">由 Inspector 选择并用于初始化缓存的默认移动策略。</param>
         public UnitMovementRuntime(
             IUnitBody body,
             ColliderShapeModule shapeModule,
             GroundProbeModule groundProbe,
             UnitMovementProfile profile,
+            JumpModule jumpModule,
+            GravityModule gravityModule,
+            EdgeProtectionModule edgeProtectionModule,
             UnitMovementStrategy initialMovementStrategy)
         {
             _body = body;
@@ -75,18 +77,16 @@ namespace Framework.ExpandComponent.UnitMover
 
             // 核心模块均只接收自己需要的配置，避免依赖整个 Profile。
             LocomotionSettings locomotion = profile != null ? profile.Locomotion : null;
-            JumpSettings jump = profile != null ? profile.Jump : null;
-            GravitySettings gravity = profile != null ? profile.Gravity : null;
             GroundSettings ground = profile != null ? profile.Ground : null;
-            StepSettings step = profile != null ? profile.Step : null;
-            EdgeProtectionSettings edgeProtection = profile != null ? profile.EdgeProtection : null;
 
-            _stepAssist = new StepAssistModule(shapeModule, groundProbe, step);
-            _jumpSettings = jump;
-            _jumpModule = new JumpModule(jump);
+            _jumpModule = jumpModule ?? new JumpModule();
+            _jumpModule.ResetRuntimeState();
             _hoverModule = new HoverModule(ground, groundProbe);
-            _gravityModule = new GravityModule(gravity, Physics.gravity);
-            _edgeProtection = new EdgeProtectionModule(shapeModule, groundProbe, edgeProtection);
+            _gravityModule = gravityModule ?? new GravityModule();
+            _gravityModule.Initialize(Physics.gravity);
+            _edgeProtection = edgeProtectionModule ?? new EdgeProtectionModule();
+            _edgeProtection.Initialize(shapeModule, groundProbe);
+            _edgeProtection.ResetRuntimeState();
             _locomotionSettings = locomotion;
             SetInitialMovementStrategy(initialMovementStrategy);
         }
@@ -298,14 +298,6 @@ namespace Framework.ExpandComponent.UnitMover
             Vector3 normalVelocity = Vector3.Project(adjustedCurrentVelocity, supportNormal);
             Vector3 finalVelocity = constrainedTangent + normalVelocity;
 
-            // 台阶只输出有限向上速度，实际刚体写入仍在本方法结尾统一完成。
-            if (!startJump)
-                finalVelocity += Vector3.up * _stepAssist.CalculateUpwardSpeed(
-                    _state,
-                    command.WorldMoveDirection,
-                    _body.Velocity,
-                    fixedDeltaTime);
-
             if (startJump)
             {
                 float upwardSpeed = Vector3.Dot(finalVelocity, Vector3.up);
@@ -355,6 +347,9 @@ namespace Framework.ExpandComponent.UnitMover
             ClearAllMovementStrategyStates();
             _movementStrategies.Clear();
             _activeMovementStrategy = null;
+            _jumpModule.ResetRuntimeState();
+            _gravityModule.ResetRuntimeState();
+            _edgeProtection.ResetRuntimeState();
             _body?.RestoreInitialSettings();
         }
 
@@ -442,7 +437,7 @@ namespace Framework.ExpandComponent.UnitMover
         /// <returns>本次普通跳跃应达到的初始向上速度。</returns>
         private float GetJumpInitialSpeed()
         {
-            return _jumpSettings == null ? 0f : _jumpSettings.InitialSpeed;
+            return _jumpModule != null ? _jumpModule.InitialSpeed : 0f;
         }
 
         /// <summary>
@@ -451,7 +446,7 @@ namespace Framework.ExpandComponent.UnitMover
         /// <returns>松开跳跃键后保留的向上速度比例。</returns>
         private float GetJumpCutMultiplier()
         {
-            return _jumpSettings == null ? 1f : _jumpSettings.CutMultiplier;
+            return _jumpModule != null ? _jumpModule.CutMultiplier : 1f;
         }
     }
 }

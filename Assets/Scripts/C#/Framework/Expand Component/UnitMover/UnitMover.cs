@@ -13,23 +13,31 @@ namespace Framework.ExpandComponent.UnitMover
         // 由 UnitMover 接管并在固定步末端统一写入的刚体。
         [Tooltip("由 UnitMover 接管速度和重力的 Rigidbody 组件")]
         [SerializeField] private Rigidbody _rigidbody;
-        // 参与接地、台阶和边缘保护查询的实际碰撞体。
+        // 参与接地和边缘保护查询的实际碰撞体。
         [Tooltip("参与移动物理检测的 CapsuleCollider 或 BoxCollider 组件")]
         [SerializeField] private Collider _movementCollider;
         // 向 UnitMover 提供通用移动输入黑板的同对象 DataProvider 组件。
         [Tooltip("提供 IUnitMovementInput 黑板的同对象 DataProvider；手动指定时优先使用，为空时自动查找")]
         [SerializeField] private MonoBehaviour _dataProvider;
         // 按功能大类聚合的可序列化纯 C# 运动配置。
-        [Tooltip("包含移动、跳跃、悬浮、台阶和边缘保护设置的模块化配置")]
+        [Tooltip("包含移动策略和接地参数的模块化配置")]
         [SerializeField] private UnitMovementProfile _profile = new UnitMovementProfile();
+        // 保存跳跃参数和本次运行瞬态状态的可序列化模块。
+        [Tooltip("包含普通跳跃参数和运行时状态的模块")]
+        [SerializeField] private JumpModule _jumpModule = new JumpModule();
+        // 保存重力参数和本次运行重力基准的可序列化模块。
+        [Tooltip("包含重力参数和运行时状态的模块")]
+        [SerializeField] private GravityModule _gravityModule = new GravityModule();
+        // 保存边缘保护参数、安全位置和诊断状态的可序列化模块。
+        [Tooltip("包含边缘防跌落参数和运行时状态的模块")]
+        [SerializeField] private EdgeProtectionModule _edgeProtectionModule = new EdgeProtectionModule();
+        // 保存浮动胶囊参数和组件专属基础形状快照的可序列化模块。
+        [Tooltip("包含浮动胶囊、脚底 BoxCollider 和基础形状快照的模块")]
+        [SerializeField] private FloatingCapsuleModule _floatingCapsuleModule = new FloatingCapsuleModule();
         // 由开发者在 Inspector 选择的初始纯 C# 移动策略，不包含业务输入读取职责。
         [Tooltip("运行时首次启用的纯 C# 移动策略；可在代码中通过泛型接口切换并复用缓存实例")]
         [SerializeReference] private UnitMovementStrategy _movementStrategy
             = new DefaultRigidbodyMovementStrategy();
-        // 当前组件专属的基础 CapsuleCollider 快照，不属于可复用运动 Profile。
-        [Tooltip("保存浮动胶囊关闭时需要恢复的基础 CapsuleCollider 形状")]
-        [SerializeField] private FloatingCapsuleAuthoringState _floatingCapsuleAuthoringState
-            = new FloatingCapsuleAuthoringState();
         // 是否在 Scene 视图绘制浮动间隙、接地和边缘保护诊断数据。
         [Tooltip("是否在 Scene 窗口绘制浮动间隙、悬浮高度和边缘保护预览")]
         [SerializeField] private bool _showScenePreview = true;
@@ -165,9 +173,14 @@ namespace Framework.ExpandComponent.UnitMover
         {
             if (!_showScenePreview) return;
 
-            DrawFloatingCapsuleGapPreview();
-            DrawGroundPreview();
-            DrawEdgeProtectionPreview();
+            // Gizmo 渲染只消费已存在的模块和运行时快照，不参与组件同步或物理模拟。
+            UnitMoverGizmoRenderer.DrawAll(
+                _movementCollider,
+                _shapeModule,
+                _floatingCapsuleModule,
+                _profile != null ? _profile.Ground : null,
+                _runtime != null ? _runtime.EdgeDebugState : null,
+                _showEdgeDetectionGizmos);
         }
 
         #endregion
@@ -280,8 +293,11 @@ namespace Framework.ExpandComponent.UnitMover
             if (_profile == null) _profile = new UnitMovementProfile();
             _profile.EnsureModules();
             if (_movementStrategy == null) _movementStrategy = new DefaultRigidbodyMovementStrategy();
-            if (_floatingCapsuleAuthoringState == null)
-                _floatingCapsuleAuthoringState = new FloatingCapsuleAuthoringState();
+            if (_jumpModule == null) _jumpModule = new JumpModule();
+            if (_gravityModule == null) _gravityModule = new GravityModule();
+            if (_edgeProtectionModule == null) _edgeProtectionModule = new EdgeProtectionModule();
+            if (_floatingCapsuleModule == null) _floatingCapsuleModule = new FloatingCapsuleModule();
+            _floatingCapsuleModule.EnsureAuthoringState();
         }
 
         /// <summary>
@@ -298,8 +314,7 @@ namespace Framework.ExpandComponent.UnitMover
             _shapeModule = new ColliderShapeModule(
                 _movementCollider,
                 gameObject,
-                _profile.FloatingCapsule,
-                _floatingCapsuleAuthoringState);
+                _floatingCapsuleModule);
             _shapeModule.Synchronize();
 
             IUnitBody body = new RigidbodyUnitBody(_rigidbody);
@@ -314,6 +329,9 @@ namespace Framework.ExpandComponent.UnitMover
                 _shapeModule,
                 groundProbe,
                 _profile,
+                _jumpModule,
+                _gravityModule,
+                _edgeProtectionModule,
                 _movementStrategy);
             ResolveMovementDataProvider();
             _reportedMissingDependencies = false;
@@ -338,16 +356,15 @@ namespace Framework.ExpandComponent.UnitMover
         /// </summary>
         public void SynchronizeColliderShape()
         {
-            if (_movementCollider == null || _profile == null || _floatingCapsuleAuthoringState == null) return;
+            if (_movementCollider == null || _floatingCapsuleModule == null) return;
 
             if (_shapeModule == null
                 || _shapeModule.MovementCollider != _movementCollider
-                || _shapeModule.FloatingCapsuleSettings != _profile.FloatingCapsule)
+                || _shapeModule.FloatingCapsuleModule != _floatingCapsuleModule)
                 _shapeModule = new ColliderShapeModule(
                     _movementCollider,
                     gameObject,
-                    _profile.FloatingCapsule,
-                    _floatingCapsuleAuthoringState);
+                    _floatingCapsuleModule);
 
             _shapeModule.Synchronize();
         }
@@ -455,139 +472,5 @@ namespace Framework.ExpandComponent.UnitMover
 
         #endregion
 
-        #region Gizmos
-
-        /// <summary>
-        /// 浮动胶囊启用时在基础胶囊底部与有效碰撞底部之间绘制黄色间隙立方体。
-        /// </summary>
-        private void DrawFloatingCapsuleGapPreview()
-        {
-            if (_shapeModule == null || _profile == null) return;
-            if (!(_movementCollider is CapsuleCollider capsule)) return;
-
-            FloatingCapsuleSettings settings = _profile.FloatingCapsule;
-            FloatingCapsuleAuthoringState state = _shapeModule.AuthoringState;
-            if (settings == null || state == null) return;
-            if (!settings.Enabled || !state.Captured || !state.FloatingShapeApplied) return;
-
-            float maxClearance = Mathf.Max(0f, state.BaseHeight - state.BaseRadius * 2f);
-            float clearance = Mathf.Clamp(settings.BottomClearance, 0f, maxClearance);
-            if (clearance <= 0.0001f) return;
-
-            Vector3 localAxis = ColliderShapeModule.GetCapsuleLocalAxis(capsule.direction);
-            float diameter = capsule.radius * 2f;
-            float effectiveHalfHeight = capsule.height * 0.5f;
-
-            // 当前 Collider 底部（有效碰撞底部）
-            Vector3 effectiveBottom = capsule.center - localAxis * effectiveHalfHeight;
-            // 基础胶囊底部 = 有效底部往下加 clearance
-            Vector3 baseBottom = effectiveBottom - localAxis * clearance;
-            // 间隙中心
-            Vector3 gapCenter = (effectiveBottom + baseBottom) * 0.5f;
-
-            Vector3 gapSize = capsule.direction switch
-            {
-                0 => new Vector3(clearance, diameter, diameter),
-                1 => new Vector3(diameter, clearance, diameter),
-                _ => new Vector3(diameter, diameter, clearance)
-            };
-
-            Color previousColor = Gizmos.color;
-            Matrix4x4 previousMatrix = Gizmos.matrix;
-            Gizmos.matrix = capsule.transform.localToWorldMatrix;
-
-            // 半透明填充
-            Gizmos.color = new Color(1f, 0.92f, 0.016f, 0.35f);
-            Gizmos.DrawCube(gapCenter, gapSize);
-
-            // 轮廓线
-            Gizmos.color = new Color(1f, 0.92f, 0.016f, 0.85f);
-            Gizmos.DrawWireCube(gapCenter, gapSize);
-
-            Gizmos.matrix = previousMatrix;
-            Gizmos.color = previousColor;
-
-            // 高度标注（世界空间文字）
-            Vector3 labelPos = capsule.transform.TransformPoint(gapCenter);
-#if UNITY_EDITOR
-            UnityEditor.Handles.color = new Color(1f, 0.92f, 0.016f, 0.9f);
-            UnityEditor.Handles.Label(labelPos, $"{clearance:0.###} m",
-                new GUIStyle(UnityEditor.EditorStyles.miniLabel)
-                {
-                    normal = { textColor = new Color(1f, 0.92f, 0.016f) },
-                    alignment = TextAnchor.MiddleCenter
-                });
-#endif
-        }
-
-        /// <summary>
-        /// 绘制当前 Collider 底部到悬浮高度的参考线，编辑模式下也可观察有效底部变化。
-        /// </summary>
-        private void DrawGroundPreview()
-        {
-            if (_shapeModule == null || _profile == null) return;
-
-            Bounds bounds = _shapeModule.Bounds;
-            Vector3 origin = new Vector3(bounds.center.x, bounds.min.y, bounds.center.z);
-            Color previousColor = Gizmos.color;
-            Gizmos.color = new Color(1f, 0.85f, 0.15f, 0.75f);
-            float supportDistance = _shapeModule.GetFloatingBottomClearance()
-                + _profile.Ground.HoverHeight;
-            Gizmos.DrawLine(origin, origin + Vector3.down * supportDistance);
-            Gizmos.color = previousColor;
-        }
-
-        /// <summary>
-        /// 绘制运行时最近一次边缘支撑、危险方向和受约束速度的诊断数据。
-        /// </summary>
-        private void DrawEdgeProtectionPreview()
-        {
-            if (!_showEdgeDetectionGizmos || _runtime == null || _shapeModule == null) return;
-
-            EdgeProtectionDebugState debugState = _runtime.EdgeDebugState;
-            if (debugState.SupportRayDistance > 0f)
-            {
-                for (int index = 0; index < debugState.SupportPoints.Length; index++)
-                    DrawEdgeDetectionRay(
-                        debugState.SupportPoints[index],
-                        debugState.SupportRayDistance,
-                        debugState.SupportResults[index]);
-            }
-
-            if (debugState.HazardRayDistance > 0f)
-            {
-                for (int index = 0; index < debugState.HazardPoints.Length; index++)
-                    DrawEdgeDetectionRay(
-                        debugState.HazardPoints[index],
-                        debugState.HazardRayDistance,
-                        !debugState.HazardResults[index]);
-            }
-
-            Bounds bounds = _shapeModule.Bounds;
-            Gizmos.color = Color.red;
-            Gizmos.DrawRay(bounds.center, debugState.EdgeOutNormal * 0.75f);
-            Gizmos.color = Color.cyan;
-            Gizmos.DrawRay(bounds.center, debugState.ConstrainedVelocity.normalized * 0.75f);
-        }
-
-        /// <summary>
-        /// 以统一颜色绘制一条边缘检测向下射线及其检测终点。
-        /// </summary>
-        /// <param name="origin">射线的世界空间起点。</param>
-        /// <param name="distance">射线向下检测的最大长度。</param>
-        /// <param name="isSafe">命中可行走支撑时为 true，缺少支撑时为 false。</param>
-        private static void DrawEdgeDetectionRay(Vector3 origin, float distance, bool isSafe)
-        {
-            Color color = isSafe
-                ? new Color(0.15f, 0.95f, 0.25f, 0.9f)
-                : new Color(1f, 0.15f, 0.1f, 0.9f);
-            Vector3 end = origin + Vector3.down * distance;
-            Gizmos.color = color;
-            Gizmos.DrawRay(origin, Vector3.down * distance);
-            Gizmos.DrawSphere(origin, 0.025f);
-            Gizmos.DrawSphere(end, 0.02f);
-        }
-
-        #endregion
     }
 }

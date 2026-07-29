@@ -1024,16 +1024,6 @@ MonoBehaviour:
       _airMaxSpeed: 6
       _airAcceleration: 15
       _airControl: 0.45
-    _jump:
-      _enabled: 1
-      _initialSpeed: 8
-      _coyoteTime: 0.1
-      _bufferTime: 0.12
-      _cutMultiplier: 0.446
-    _gravity:
-      _multiplier: 1
-      _fallMultiplier: 1.5
-      _maxFallSpeed: 25
     _ground:
       _groundLayer:
         serializedVersion: 2
@@ -1043,31 +1033,37 @@ MonoBehaviour:
       _probeDistance: 0.3
       _springStrength: 80
       _springDamping: 20
-    _floatingCapsule:
-      _enabled: 1
-      _bottomClearance: 0.6
-      _footBoxHeight: 0.05
-      _footBoxSupportWidthScale: 0.7
-    _step:
-      _maxHeight: 0
-      _probePadding: 0.08
-      _maxUpSpeed: 4
-    _edgeProtection:
-      _enabled: 1
-      _maxFallHeight: 2
-      _fallRecoveryEnabled: 1
-      _recoverUnexpectedFallsOnly: 1
-      _maxBridgeableGapWidth: 0.15
+  _jumpModule:
+    _enabled: 1
+    _initialSpeed: 8
+    _coyoteTime: 0.1
+    _bufferTime: 0.12
+    _cutMultiplier: 0.446
+  _gravityModule:
+    _multiplier: 1
+    _fallMultiplier: 1.5
+    _maxFallSpeed: 25
+  _edgeProtectionModule:
+    _enabled: 1
+    _maxFallHeight: 2
+    _fallRecoveryEnabled: 1
+    _recoverUnexpectedFallsOnly: 1
+    _maxBridgeableGapWidth: 0.15
+  _floatingCapsuleModule:
+    _enabled: 1
+    _bottomClearance: 0.6
+    _footBoxHeight: 0.05
+    _footBoxSupportWidthScale: 0.7
+    _authoringState:
+      _captured: 1
+      _baseCenter: {x: 0, y: 0, z: 0}
+      _baseHeight: 2
+      _baseRadius: 0.5
+      _baseDirection: 1
+      _floatingShapeApplied: 1
+      _footCollider: {fileID: 1813344960}
   _movementStrategy:
     rid: 2888644187217723392
-  _floatingCapsuleAuthoringState:
-    _captured: 1
-    _baseCenter: {x: 0, y: 0, z: 0}
-    _baseHeight: 2
-    _baseRadius: 0.5
-    _baseDirection: 1
-    _floatingShapeApplied: 1
-    _footCollider: {fileID: 1813344960}
   _showScenePreview: 1
   _showEdgeDetectionGizmos: 1
   references:

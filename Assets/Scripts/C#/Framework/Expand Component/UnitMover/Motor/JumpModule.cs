@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 
 namespace Framework.ExpandComponent.UnitMover
@@ -5,30 +6,52 @@ namespace Framework.ExpandComponent.UnitMover
     /// <summary>
     /// 维护跳跃请求缓存、土狼时间和跳跃截断状态的纯 C# 模块。
     /// </summary>
+    [Serializable]
     public sealed class JumpModule
     {
-        // 普通跳跃的启用开关和手感配置。
-        private readonly JumpSettings _settings;
+        // 是否启用普通跳跃能力。
+        [Tooltip("是否启用普通跳跃能力")]
+        [SerializeField] private bool _enabled = true;
+        // 起跳时写入的初始向上速度。
+        [Tooltip("起跳时的初始向上速度，单位：米/秒")]
+        [Min(0f)] [SerializeField] private float _initialSpeed = 8f;
+        // 离开稳定地面后仍允许起跳的时间。
+        [Tooltip("离开稳定地面后仍允许起跳的时间，单位：秒")]
+        [Min(0f)] [SerializeField] private float _coyoteTime = 0.1f;
+        // 接收到跳跃请求后等待接地消费的时间。
+        [Tooltip("落地前缓存跳跃请求的时间，单位：秒")]
+        [Min(0f)] [SerializeField] private float _bufferTime = 0.12f;
+        // 提前松开跳跃键时保留的上升速度比例。
+        [Tooltip("提前松开跳跃键时保留的上升速度比例，范围：0-1")]
+        [Range(0f, 1f)] [SerializeField] private float _cutMultiplier = 0.5f;
         // 离开稳定地面后仍允许起跳的剩余时间。
-        private float _coyoteRemaining;
+        [NonSerialized] private float _coyoteRemaining;
         // 已接收到但尚未消费的跳跃请求剩余时间。
-        private float _bufferRemaining;
+        [NonSerialized] private float _bufferRemaining;
         // 当前起跳后是否仍处于可执行跳跃截断的阶段。
-        private bool _jumping;
+        [NonSerialized] private bool _jumping;
         // 当前上升阶段是否已应用过一次跳跃截断。
-        private bool _cutApplied;
-
-        /// <summary>
-        /// 使用指定跳跃配置创建运行时跳跃模块。
-        /// </summary>
-        /// <param name="settings">普通跳跃配置。</param>
-        public JumpModule(JumpSettings settings)
-        {
-            _settings = settings;
-        }
+        [NonSerialized] private bool _cutApplied;
 
         /// <summary>获取当前是否处于主动起跳后的空中阶段。</summary>
         public bool IsJumping => _jumping;
+
+        /// <summary>获取本次起跳应写入的初始向上速度。</summary>
+        public float InitialSpeed => _initialSpeed;
+
+        /// <summary>获取提前松开跳跃键时保留的上升速度比例。</summary>
+        public float CutMultiplier => _cutMultiplier;
+
+        /// <summary>
+        /// 清空本组件保存的全部瞬态跳跃状态，保留 Inspector 配置供下一次运行时复用。
+        /// </summary>
+        public void ResetRuntimeState()
+        {
+            _coyoteRemaining = 0f;
+            _bufferRemaining = 0f;
+            _jumping = false;
+            _cutApplied = false;
+        }
 
         /// <summary>
         /// 更新跳跃计时器并解析本物理步是否应开始跳跃或截断上升速度。
@@ -47,19 +70,16 @@ namespace Framework.ExpandComponent.UnitMover
         {
             startJump = false;
             cutJump = false;
-            if (_settings == null || !_settings.Enabled)
+            if (!_enabled)
             {
-                _coyoteRemaining = 0f;
-                _bufferRemaining = 0f;
-                _jumping = false;
-                _cutApplied = false;
+                ResetRuntimeState();
                 return;
             }
 
             // 稳定接地会重置土狼时间并结束上一段跳跃状态。
             if (state.IsStableGrounded)
             {
-                _coyoteRemaining = _settings.CoyoteTime;
+                _coyoteRemaining = _coyoteTime;
                 _jumping = false;
                 _cutApplied = false;
             }
@@ -67,7 +87,7 @@ namespace Framework.ExpandComponent.UnitMover
                 _coyoteRemaining = Mathf.Max(0f, _coyoteRemaining - fixedDeltaTime);
 
             if (command.RequestJump)
-                _bufferRemaining = _settings.BufferTime;
+                _bufferRemaining = _bufferTime;
             else
                 _bufferRemaining = Mathf.Max(0f, _bufferRemaining - fixedDeltaTime);
 

@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 
 namespace Framework.ExpandComponent.UnitMover
@@ -122,6 +123,7 @@ namespace Framework.ExpandComponent.UnitMover
     /// <summary>
     /// 基于预测脚底支撑约束目标速度和已有外向速度，并提供有限的异常跌落回退判断。
     /// </summary>
+    [Serializable]
     public sealed class EdgeProtectionModule
     {
         // 前缘预测距离中保留的微小安全边距。
@@ -129,13 +131,26 @@ namespace Framework.ExpandComponent.UnitMover
         // 局部边缘方向定位时使用的固定危险采样数量。
         private const int HazardSampleCount = 8;
         // 提供有效 Collider 边界和脚底半径的形状模块。
-        private readonly ColliderShapeModule _shapeModule;
+        [NonSerialized] private ColliderShapeModule _shapeModule;
         // 复用统一地面过滤规则的接地模块。
-        private readonly GroundProbeModule _groundProbe;
-        // 边缘保护和异常回退配置。
-        private readonly EdgeProtectionSettings _settings;
+        [NonSerialized] private GroundProbeModule _groundProbe;
+        // 是否启用预测支撑式边缘防跌落。
+        [Tooltip("是否启用预测支撑式边缘防跌落")]
+        [SerializeField] private bool _enabled = true;
+        // 允许自然落到较低可站立地面的最大高度。
+        [Tooltip("允许自然落到较低可站立地面的最大高度，单位：米")]
+        [Min(0f)] [SerializeField] private float _maxFallHeight = 2f;
+        // 是否在异常跌落且无落脚点时恢复最近安全位置。
+        [Tooltip("是否在异常跌落且无落脚点时恢复到最近安全位置")]
+        [SerializeField] private bool _fallRecoveryEnabled = true;
+        // 是否只回退非主动跳跃导致的异常跌落。
+        [Tooltip("是否只回退非主动跳跃导致的异常跌落")]
+        [SerializeField] private bool _recoverUnexpectedFallsOnly = true;
+        // 允许确认后跨越的最大短缝宽度。
+        [Tooltip("允许确认后跨越的最大短缝宽度，单位：米")]
+        [Min(0f)] [SerializeField] private float _maxBridgeableGapWidth = 0.15f;
         // 供 Scene Gizmos 读取的固定缓冲诊断数据。
-        private readonly EdgeProtectionDebugState _debugState = new EdgeProtectionDebugState();
+        [NonSerialized] private readonly EdgeProtectionDebugState _debugState = new EdgeProtectionDebugState();
         // 最近一次完全安全位置是否有效。
         private bool _hasSafePosition;
         // 最近一次完全安全位置快照。
@@ -149,18 +164,30 @@ namespace Framework.ExpandComponent.UnitMover
         /// <param name="shapeModule">提供当前有效 Collider 尺寸的模块。</param>
         /// <param name="groundProbe">提供统一地面判断的模块。</param>
         /// <param name="settings">边缘保护配置。</param>
-        public EdgeProtectionModule(
+        public void Initialize(
             ColliderShapeModule shapeModule,
-            GroundProbeModule groundProbe,
-            EdgeProtectionSettings settings)
+            GroundProbeModule groundProbe)
         {
             _shapeModule = shapeModule;
             _groundProbe = groundProbe;
-            _settings = settings;
         }
 
         /// <summary>获取最近一次边缘保护调试数据。</summary>
         public EdgeProtectionDebugState DebugState => _debugState;
+
+        /// <summary>
+        /// 清空安全位置、跳跃豁免和 Gizmo 诊断等全部运行时状态，保留 Inspector 配置。
+        /// </summary>
+        public void ResetRuntimeState()
+        {
+            _hasSafePosition = false;
+            _safePosition = default;
+            _recoveryDisarmedByJump = false;
+            _debugState.ClearRayData();
+            _debugState.EdgeOutNormal = Vector3.zero;
+            _debugState.ConstrainedVelocity = Vector3.zero;
+            _debugState.SupportStatus = SupportStatus.Unsupported;
+        }
 
         /// <summary>
         /// 在稳定地面上记录安全位置，并在重新稳定接地后重新武装异常回退。
@@ -208,7 +235,7 @@ namespace Framework.ExpandComponent.UnitMover
             _debugState.EdgeOutNormal = Vector3.zero;
             _debugState.ConstrainedVelocity = candidateVelocity;
 
-            if (_settings == null || !_settings.Enabled || !state.IsStableGrounded) return;
+            if (!_enabled || !state.IsStableGrounded) return;
             if (candidateVelocity.sqrMagnitude <= 0.000001f) return;
 
             Vector3 direction = candidateVelocity.normalized;
@@ -254,14 +281,14 @@ namespace Framework.ExpandComponent.UnitMover
         public bool TryGetFallRecovery(in UnitMovementState state, out SafePositionSnapshot snapshot)
         {
             snapshot = default;
-            if (_settings == null || !_settings.Enabled || !_settings.FallRecoveryEnabled || !_hasSafePosition) return false;
+            if (!_enabled || !_fallRecoveryEnabled || !_hasSafePosition) return false;
             if (state.IsGrounded) return false;
-            if (_settings.RecoverUnexpectedFallsOnly && _recoveryDisarmedByJump) return false;
+            if (_recoverUnexpectedFallsOnly && _recoveryDisarmedByJump) return false;
             if (_shapeModule == null || _groundProbe == null) return false;
 
             Bounds bounds = _shapeModule.Bounds;
             Vector3 origin = bounds.center + Vector3.up * bounds.extents.y;
-            float distance = bounds.size.y + _groundProbe.HoverHeight + _settings.MaxFallHeight + SkinWidth;
+            float distance = bounds.size.y + _groundProbe.HoverHeight + _maxFallHeight + SkinWidth;
             if (_groundProbe.TryGetWalkableGround(origin, Vector3.down, distance, out _)) return false;
 
             snapshot = _safePosition;
@@ -282,7 +309,7 @@ namespace Framework.ExpandComponent.UnitMover
             Vector3 currentVelocity,
             float fixedDeltaTime)
         {
-            if (_shapeModule == null || _groundProbe == null || _settings == null) return SupportStatus.Unsupported;
+            if (_shapeModule == null || _groundProbe == null) return SupportStatus.Unsupported;
 
             Bounds bounds = _shapeModule.Bounds;
             float horizontalSpeed = Mathf.Max(candidateVelocity.magnitude, currentVelocity.magnitude);
@@ -290,7 +317,7 @@ namespace Framework.ExpandComponent.UnitMover
             Vector3 right = Vector3.Cross(Vector3.up, direction).normalized;
             float lateralOffset = Mathf.Min(_shapeModule.GetHorizontalExtent(right) * 0.7f, _shapeModule.GetFootSupportRadius());
             Vector3 frontCenter = bounds.center + direction * predictionDistance;
-            float rayDistance = bounds.size.y + _groundProbe.HoverHeight + _settings.MaxFallHeight + SkinWidth;
+            float rayDistance = bounds.size.y + _groundProbe.HoverHeight + _maxFallHeight + SkinWidth;
             Vector3 rayOrigin = new Vector3(frontCenter.x, bounds.max.y + SkinWidth, frontCenter.z);
             _debugState.SetSupportRayDistance(rayDistance);
 
@@ -317,14 +344,14 @@ namespace Framework.ExpandComponent.UnitMover
             Vector3 currentVelocity,
             float fixedDeltaTime)
         {
-            if (_settings == null || _settings.MaxBridgeableGapWidth <= 0f) return false;
+            if (_maxBridgeableGapWidth <= 0f) return false;
             if (_shapeModule == null || _groundProbe == null) return false;
 
-            float step = Mathf.Max(0.02f, _settings.MaxBridgeableGapWidth * 0.5f);
+            float step = Mathf.Max(0.02f, _maxBridgeableGapWidth * 0.5f);
             Vector3 originalCenter = _shapeModule.Bounds.center;
 
             // 仅在紧邻失去支撑后向前扫描有限距离，不进行全方向持续检测。
-            for (float offset = step; offset <= _settings.MaxBridgeableGapWidth; offset += step)
+            for (float offset = step; offset <= _maxBridgeableGapWidth; offset += step)
             {
                 if (!HasStableSupportAt(originalCenter + direction * offset, direction, candidateVelocity, currentVelocity, fixedDeltaTime))
                     continue;
@@ -381,7 +408,7 @@ namespace Framework.ExpandComponent.UnitMover
             Vector3 right = Vector3.Cross(Vector3.up, direction).normalized;
             float lateralOffset = Mathf.Min(_shapeModule.GetHorizontalExtent(right) * 0.7f, _shapeModule.GetFootSupportRadius());
             Vector3 frontCenter = center + direction * predictionDistance;
-            float rayDistance = bounds.size.y + _groundProbe.HoverHeight + _settings.MaxFallHeight + SkinWidth;
+            float rayDistance = bounds.size.y + _groundProbe.HoverHeight + _maxFallHeight + SkinWidth;
             Vector3 rayOrigin = new Vector3(frontCenter.x, bounds.max.y + SkinWidth, frontCenter.z);
 
             bool middleSupported = _groundProbe.TryGetWalkableGround(rayOrigin, Vector3.down, rayDistance, out _);
@@ -411,11 +438,11 @@ namespace Framework.ExpandComponent.UnitMover
         /// <returns>有足够危险样本时返回归一化外法线，否则返回零向量。</returns>
         private Vector3 TryResolveEdgeOutNormal()
         {
-            if (_shapeModule == null || _groundProbe == null || _settings == null) return Vector3.zero;
+            if (_shapeModule == null || _groundProbe == null) return Vector3.zero;
 
             Bounds bounds = _shapeModule.Bounds;
             float radialDistance = _shapeModule.GetFootSupportRadius();
-            float rayDistance = bounds.size.y + _groundProbe.HoverHeight + _settings.MaxFallHeight + SkinWidth;
+            float rayDistance = bounds.size.y + _groundProbe.HoverHeight + _maxFallHeight + SkinWidth;
             Vector3 rayBase = new Vector3(bounds.center.x, bounds.max.y + SkinWidth, bounds.center.z);
             _debugState.SetHazardRayDistance(rayDistance);
             Vector3 hazardSum = Vector3.zero;

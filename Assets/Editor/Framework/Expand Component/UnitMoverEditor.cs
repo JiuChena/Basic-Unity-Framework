@@ -33,7 +33,7 @@ namespace Framework.ExpandComponent.UnitMover.Editor
         private bool _locomotionFoldout = true;
         // 普通跳跃模块的展开状态。
         private bool _jumpFoldout = true;
-        // 浮动胶囊、接地、坡面和台阶模块的展开状态。
+        // 浮动胶囊、接地和坡面模块的展开状态。
         private bool _groundAdaptationFoldout = true;
         // 空中速度和重力模块的展开状态。
         private bool _airAndGravityFoldout = true;
@@ -55,7 +55,7 @@ namespace Framework.ExpandComponent.UnitMover.Editor
             DrawCommandSourcePanel(mover);
             DrawLocomotionPanel();
             DrawJumpPanel();
-            DrawGroundAdaptationPanel();
+            DrawGroundAdaptationPanel(mover);
             DrawAirAndGravityPanel();
             DrawEdgeProtectionPanel();
             DrawPreviewPanel();
@@ -255,7 +255,7 @@ namespace Framework.ExpandComponent.UnitMover.Editor
         /// </summary>
         private void DrawJumpPanel()
         {
-            SerializedProperty jump = GetProfileModule("_jump");
+            SerializedProperty jump = serializedObject.FindProperty("_jumpModule");
             if (jump == null) return;
 
             _jumpFoldout = BeginModulePanel(_jumpFoldout, "跳跃功能");
@@ -277,18 +277,17 @@ namespace Framework.ExpandComponent.UnitMover.Editor
         }
 
         /// <summary>
-        /// 绘制浮动胶囊、接地悬浮、坡面和台阶配置。
+        /// 绘制浮动胶囊、接地悬浮和坡面配置。
         /// </summary>
-        private void DrawGroundAdaptationPanel()
+        private void DrawGroundAdaptationPanel(UnitMoverComponent mover)
         {
-            SerializedProperty floatingCapsule = GetProfileModule("_floatingCapsule");
+            SerializedProperty floatingCapsule = serializedObject.FindProperty("_floatingCapsuleModule");
             SerializedProperty ground = GetProfileModule("_ground");
-            SerializedProperty step = GetProfileModule("_step");
-            if (floatingCapsule == null || ground == null || step == null) return;
+            if (floatingCapsule == null || ground == null) return;
 
             _groundAdaptationFoldout = BeginModulePanel(
                 _groundAdaptationFoldout,
-                "浮动胶囊、接地与台阶");
+                "浮动胶囊与接地");
             if (_groundAdaptationFoldout)
             {
                 EditorGUI.indentLevel++;
@@ -296,7 +295,9 @@ namespace Framework.ExpandComponent.UnitMover.Editor
                 EditorGUILayout.PropertyField(enabled);
                 if (enabled.boolValue)
                 {
-                    DrawRelativeProperty(floatingCapsule, "_bottomClearance");
+                    DrawBottomClearanceProperty(
+                        floatingCapsule.FindPropertyRelative("_bottomClearance"),
+                        mover);
                     DrawRelativeProperty(floatingCapsule, "_footBoxHeight");
                     DrawRelativeProperty(floatingCapsule, "_footBoxSupportWidthScale");
                 }
@@ -309,13 +310,58 @@ namespace Framework.ExpandComponent.UnitMover.Editor
                 DrawRelativeProperty(ground, "_springStrength");
                 DrawRelativeProperty(ground, "_springDamping");
 
-                EditorGUILayout.Space(3f);
-                DrawRelativeProperty(step, "_maxHeight");
-                DrawRelativeProperty(step, "_probePadding");
-                DrawRelativeProperty(step, "_maxUpSpeed");
                 EditorGUI.indentLevel--;
             }
             EndModulePanel();
+        }
+
+        /// <summary>
+        /// 按基础胶囊的合法最小高度限制底部留空，并以滑条形式绘制唯一的最大可通过台阶高度。
+        /// </summary>
+        /// <param name="clearance">浮动胶囊底部留空的序列化属性。</param>
+        /// <param name="mover">当前正在编辑的 UnitMover 组件。</param>
+        private void DrawBottomClearanceProperty(SerializedProperty clearance, UnitMoverComponent mover)
+        {
+            if (clearance == null) return;
+
+            // 上限来自浮动前的基础胶囊，保证实际高度始终不小于胶囊直径。
+            float maximumClearance = GetMaximumBottomClearance(mover);
+            clearance.floatValue = Mathf.Clamp(clearance.floatValue, 0f, maximumClearance);
+            EditorGUILayout.Slider(
+                clearance,
+                0f,
+                maximumClearance,
+                new GUIContent("底部留空 / 最大台阶高度", "单位：米；同时决定浮动胶囊留空和可通过的最大台阶高度"));
+        }
+
+        /// <summary>
+        /// 根据已保存的基础胶囊快照或当前 CapsuleCollider 计算底部留空的最大合法高度。
+        /// </summary>
+        /// <param name="mover">当前正在编辑的 UnitMover 组件。</param>
+        /// <returns>基础胶囊在保持最小直径高度前提下允许移除的最大底部高度，单位：米。</returns>
+        private float GetMaximumBottomClearance(UnitMoverComponent mover)
+        {
+            SerializedProperty floatingCapsule = serializedObject.FindProperty("_floatingCapsuleModule");
+            SerializedProperty authoringState = floatingCapsule != null
+                ? floatingCapsule.FindPropertyRelative("_authoringState")
+                : null;
+            if (authoringState != null
+                && authoringState.FindPropertyRelative("_captured").boolValue)
+            {
+                // 启用浮动后仍读取原始快照，不能用已缩短的当前胶囊重复扣减。
+                float baseHeight = authoringState.FindPropertyRelative("_baseHeight").floatValue;
+                float baseRadius = authoringState.FindPropertyRelative("_baseRadius").floatValue;
+                return Mathf.Max(0f, baseHeight - baseRadius * 2f);
+            }
+
+            // 尚未记录快照时使用当前指定的 CapsuleCollider 作为首帧编辑上限。
+            SerializedProperty colliderProperty = serializedObject.FindProperty("_movementCollider");
+            CapsuleCollider capsule = colliderProperty != null
+                ? colliderProperty.objectReferenceValue as CapsuleCollider
+                : null;
+            return capsule != null
+                ? Mathf.Max(0f, capsule.height - capsule.radius * 2f)
+                : 0f;
         }
 
         /// <summary>
@@ -324,7 +370,7 @@ namespace Framework.ExpandComponent.UnitMover.Editor
         private void DrawAirAndGravityPanel()
         {
             SerializedProperty locomotion = GetProfileModule("_locomotion");
-            SerializedProperty gravity = GetProfileModule("_gravity");
+            SerializedProperty gravity = serializedObject.FindProperty("_gravityModule");
             if (locomotion == null || gravity == null) return;
 
             _airAndGravityFoldout = BeginModulePanel(_airAndGravityFoldout, "空中行为与重力");
@@ -347,7 +393,7 @@ namespace Framework.ExpandComponent.UnitMover.Editor
         /// </summary>
         private void DrawEdgeProtectionPanel()
         {
-            SerializedProperty edgeProtection = GetProfileModule("_edgeProtection");
+            SerializedProperty edgeProtection = serializedObject.FindProperty("_edgeProtectionModule");
             if (edgeProtection == null) return;
 
             _edgeProtectionFoldout = BeginModulePanel(_edgeProtectionFoldout, "边缘防跌落");
@@ -387,7 +433,7 @@ namespace Framework.ExpandComponent.UnitMover.Editor
         }
 
         /// <summary>
-        /// 获取 UnitMovementProfile 内某个配置模块的序列化属性。
+        /// 获取 UnitMovementProfile 内仍由策略和接地共享的配置模块属性。
         /// </summary>
         /// <param name="relativeName">配置模块在 Profile 中的私有序列化字段名。</param>
         /// <returns>找到时返回模块属性，否则返回 null。</returns>

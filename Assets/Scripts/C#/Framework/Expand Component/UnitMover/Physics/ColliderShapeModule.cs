@@ -125,7 +125,7 @@ namespace Framework.ExpandComponent.UnitMover
         // 持有所有组件的 GameObject，用于管理脚底 BoxCollider 的创建与销毁。
         private readonly GameObject _owner;
         // 浮动胶囊的可序列化开关与留空高度。
-        private readonly FloatingCapsuleSettings _settings;
+        private readonly FloatingCapsuleModule _settings;
         // 组件级基础胶囊快照。
         private readonly FloatingCapsuleAuthoringState _authoringState;
         // 浮动胶囊启用时自动管理的脚底扁平 BoxCollider。
@@ -141,14 +141,13 @@ namespace Framework.ExpandComponent.UnitMover
         public ColliderShapeModule(
             Collider movementCollider,
             GameObject owner,
-            FloatingCapsuleSettings settings,
-            FloatingCapsuleAuthoringState authoringState)
+            FloatingCapsuleModule settings)
         {
             _movementCollider = movementCollider;
             _owner = owner;
             _settings = settings;
-            _authoringState = authoringState;
-            _footCollider = authoringState != null ? authoringState.FootCollider : null;
+            _authoringState = settings != null ? settings.AuthoringState : null;
+            _footCollider = _authoringState != null ? _authoringState.FootCollider : null;
         }
 
         /// <summary>获取实际参与物理查询的碰撞体。</summary>
@@ -163,7 +162,7 @@ namespace Framework.ExpandComponent.UnitMover
             : _movementCollider;
 
         /// <summary>获取当前绑定的浮动胶囊配置。</summary>
-        public FloatingCapsuleSettings FloatingCapsuleSettings => _settings;
+        public FloatingCapsuleModule FloatingCapsuleModule => _settings;
 
         /// <summary>获取与浮动胶囊关联的基础形状快照。</summary>
         public FloatingCapsuleAuthoringState AuthoringState => _authoringState;

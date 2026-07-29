@@ -43,7 +43,7 @@ namespace Framework.ExpandComponent.UnitMover
         public abstract MovementMode ResolveMovementMode(bool isGrounded);
 
         /// <summary>
-        /// 将通用移动命令转换为尚未经过台阶和边缘保护处理的候选平面速度。
+        /// 将通用移动命令转换为尚未经过边缘保护处理的候选平面速度。
         /// </summary>
         /// <param name="state">当前固定步的只读运动状态。</param>
         /// <param name="command">业务层提供的通用移动意图。</param>
@@ -85,7 +85,7 @@ namespace Framework.ExpandComponent.UnitMover
         /// <param name="state">当前固定步的只读运动状态。</param>
         /// <param name="command">业务层提供的通用移动意图。</param>
         /// <param name="fixedDeltaTime">当前固定步时长，单位：秒。</param>
-        /// <returns>尚未经过台阶和边缘保护处理的候选平面速度。</returns>
+        /// <returns>尚未经过边缘保护处理的候选平面速度。</returns>
         public override Vector3 BuildPlanarVelocity(
             in UnitMovementState state,
             in UnitMovementCommand command,
