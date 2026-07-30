@@ -379,7 +379,7 @@ namespace Framework.ExpandComponent.UnitMover
 
             // Runtime 只传递跳跃与接地协同后的支撑结果；重力和陡坡模块自行决定是否修正速度。
             finalVelocity = _gravityModule.Apply(finalVelocity, useGroundNormal, fixedDeltaTime);
-            finalVelocity = _steepSlopeSlideModule.Apply(finalVelocity, contact, fixedDeltaTime);
+            finalVelocity = _steepSlopeSlideModule.Apply(finalVelocity, contact);
 
             // Runtime 只按固定顺序调度模块；浮动胶囊自身决定本步是否需要支撑修正。
             finalVelocity = _hoverModule.Apply(finalVelocity, contact, startJump, fixedDeltaTime);

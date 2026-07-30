@@ -133,7 +133,7 @@ namespace Framework.ExpandComponent.UnitMover
         }
 
         /// <summary>
-        /// 以脚底中心射线为主探针，并使用浮动胶囊自动生成的脚底 BoxCollider 验证范围支撑。
+        /// 以脚底 BoxCast 为主探针，并在区域未命中时使用中心射线兜底。
         /// </summary>
         /// <param name="footCollider">仅由浮动胶囊内部维护的脚底 BoxCollider。</param>
         /// <param name="distance">碰撞体底部额外向下检测的距离，单位：米。</param>
@@ -142,11 +142,7 @@ namespace Framework.ExpandComponent.UnitMover
         {
             if (_physicsQuery == null) return new GroundContact(false, default);
 
-            // 中心射线必须先确认脚底正下方存在地面，防止范围探针提前碰到前方斜坡而推离玩家。
-            bool hasCenterGroundHit = TryProbeFootCenterGround(footCollider, distance, out RaycastHit centerHit, out float centerBottomDistance);
-            if (!hasCenterGroundHit) return new GroundContact(false, default);
-
-            // BoxCast 同样从脚底上方开始，验证中心命中不是缝隙、边缘等不可靠支撑，并覆盖下陷回正范围。
+            // 区域检测优先覆盖脚底实际占地，并以最近命中面提供坡度法线。
             Vector3 halfExtents = _shapeModule.GetFootSupportProbeHalfExtents();
             Vector3 center = footCollider.transform.TransformPoint(footCollider.center) + Vector3.up * distance;
             int hitCount = _physicsQuery.FootBoxCastNonAlloc(
@@ -158,12 +154,21 @@ namespace Framework.ExpandComponent.UnitMover
                 _settings.GroundLayer.value,
                 _castHits);
             bool hasBoxGroundHit = TrySelectGroundHit(_castHits, hitCount, out RaycastHit boxHit);
-            if (!hasBoxGroundHit) return new GroundContact(false, default);
+            if (hasBoxGroundHit)
+            {
+                // BoxCast 起点比当前脚底底面高 distance，因此需要换算回真实脚底间隙。
+                float boxBottomDistance = Mathf.Max(0f, boxHit.distance - distance);
+                return CreateGroundContact(boxHit, boxBottomDistance);
+            }
 
-            // 两种探针必须确认同一支撑碰撞体，防止中心射线穿过缝隙命中下层地面。
-            if (centerHit.collider != boxHit.collider) return new GroundContact(false, default);
+            // 区域未命中时才使用有界中心射线，避免窄平台或数值边界导致瞬间失去接地。
+            bool hasCenterGroundHit = TryProbeFootCenterGround(
+                footCollider,
+                distance,
+                out RaycastHit centerHit,
+                out float centerBottomDistance);
+            if (!hasCenterGroundHit) return new GroundContact(false, default);
 
-            // 坡度法线和悬浮距离都以中心脚底真实命中为准，BoxCast 仅承担范围有效性验证。
             return CreateGroundContact(centerHit, centerBottomDistance);
         }
 
@@ -432,6 +437,8 @@ namespace Framework.ExpandComponent.UnitMover
     {
         // 提供坡度限制、曲线下滑因数和速度上限的地面配置。
         private readonly GroundSettings _settings;
+        // 当前是否已连续处于同一段不可站立斜坡；首次进入时只阻止上坡。
+        private bool _isOnSteepSlope;
 
         /// <summary>
         /// 创建陡坡下滑模块并缓存地面配置。
@@ -443,20 +450,20 @@ namespace Framework.ExpandComponent.UnitMover
         }
 
         /// <summary>
-        /// 在有效但不可站立的斜面上保证沿下坡方向的最小目标速度，超限坡度越大则速度越快。
+        /// 首次进入不可站立斜面时阻止上坡，后续物理步补充最小下坡目标速度。
         /// </summary>
         /// <param name="velocity">完成重力计算后、尚未提交给刚体的速度。</param>
         /// <param name="contact">本物理步最近的地面接触结果。</param>
-        /// <param name="fixedDeltaTime">本物理步时长；保留为统一模块调用契约，陡坡目标速度不依赖步长。</param>
-        /// <returns>保证上坡速度已被清除且达到目标下坡速度后的结果；没有不可站立斜面时返回原速度。</returns>
-        internal Vector3 Apply(Vector3 velocity, in GroundContact contact, float fixedDeltaTime)
+        /// <returns>首次进入时仅清除上坡分量；已在斜坡上时会补足目标下坡速度。</returns>
+        internal Vector3 Apply(Vector3 velocity, in GroundContact contact)
         {
-            if (_settings == null || fixedDeltaTime <= 0f) return velocity;
-            if (!contact.HasContact)
+            if (_settings == null) return velocity;
+            if (!contact.HasContact || contact.IsWalkable)
+            {
+                // 离开陡坡或回到可行走面后，下一次命中陡坡需再次走首次阻止分支。
+                _isOnSteepSlope = false;
                 return velocity;
-
-            if (contact.IsWalkable)
-                return velocity;
+            }
 
             // 将重力方向投影到斜面上，得到严格沿坡面向下的修正方向。
             Vector3 downhillDirection = Vector3.ProjectOnPlane(Vector3.down, contact.Hit.normal);
@@ -464,9 +471,20 @@ namespace Framework.ExpandComponent.UnitMover
                 return velocity;
 
             downhillDirection.Normalize();
+            float uphillSpeed = Vector3.Dot(velocity, -downhillDirection);
+            float uphillCorrectionSpeed = Mathf.Max(0f, uphillSpeed);
+
+            // 首次进入陡坡只阻止上坡推进，避免当前帧被完整目标下坡速度突然反推。
+            bool justEnteredSteepSlope = !_isOnSteepSlope;
+            _isOnSteepSlope = true;
+            if (justEnteredSteepSlope)
+            {
+                return velocity + downhillDirection * uphillCorrectionSpeed;
+            }
+
+            // 已在斜坡上时恢复正常下坡目标速度，使持续停留时仍能自然滑落。
             float normalizedSlopeDifference = CalculateNormalizedSlopeDifference(contact.SlopeAngle);
             float slideRatio = _settings.EvaluateSteepSlopeSlideRatio(normalizedSlopeDifference);
-            float uphillSpeed = Vector3.Dot(velocity, -downhillDirection);
             float downhillSpeed = Vector3.Dot(velocity, downhillDirection);
             float targetDownhillSpeed = Mathf.Clamp(
                 _settings.SteepSlopeSlideFactor * slideRatio,
@@ -474,7 +492,6 @@ namespace Framework.ExpandComponent.UnitMover
                 _settings.SteepSlopeSlideSpeedLimit);
 
             // 先完整抵消上坡速度，再把下坡分量补足到由逆坡比例决定的目标速度。
-            float uphillCorrectionSpeed = Mathf.Max(0f, uphillSpeed);
             float targetSpeedCorrection = Mathf.Max(0f, targetDownhillSpeed - downhillSpeed);
             float downhillCorrectionSpeed = Mathf.Max(uphillCorrectionSpeed, targetSpeedCorrection);
             Vector3 downhillVelocityAddition = downhillDirection * downhillCorrectionSpeed;
