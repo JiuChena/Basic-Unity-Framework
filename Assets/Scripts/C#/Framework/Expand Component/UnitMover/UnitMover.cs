@@ -8,14 +8,15 @@ namespace Framework.ExpandComponent.UnitMover
     /// </summary>
     [ExecuteAlways]
     [RequireComponent(typeof(Rigidbody))]
+    [RequireComponent(typeof(CapsuleCollider))]
     public sealed class UnitMover : MonoBehaviour
     {
         // 由 UnitMover 接管并在固定步末端统一写入的刚体。
         [Tooltip("由 UnitMover 接管速度和重力的 Rigidbody 组件")]
         [SerializeField] private Rigidbody _rigidbody;
-        // 参与接地和边缘保护查询的实际碰撞体。
-        [Tooltip("参与移动物理检测的 CapsuleCollider 或 BoxCollider 组件")]
-        [SerializeField] private Collider _movementCollider;
+        // 参与移动、接地和边缘保护查询的主胶囊碰撞体。
+        [Tooltip("UnitMover 唯一支持的主碰撞体；用于移动、接地和边缘保护")]
+        [SerializeField] private CapsuleCollider _movementCollider;
         // 向 UnitMover 提供通用移动输入黑板的同对象 DataProvider 组件。
         [Tooltip("提供 IUnitMovementInput 黑板的同对象 DataProvider；手动指定时优先使用，为空时自动查找")]
         [SerializeField] private MonoBehaviour _dataProvider;
@@ -57,12 +58,17 @@ namespace Framework.ExpandComponent.UnitMover
         private IUnitMovementInput _movementInput;
         // UnitMover 作为当前黑板消费者独立维护的跳跃按下事件游标。
         private uint _jumpPressedVersion;
+        // 已报告过 DataProvider 缺失或失效，避免固定步重复输出日志。
+        private bool _reportedMissingDataProvider;
 
         /// <summary>获取最近完成固定步的只读运动状态；未运行时返回默认状态。</summary>
         public UnitMovementState State => _runtime != null ? _runtime.State : default;
 
         /// <summary>获取当前是否已经创建运行时运动管线。</summary>
         public bool IsRuntimeReady => _runtime != null;
+
+        /// <summary>获取当前运动运行时；组件禁用或依赖缺失时返回 null。</summary>
+        public UnitMovementRuntime Runtime => _runtime;
 
         /// <summary>获取当前激活命令来源的标识；无来源时为 null。</summary>
         public string ActiveCommandSourceId => _runtime != null ? _runtime.ActiveCommandSourceId : null;
@@ -111,6 +117,8 @@ namespace Framework.ExpandComponent.UnitMover
         private void OnEnable()
         {
             if (!Application.isPlaying) return;
+
+            _reportedMissingDataProvider = false;
             CreateRuntime();
         }
 
@@ -151,7 +159,7 @@ namespace Framework.ExpandComponent.UnitMover
                 CreateRuntime();
             if (_runtime == null) return;
 
-            SubmitDataProviderCommand();
+            if (!SubmitDataProviderCommand()) return;
             _runtime.Simulate(Time.fixedDeltaTime, Time.time);
         }
 
@@ -185,103 +193,15 @@ namespace Framework.ExpandComponent.UnitMover
 
         #endregion
 
-        #region Command Sources
-
-        /// <summary>
-        /// 注册纯 C# 命令来源，例如玩家输入、AI 导航或网络回放来源。
-        /// </summary>
-        /// <param name="id">调用方定义的唯一命令来源标识。</param>
-        /// <param name="source">不具备挂载职责的命令来源实例。</param>
-        /// <param name="activate">是否在注册后立即作为当前命令来源。</param>
-        public void RegisterCommandSource(string id, IUnitMovementCommandSource source, bool activate = false)
-        {
-            RequireRuntime();
-            _runtime.RegisterCommandSource(id, source, activate);
-        }
-
-        /// <summary>
-        /// 替换已有命令来源并按完整生命周期清理旧实例。
-        /// </summary>
-        /// <param name="id">需要替换的命令来源标识。</param>
-        /// <param name="source">新的纯 C# 命令来源实例。</param>
-        public void ReplaceCommandSource(string id, IUnitMovementCommandSource source)
-        {
-            RequireRuntime();
-            _runtime.ReplaceCommandSource(id, source);
-        }
-
-        /// <summary>
-        /// 激活已注册命令来源并保留其原有运行时状态。
-        /// </summary>
-        /// <param name="id">需要激活的命令来源标识。</param>
-        /// <returns>是否成功找到并激活命令来源。</returns>
-        public bool ActivateCommandSource(string id)
-        {
-            RequireRuntime();
-            return _runtime.ActivateCommandSource(id);
-        }
-
-        /// <summary>
-        /// 注销命令来源并在其为当前来源时自动停用。
-        /// </summary>
-        /// <param name="id">需要注销的命令来源标识。</param>
-        /// <returns>是否成功注销命令来源。</returns>
-        public bool UnregisterCommandSource(string id)
-        {
-            RequireRuntime();
-            return _runtime.UnregisterCommandSource(id);
-        }
-
-        /// <summary>
-        /// 提交只保留到下一固定步的通用移动命令，适用于简单桥接或测试。
-        /// </summary>
-        /// <param name="command">需要由运动管线消费的通用移动命令。</param>
-        public void SubmitCommand(in UnitMovementCommand command)
-        {
-            RequireRuntime();
-            _runtime.SubmitCommand(command);
-        }
-
-        #endregion
-
-        #region Movement Strategies
-
-        /// <summary>
-        /// 按具体策略类型切换当前移动策略；首次使用时创建实例，后续再次选择时复用原实例与其状态。
-        /// </summary>
-        /// <typeparam name="TStrategy">需要启用的具体纯 C# 移动策略类型。</typeparam>
-        /// <returns>当前生效且已缓存的策略实例。</returns>
-        public TStrategy UseMovementStrategy<TStrategy>()
-            where TStrategy : UnitMovementStrategy, new()
-        {
-            RequireRuntime();
-            return _runtime.UseMovementStrategy<TStrategy>();
-        }
-
-        /// <summary>
-        /// 清空指定缓存策略持有的全部运行时状态，但保留该实例供后续复用。
-        /// </summary>
-        /// <typeparam name="TStrategy">需要清空状态的具体纯 C# 移动策略类型。</typeparam>
-        /// <returns>是否已找到并清空该策略实例。</returns>
-        public bool ClearMovementStrategyState<TStrategy>()
-            where TStrategy : UnitMovementStrategy
-        {
-            RequireRuntime();
-            return _runtime.ClearMovementStrategyState<TStrategy>();
-        }
-
-        #endregion
-
         #region Runtime Assembly
 
         /// <summary>
-        /// 解析未显式配置的同对象刚体、支持的移动碰撞体和兼容的数据 Provider 引用。
+        /// 解析未显式配置的同对象刚体、主胶囊碰撞体和兼容的数据 Provider 引用。
         /// </summary>
         private void ResolveReferences()
         {
             if (_rigidbody == null) _rigidbody = GetComponent<Rigidbody>();
             if (_movementCollider == null) _movementCollider = GetComponent<CapsuleCollider>();
-            if (_movementCollider == null) _movementCollider = GetComponent<BoxCollider>();
             if (_dataProvider == null) _dataProvider = FindCompatibleDataProvider();
         }
 
@@ -301,7 +221,7 @@ namespace Framework.ExpandComponent.UnitMover
         }
 
         /// <summary>
-        /// 创建形状、物理查询、接地和运动运行时对象，并接管 Rigidbody 的必要物理设置。
+        /// 将 Unity 引用和 Authoring 模块交给 Runtime 工厂，创建并接管运动运行时。
         /// </summary>
         private void CreateRuntime()
         {
@@ -311,27 +231,17 @@ namespace Framework.ExpandComponent.UnitMover
             EnsureAuthoringData();
             if (!HasRequiredDependencies()) return;
 
-            _shapeModule = new ColliderShapeModule(
+            SynchronizeColliderShape();
+            _runtime = UnitMovementRuntime.Create(
+                _rigidbody,
                 _movementCollider,
                 gameObject,
-                _floatingCapsuleModule);
-            _shapeModule.Synchronize();
-
-            IUnitBody body = new RigidbodyUnitBody(_rigidbody);
-            IPhysicsQuery physicsQuery = new UnityPhysicsQuery();
-            GroundProbeModule groundProbe = new GroundProbeModule(
                 _shapeModule,
-                transform,
-                physicsQuery,
-                _profile.Ground);
-            _runtime = new UnitMovementRuntime(
-                body,
-                _shapeModule,
-                groundProbe,
                 _profile,
                 _jumpModule,
                 _gravityModule,
                 _edgeProtectionModule,
+                _floatingCapsuleModule,
                 _movementStrategy);
             ResolveMovementDataProvider();
             _reportedMissingDependencies = false;
@@ -342,9 +252,8 @@ namespace Framework.ExpandComponent.UnitMover
         /// </summary>
         private void DisposeRuntime()
         {
-            if (_runtime == null) return;
+            if (_runtime != null) _runtime.Dispose();
 
-            _runtime.Dispose();
             _runtime = null;
             _movementDataProvider = null;
             _movementInput = null;
@@ -352,7 +261,7 @@ namespace Framework.ExpandComponent.UnitMover
         }
 
         /// <summary>
-        /// 在编辑或运行时将浮动胶囊设置同步到实际 Collider，保证顶部对齐且底部留空。
+        /// 在编辑或运行时将浮动胶囊设置同步到主 CapsuleCollider，保证顶部对齐且底部留空。
         /// </summary>
         public void SynchronizeColliderShape()
         {
@@ -370,23 +279,22 @@ namespace Framework.ExpandComponent.UnitMover
         }
 
         /// <summary>
-        /// 验证运行时组装所需的 Rigidbody 与支持的 Collider 是否都已配置。
+        /// 验证运行时组装所需的 Rigidbody 与主 CapsuleCollider 是否都已配置。
         /// </summary>
         /// <returns>依赖是否足以创建运动运行时。</returns>
         private bool HasRequiredDependencies()
         {
-            bool supportedCollider = _movementCollider is CapsuleCollider || _movementCollider is BoxCollider;
-            if (_rigidbody != null && supportedCollider) return true;
+            if (_rigidbody != null && _movementCollider != null) return true;
             if (_reportedMissingDependencies) return false;
 
-            Debug.LogError("UnitMover 需要 Rigidbody 与 CapsuleCollider 或 BoxCollider 才能创建运动运行时。", this);
+            Debug.LogError("UnitMover 需要 Rigidbody 与 CapsuleCollider 才能创建运动运行时。", this);
             _reportedMissingDependencies = true;
             return false;
         }
 
         /// <summary>
-        /// 优先使用 Inspector 指定的 DataProvider；引用为空或失效时，再扫描同一 GameObject 的兼容 Provider。
-        /// 解析仅发生在 UnitMover 初始化和运行时创建时，后续物理步直接读取已缓存的黑板数据。
+        /// 优先缓存 Inspector 指定的 DataProvider；引用为空或不兼容时，再扫描同一 GameObject 的兼容 Provider。
+        /// 绑定仅发生在运行时创建阶段，可用性由首个固定步确认以兼容 Unity 的 OnEnable 调用顺序。
         /// </summary>
         private void ResolveMovementDataProvider()
         {
@@ -395,6 +303,7 @@ namespace Framework.ExpandComponent.UnitMover
             _jumpPressedVersion = 0;
             if (TryResolveMovementDataProvider(_dataProvider)) return;
 
+            // 仅在运行时创建阶段扫描同对象组件，固定步不会重复分配或轮询。
             MonoBehaviour[] components = GetComponents<MonoBehaviour>();
             for (int index = 0; index < components.Length; index++)
             {
@@ -402,6 +311,8 @@ namespace Framework.ExpandComponent.UnitMover
                 if (component == _dataProvider) continue;
                 if (TryResolveMovementDataProvider(component)) return;
             }
+
+            ReportMissingDataProvider();
         }
 
         /// <summary>
@@ -411,7 +322,7 @@ namespace Framework.ExpandComponent.UnitMover
         /// <returns>组件提供了可用移动输入并已完成缓存时返回 true。</returns>
         private bool TryResolveMovementDataProvider(MonoBehaviour component)
         {
-            if (component == null || !component.isActiveAndEnabled) return false;
+            if (component == null) return false;
             if (component.gameObject != gameObject) return false;
             if (component is not IDataProvider provider) return false;
             if (provider.Blackboard is not IUnitMovementInput movementInput) return false;
@@ -426,14 +337,15 @@ namespace Framework.ExpandComponent.UnitMover
         /// 将当前缓存的 DataProvider 黑板数据直接提交给本物理步运行时。
         /// 该路径不依赖命令来源注册表，确保实体基础输入始终由 UnitMover 主动消费。
         /// </summary>
-        private void SubmitDataProviderCommand()
+        private bool SubmitDataProviderCommand()
         {
-            // Unity 组件启用顺序不保证 DataProvider 必然早于 UnitMover。
-            // 当运行时在 Provider 尚未激活时创建，首个可用物理步必须主动完成重新绑定。
             if (!IsDataProviderInputActive)
-                ResolveMovementDataProvider();
-            if (!IsDataProviderInputActive) return;
+            {
+                ReportMissingDataProvider();
+                return false;
+            }
 
+            // 只消费已经在运行时创建阶段绑定的黑板，固定步不执行任何组件查找。
             UnitMovementCommand command = UnitMovementCommand.CreateDefault();
             command.WorldMoveDirection = _movementInput.WorldMoveDirection;
             command.SpeedScale = Mathf.Max(0f, _movementInput.SpeedScale);
@@ -442,6 +354,7 @@ namespace Framework.ExpandComponent.UnitMover
                 command.RequestJump = true;
 
             _runtime.SubmitCommand(command);
+            return true;
         }
 
         /// <summary>
@@ -454,6 +367,7 @@ namespace Framework.ExpandComponent.UnitMover
             for (int index = 0; index < components.Length; index++)
             {
                 MonoBehaviour component = components[index];
+                if (!component.isActiveAndEnabled) continue;
                 if (component is not IDataProvider provider) continue;
                 if (provider.Blackboard is IUnitMovementInput) return component;
             }
@@ -462,12 +376,14 @@ namespace Framework.ExpandComponent.UnitMover
         }
 
         /// <summary>
-        /// 确保业务桥接只在 UnitMover 已启用并创建运行时后注册命令来源或模式。
+        /// 仅首次报告 DataProvider 缺失或失效，随后持续阻断物理步以避免产生重复日志和热路径分配。
         /// </summary>
-        private void RequireRuntime()
+        private void ReportMissingDataProvider()
         {
-            if (_runtime != null) return;
-            throw new System.InvalidOperationException("UnitMover 运行时尚未就绪，请在 UnitMover.OnEnable 之后注册命令来源或运动模式。");
+            if (_reportedMissingDataProvider) return;
+
+            Debug.LogError("UnitMover 未能绑定实现 IUnitMovementInput 的同对象 DataProvider，运动物理步已阻断。", this);
+            _reportedMissingDataProvider = true;
         }
 
         #endregion

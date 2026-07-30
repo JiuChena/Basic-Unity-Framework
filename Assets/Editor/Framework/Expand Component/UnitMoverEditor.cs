@@ -81,7 +81,7 @@ namespace Framework.ExpandComponent.UnitMover.Editor
         }
 
         /// <summary>
-        /// 绘制 Rigidbody、运动 Collider 和移动数据 Provider 引用。
+        /// 绘制 Rigidbody、主 CapsuleCollider 和移动数据 Provider 引用。
         /// </summary>
         /// <param name="mover">当前正在编辑的 UnitMover 组件。</param>
         private void DrawComponentReferences(UnitMoverComponent mover)
@@ -305,6 +305,9 @@ namespace Framework.ExpandComponent.UnitMover.Editor
                 EditorGUILayout.Space(3f);
                 DrawRelativeProperty(ground, "_groundLayer");
                 DrawRelativeProperty(ground, "_slopeLimit");
+                DrawRelativeProperty(ground, "_steepSlopeSlideFactor");
+                DrawRelativeProperty(ground, "_steepSlopeSlideCurve");
+                DrawRelativeProperty(ground, "_steepSlopeSlideSpeedLimit");
                 DrawRelativeProperty(ground, "_hoverHeight");
                 DrawRelativeProperty(ground, "_probeDistance");
                 DrawRelativeProperty(ground, "_springStrength");

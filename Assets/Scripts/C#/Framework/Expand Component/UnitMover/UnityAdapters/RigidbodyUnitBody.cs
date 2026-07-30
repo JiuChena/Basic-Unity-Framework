@@ -151,7 +151,7 @@ namespace Framework.ExpandComponent.UnitMover
         }
 
         /// <summary>
-        /// 执行忽略 Trigger 的无分配方体检测。
+        /// 执行忽略 Trigger 的无分配方体检测，仅供内部脚底 BoxCollider 使用。
         /// </summary>
         /// <param name="center">方体检测中心。</param>
         /// <param name="halfExtents">方体半尺寸。</param>
@@ -161,7 +161,7 @@ namespace Framework.ExpandComponent.UnitMover
         /// <param name="layerMask">参与检测的物理层。</param>
         /// <param name="results">复用的命中结果缓冲区。</param>
         /// <returns>写入缓冲区的命中数量。</returns>
-        public int BoxCastNonAlloc(
+        public int FootBoxCastNonAlloc(
             Vector3 center,
             Vector3 halfExtents,
             Vector3 direction,

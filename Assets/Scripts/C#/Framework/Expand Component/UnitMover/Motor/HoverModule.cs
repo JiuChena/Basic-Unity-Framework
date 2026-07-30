@@ -3,7 +3,7 @@ using UnityEngine;
 namespace Framework.ExpandComponent.UnitMover
 {
     /// <summary>
-    /// 基于统一接地结果沿地面法线计算悬浮弹簧速度修正。
+    /// 处理浮动胶囊在有效地面接触上的沿法线支撑和回拉。
     /// </summary>
     public sealed class HoverModule
     {
@@ -24,27 +24,33 @@ namespace Framework.ExpandComponent.UnitMover
         }
 
         /// <summary>
-        /// 在可行走地面上沿法线施加弹簧和阻尼修正。
+        /// 在任何有效地面命中上沿法线施加浮动胶囊的弹簧和阻尼修正。
         /// </summary>
         /// <param name="velocity">尚未施加悬浮修正的速度。</param>
-        /// <param name="state">当前地面状态。</param>
+        /// <param name="contact">当前物理步的真实地面接触结果；陡坡同样参与悬浮支撑。</param>
+        /// <param name="isJumping">本物理步是否刚触发起跳；起跳时不施加支撑回正。</param>
         /// <param name="fixedDeltaTime">本物理步时长，单位：秒。</param>
-        /// <returns>加入弹簧速度修正后的速度。</returns>
-        public Vector3 Apply(Vector3 velocity, in UnitMovementState state, float fixedDeltaTime)
+        /// <returns>加入浮动胶囊支撑修正后的速度；不满足支撑条件时返回原速度。</returns>
+        public Vector3 Apply(
+            Vector3 velocity,
+            in GroundContact contact,
+            bool isJumping,
+            float fixedDeltaTime)
         {
-            if (_settings == null || !state.IsGrounded) return velocity;
+            // 接触、起跳和物理步有效性均属于浮动胶囊自身的支撑规则。
+            if (_settings == null || !contact.HasContact || isJumping || fixedDeltaTime <= 0f) return velocity;
 
             // 浮动胶囊的支撑留空属于物理支撑目标，不能仅作为外形修改后被弹簧重新压回地面。
             float targetDistance = _groundProbe != null
                 ? _groundProbe.DesiredGroundDistance
                 : _settings.HoverHeight;
-            float heightError = targetDistance - state.GroundDistance;
+            float heightError = targetDistance - contact.Distance;
             if (Mathf.Abs(heightError) <= 0.0001f) return velocity;
 
             // 脚底低于目标距离时向上托起；高于目标距离时沿相反方向拉回。
             Vector3 correctionDirection = heightError > 0f
-                ? state.GroundNormal
-                : -state.GroundNormal;
+                ? contact.Hit.normal
+                : -contact.Hit.normal;
             float springAcceleration = Mathf.Abs(heightError) * _settings.SpringStrength;
 
             // 阻尼始终在本次校正方向上计算，抵消沿该方向的已有速度以避免越过目标高度。

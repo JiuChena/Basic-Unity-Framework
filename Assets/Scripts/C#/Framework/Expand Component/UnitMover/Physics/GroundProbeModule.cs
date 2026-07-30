@@ -3,41 +3,59 @@ using UnityEngine;
 namespace Framework.ExpandComponent.UnitMover
 {
     /// <summary>
-    /// 描述一次经过层、Trigger、自身和坡度过滤后的可行走地面命中。
+    /// 描述一次经过层、Trigger 和自身过滤后的地面命中及其可站立性。
     /// </summary>
     public readonly struct GroundContact
     {
         /// <summary>
         /// 创建地面命中结果。
         /// </summary>
-        /// <param name="hasContact">是否存在可行走地面。</param>
-        /// <param name="hit">距离最近的可行走地面命中。</param>
+        /// <param name="hasContact">是否存在有效地面命中。</param>
+        /// <param name="hit">距离最近的有效地面命中。</param>
         public GroundContact(bool hasContact, RaycastHit hit)
-            : this(hasContact, hit, hit.distance)
+            : this(
+                hasContact,
+                hasContact,
+                hit,
+                hit.distance,
+                hasContact ? Vector3.Angle(hit.normal, Vector3.up) : 0f)
         {
         }
 
         /// <summary>
         /// 创建地面命中结果，并保存从有效碰撞体底部换算后的接地距离。
         /// </summary>
-        /// <param name="hasContact">是否存在可行走地面。</param>
-        /// <param name="hit">距离最近的可行走地面命中。</param>
+        /// <param name="hasContact">是否存在有效地面命中。</param>
+        /// <param name="isWalkable">命中地面是否在允许站立的坡度范围内。</param>
+        /// <param name="hit">距离最近的有效地面命中。</param>
         /// <param name="distance">有效碰撞体底部至地面的距离，单位：米。</param>
-        public GroundContact(bool hasContact, RaycastHit hit, float distance)
+        /// <param name="slopeAngle">命中法线相对世界向上的坡度角，单位：度。</param>
+        public GroundContact(bool hasContact, bool isWalkable, RaycastHit hit, float distance, float slopeAngle)
         {
             HasContact = hasContact;
+            IsWalkable = hasContact && isWalkable;
             Hit = hit;
             Distance = distance;
+            SlopeAngle = hasContact ? slopeAngle : 0f;
         }
 
-        /// <summary>是否命中可行走地面。</summary>
+        /// <summary>是否命中有效地面。</summary>
         public bool HasContact { get; }
 
-        /// <summary>距离最近的可行走地面命中。</summary>
+        /// <summary>命中地面是否允许作为正常站立地面。</summary>
+        public bool IsWalkable { get; }
+
+        /// <summary>是否可作为当前物理步的正常接地结果。</summary>
+        public bool IsGrounded => HasContact && IsWalkable;
+
+        /// <summary>距离最近的有效地面命中。</summary>
         public RaycastHit Hit { get; }
 
         /// <summary>有效碰撞体底部至地面的距离。</summary>
         public float Distance { get; }
+
+        /// <summary>命中斜面相对世界向上的坡度角，单位：度。</summary>
+        public float SlopeAngle { get; }
     }
 
     /// <summary>
@@ -45,8 +63,8 @@ namespace Framework.ExpandComponent.UnitMover
     /// </summary>
     public sealed class GroundProbeModule
     {
-        // 主体运动碰撞体，用于在形状模块不可用时的回退。
-        private readonly Collider _movementCollider;
+        // 主体运动胶囊，用于在形状模块不可用时的接地回退。
+        private readonly CapsuleCollider _movementCollider;
         // 宿主根节点，用于排除自身和子物体碰撞体。
         private readonly Transform _ownerRoot;
         // 抽象后的无分配 Physics 查询。
@@ -59,6 +77,10 @@ namespace Framework.ExpandComponent.UnitMover
         private readonly RaycastHit[] _castHits = new RaycastHit[8];
         // 复用射线和球体检测的命中缓冲区。
         private readonly RaycastHit[] _queryHits = new RaycastHit[8];
+        // 以胶囊脚底半径为基准采样稳定支撑时使用的水平偏移比例。
+        private const float StableSupportOffsetRatio = 0.55f;
+        // 除中心点外至少需要命中的方向采样数量。
+        private const int RequiredPeripheralSupportCount = 2;
 
         /// <summary>
         /// 构造接地查询模块并缓存其固定依赖。
@@ -95,51 +117,91 @@ namespace Framework.ExpandComponent.UnitMover
         public float HoverHeight => DesiredGroundDistance;
 
         /// <summary>
-        /// 使用当前支撑形状的方体 Cast 或脚底球体 Cast，获取距离最近的可行走地面。
+        /// 使用内部脚底 BoxCollider 或主胶囊脚底球体 Cast，获取距离最近的有效地面。
         /// </summary>
-        /// <returns>经过层、Trigger、自身和坡度过滤后的地面接触结果。</returns>
+        /// <returns>经过层、Trigger 和自身过滤后的地面接触结果，并保留可站立性。</returns>
         public GroundContact ProbeGround()
         {
             if (_movementCollider == null || _settings == null) return new GroundContact(false, default);
 
             float distance = GroundCheckDistance;
-            Collider supportCollider = _shapeModule != null
-                ? _shapeModule.SupportCollider
-                : _movementCollider;
-            if (supportCollider is BoxCollider box)
-                return ProbeBoxGround(box, distance);
+            BoxCollider footCollider = _shapeModule != null ? _shapeModule.ActiveFootCollider : null;
+            if (footCollider != null)
+                return ProbeFootBoxGround(footCollider, distance);
 
-            return ProbeCapsuleGround(supportCollider as CapsuleCollider, distance);
+            return ProbeCapsuleGround(_movementCollider, distance);
         }
 
         /// <summary>
-        /// 使用 BoxCollider 当前世界尺寸和朝向进行无分配方体 Cast。
+        /// 以脚底中心射线为主探针，并使用浮动胶囊自动生成的脚底 BoxCollider 验证范围支撑。
         /// </summary>
-        /// <param name="box">参与移动的 BoxCollider。</param>
+        /// <param name="footCollider">仅由浮动胶囊内部维护的脚底 BoxCollider。</param>
         /// <param name="distance">碰撞体底部额外向下检测的距离，单位：米。</param>
         /// <returns>经过统一过滤后的地面接触结果。</returns>
-        private GroundContact ProbeBoxGround(BoxCollider box, float distance)
+        private GroundContact ProbeFootBoxGround(BoxCollider footCollider, float distance)
         {
             if (_physicsQuery == null) return new GroundContact(false, default);
 
-            Vector3 halfExtents = _shapeModule != null
-                ? _shapeModule.GetSupportProbeHalfExtents(box)
-                : Vector3.Scale(box.size * 0.5f, new Vector3(
-                    Mathf.Abs(box.transform.lossyScale.x),
-                    Mathf.Abs(box.transform.lossyScale.y),
-                    Mathf.Abs(box.transform.lossyScale.z)));
-            Vector3 center = box.transform.TransformPoint(box.center);
-            int hitCount = _physicsQuery.BoxCastNonAlloc(
+            // 中心射线必须先确认脚底正下方存在地面，防止范围探针提前碰到前方斜坡而推离玩家。
+            bool hasCenterGroundHit = TryProbeFootCenterGround(footCollider, distance, out RaycastHit centerHit, out float centerBottomDistance);
+            if (!hasCenterGroundHit) return new GroundContact(false, default);
+
+            // BoxCast 同样从脚底上方开始，验证中心命中不是缝隙、边缘等不可靠支撑，并覆盖下陷回正范围。
+            Vector3 halfExtents = _shapeModule.GetFootSupportProbeHalfExtents();
+            Vector3 center = footCollider.transform.TransformPoint(footCollider.center) + Vector3.up * distance;
+            int hitCount = _physicsQuery.FootBoxCastNonAlloc(
                 center,
                 halfExtents,
                 Vector3.down,
-                box.transform.rotation,
-                distance,
+                footCollider.transform.rotation,
+                distance * 2f,
                 _settings.GroundLayer.value,
                 _castHits);
-            if (!TrySelectWalkableHit(_castHits, hitCount, out RaycastHit hit)) return new GroundContact(false, default);
+            bool hasBoxGroundHit = TrySelectGroundHit(_castHits, hitCount, out RaycastHit boxHit);
+            if (!hasBoxGroundHit) return new GroundContact(false, default);
 
-            return new GroundContact(true, hit);
+            // 两种探针必须确认同一支撑碰撞体，防止中心射线穿过缝隙命中下层地面。
+            if (centerHit.collider != boxHit.collider) return new GroundContact(false, default);
+
+            // 坡度法线和悬浮距离都以中心脚底真实命中为准，BoxCast 仅承担范围有效性验证。
+            return CreateGroundContact(centerHit, centerBottomDistance);
+        }
+
+        /// <summary>
+        /// 从脚底辅助体上方的恢复范围向下执行有界中心射线，获取对应三角面的可靠法线。
+        /// </summary>
+        /// <param name="footCollider">浮动胶囊维护的脚底 BoxCollider。</param>
+        /// <param name="groundDistance">脚底上下两侧各自允许的最大接地恢复距离，单位：米。</param>
+        /// <param name="hit">找到时返回经过统一过滤的最近中心射线命中。</param>
+        /// <param name="bottomDistance">找到时返回换算为脚底底面到地面的距离，单位：米。</param>
+        /// <returns>是否找到层、Trigger 和自身规则均通过的中心射线地面命中。</returns>
+        private bool TryProbeFootCenterGround(
+            BoxCollider footCollider,
+            float groundDistance,
+            out RaycastHit hit,
+            out float bottomDistance)
+        {
+            hit = default;
+            bottomDistance = 0f;
+            if (_physicsQuery == null || footCollider == null) return false;
+
+            // 从脚底辅助体上方发射中心线，让已下陷的脚底仍能向下命中上方地面并获得回正依据。
+            Bounds footBounds = footCollider.bounds;
+            Vector3 origin = new Vector3(footBounds.center.x, footBounds.max.y + groundDistance, footBounds.center.z);
+            float originToFootBottom = Mathf.Max(0f, footBounds.max.y - footBounds.min.y) + groundDistance;
+            float rayDistance = originToFootBottom + groundDistance;
+            int hitCount = _physicsQuery.RaycastNonAlloc(
+                origin,
+                Vector3.down,
+                rayDistance,
+                _settings.GroundLayer.value,
+                _queryHits);
+            bool hasGroundHit = TrySelectGroundHit(_queryHits, hitCount, out hit);
+            if (!hasGroundHit) return false;
+
+            // 射线从脚底上方恢复范围开始，统一换算为脚底底面到地面的距离供悬浮模块消费。
+            bottomDistance = Mathf.Max(0f, hit.distance - originToFootBottom);
+            return true;
         }
 
         /// <summary>
@@ -162,9 +224,9 @@ namespace Framework.ExpandComponent.UnitMover
                 distance,
                 _settings.GroundLayer.value,
                 _castHits);
-            if (!TrySelectWalkableHit(_castHits, hitCount, out RaycastHit hit)) return new GroundContact(false, default);
+            if (!TrySelectGroundHit(_castHits, hitCount, out RaycastHit hit)) return new GroundContact(false, default);
 
-            return new GroundContact(true, hit, Mathf.Max(0f, hit.distance));
+            return CreateGroundContact(hit, Mathf.Max(0f, hit.distance));
         }
 
         /// <summary>
@@ -211,6 +273,68 @@ namespace Framework.ExpandComponent.UnitMover
         }
 
         /// <summary>
+        /// 根据当前接地结果判断脚底是否具有足以记录安全位置和启用边缘保护的稳定支撑。
+        /// </summary>
+        /// <param name="contact">当前物理步已完成过滤的地面接触结果。</param>
+        /// <returns>中心点命中且四个周向采样中至少两个命中时返回 true。</returns>
+        public bool HasStableSupport(in GroundContact contact)
+        {
+            // 不可站立接触和无接触都不能作为边缘保护的稳定支撑。
+            if (!contact.IsGrounded || _movementCollider == null || _settings == null || _shapeModule == null) return false;
+
+            // 从当前有效胶囊边界构建中心和四个周向采样点，不依赖移动方向。
+            Bounds bounds = _shapeModule.Bounds;
+            float supportRadius = Mathf.Max(0.001f, Mathf.Min(bounds.extents.x, bounds.extents.z));
+            float offset = supportRadius * StableSupportOffsetRatio;
+            float distance = bounds.size.y + GroundCheckDistance;
+            Vector3 origin = new Vector3(bounds.center.x, bounds.max.y, bounds.center.z);
+            if (!TryGetWalkableGround(origin, Vector3.down, distance, out _)) return false;
+
+            // 中心稳定后要求至少两个周向点具备支撑，避免胶囊边缘单点命中覆盖安全回退位置。
+            int peripheralSupportCount = 0;
+            if (TryGetWalkableGround(origin + Vector3.right * offset, Vector3.down, distance, out _))
+                peripheralSupportCount++;
+            if (TryGetWalkableGround(origin + Vector3.left * offset, Vector3.down, distance, out _))
+                peripheralSupportCount++;
+            if (TryGetWalkableGround(origin + Vector3.forward * offset, Vector3.down, distance, out _))
+                peripheralSupportCount++;
+            if (TryGetWalkableGround(origin + Vector3.back * offset, Vector3.down, distance, out _))
+                peripheralSupportCount++;
+
+            return peripheralSupportCount >= RequiredPeripheralSupportCount;
+        }
+
+        /// <summary>
+        /// 将本模块产生的地面接触转换为统一的运动状态快照。
+        /// </summary>
+        /// <param name="contact">当前物理步已完成过滤的地面接触结果。</param>
+        /// <param name="mode">由运动策略选择的当前运动模式。</param>
+        /// <param name="velocity">当前物理步开始时的刚体速度。</param>
+        /// <param name="isJumping">是否处于跳跃起跳后的短暂地面豁免阶段。</param>
+        /// <returns>包含接地、稳定支撑和地面几何信息的状态快照。</returns>
+        public UnitMovementState CreateMovementState(
+            in GroundContact contact,
+            MovementMode mode,
+            Vector3 velocity,
+            bool isJumping)
+        {
+            // 稳定支撑只在普通可行走接地时查询，避免无接触时产生额外 Physics 查询。
+            bool isGrounded = contact.IsGrounded;
+            bool isStableGrounded = HasStableSupport(contact);
+
+            // 地面几何数据只由接地探测模块解释，调用方不需要重复判断命中有效性。
+            return new UnitMovementState(
+                isGrounded,
+                isStableGrounded,
+                contact.HasContact ? contact.Hit.normal : Vector3.up,
+                contact.HasContact ? contact.Hit.point : Vector3.zero,
+                contact.HasContact ? contact.Distance : float.PositiveInfinity,
+                velocity,
+                mode,
+                isJumping);
+        }
+
+        /// <summary>
         /// 判断给定表面法线是否满足最大可行走坡度。
         /// </summary>
         /// <param name="normal">需要验证的世界空间法线。</param>
@@ -219,6 +343,20 @@ namespace Framework.ExpandComponent.UnitMover
         {
             if (_settings == null) return false;
             return Vector3.Angle(normal, Vector3.up) <= _settings.SlopeLimit;
+        }
+
+        /// <summary>
+        /// 将已选中的有效地面命中转换为包含坡度角和可行走状态的接触结果。
+        /// </summary>
+        /// <param name="hit">通过层、Trigger 和自身过滤的最近地面命中。</param>
+        /// <param name="distance">有效碰撞体底部至该地面的已换算距离，单位：米。</param>
+        /// <returns>保留坡度角、可行走状态和命中信息的地面接触结果。</returns>
+        private GroundContact CreateGroundContact(RaycastHit hit, float distance)
+        {
+            // 只计算一次坡度角，供可行走判定和陡坡速度修正共同消费。
+            float slopeAngle = Vector3.Angle(hit.normal, Vector3.up);
+            bool isWalkable = slopeAngle <= _settings.SlopeLimit;
+            return new GroundContact(true, isWalkable, hit, distance, slopeAngle);
         }
 
         /// <summary>
@@ -249,6 +387,32 @@ namespace Framework.ExpandComponent.UnitMover
         }
 
         /// <summary>
+        /// 从命中缓冲区挑选最近的有效地面命中，不因坡度超过站立限制而丢弃该斜面。
+        /// </summary>
+        /// <param name="hits">待过滤的命中缓冲区。</param>
+        /// <param name="hitCount">缓冲区内有效命中数量。</param>
+        /// <param name="selectedHit">找到时返回最近的有效地面命中。</param>
+        /// <returns>是否找到层、Trigger 和自身规则均通过的地面命中。</returns>
+        private bool TrySelectGroundHit(RaycastHit[] hits, int hitCount, out RaycastHit selectedHit)
+        {
+            selectedHit = default;
+            float nearestDistance = float.PositiveInfinity;
+
+            // 保留最近的真实接触面，让运行时能够对不可站立的陡坡施加下坡修正。
+            for (int index = 0; index < hitCount; index++)
+            {
+                RaycastHit candidate = hits[index];
+                if (!IsValidGroundCollider(candidate.collider)) continue;
+                if (candidate.distance >= nearestDistance) continue;
+
+                nearestDistance = candidate.distance;
+                selectedHit = candidate;
+            }
+
+            return nearestDistance < float.PositiveInfinity;
+        }
+
+        /// <summary>
         /// 验证碰撞体是否能够作为地面支撑的一部分。
         /// </summary>
         /// <param name="collider">需要验证的命中碰撞体。</param>
@@ -261,5 +425,73 @@ namespace Framework.ExpandComponent.UnitMover
 
             return true;
         }
+    }
+
+    /// <summary>在超过站立限制的斜坡上按坡度施加下坡速度修正。</summary>
+    internal sealed class SteepSlopeSlideModule
+    {
+        // 提供坡度限制、曲线下滑因数和速度上限的地面配置。
+        private readonly GroundSettings _settings;
+
+        /// <summary>
+        /// 创建陡坡下滑模块并缓存地面配置。
+        /// </summary>
+        /// <param name="settings">地面、坡度和下滑参数配置；为 null 时不产生修正。</param>
+        internal SteepSlopeSlideModule(GroundSettings settings)
+        {
+            _settings = settings;
+        }
+
+        /// <summary>
+        /// 在有效但不可站立的斜面上保证沿下坡方向的最小目标速度，超限坡度越大则速度越快。
+        /// </summary>
+        /// <param name="velocity">完成重力计算后、尚未提交给刚体的速度。</param>
+        /// <param name="contact">本物理步最近的地面接触结果。</param>
+        /// <param name="fixedDeltaTime">本物理步时长；保留为统一模块调用契约，陡坡目标速度不依赖步长。</param>
+        /// <returns>保证上坡速度已被清除且达到目标下坡速度后的结果；没有不可站立斜面时返回原速度。</returns>
+        internal Vector3 Apply(Vector3 velocity, in GroundContact contact, float fixedDeltaTime)
+        {
+            if (_settings == null || fixedDeltaTime <= 0f) return velocity;
+            if (!contact.HasContact)
+                return velocity;
+
+            if (contact.IsWalkable)
+                return velocity;
+
+            // 将重力方向投影到斜面上，得到严格沿坡面向下的修正方向。
+            Vector3 downhillDirection = Vector3.ProjectOnPlane(Vector3.down, contact.Hit.normal);
+            if (downhillDirection.sqrMagnitude <= 0.000001f)
+                return velocity;
+
+            downhillDirection.Normalize();
+            float normalizedSlopeDifference = CalculateNormalizedSlopeDifference(contact.SlopeAngle);
+            float slideRatio = _settings.EvaluateSteepSlopeSlideRatio(normalizedSlopeDifference);
+            float uphillSpeed = Vector3.Dot(velocity, -downhillDirection);
+            float downhillSpeed = Vector3.Dot(velocity, downhillDirection);
+            float targetDownhillSpeed = Mathf.Clamp(
+                _settings.SteepSlopeSlideFactor * slideRatio,
+                0f,
+                _settings.SteepSlopeSlideSpeedLimit);
+
+            // 先完整抵消上坡速度，再把下坡分量补足到由逆坡比例决定的目标速度。
+            float uphillCorrectionSpeed = Mathf.Max(0f, uphillSpeed);
+            float targetSpeedCorrection = Mathf.Max(0f, targetDownhillSpeed - downhillSpeed);
+            float downhillCorrectionSpeed = Mathf.Max(uphillCorrectionSpeed, targetSpeedCorrection);
+            Vector3 downhillVelocityAddition = downhillDirection * downhillCorrectionSpeed;
+            return velocity + downhillVelocityAddition;
+        }
+
+        /// <summary>
+        /// 将超出可行走限制的坡度差转换为动画曲线的归一化输入。
+        /// </summary>
+        /// <param name="slopeAngle">当前接触面相对世界向上的坡度角，单位：度。</param>
+        /// <returns>位于 0 到 1 的归一化超限坡度差；未超过限制时返回 0。</returns>
+        private float CalculateNormalizedSlopeDifference(float slopeAngle)
+        {
+            // 只负责将实际角度归一化，曲线如何塑形由 GroundSettings 的 Inspector 配置决定。
+            float maximumSlopeDifference = Mathf.Max(0.0001f, 90f - _settings.SlopeLimit);
+            return Mathf.Clamp01((slopeAngle - _settings.SlopeLimit) / maximumSlopeDifference);
+        }
+
     }
 }

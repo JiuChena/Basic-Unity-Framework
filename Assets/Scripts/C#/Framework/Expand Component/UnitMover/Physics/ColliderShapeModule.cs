@@ -1,4 +1,3 @@
-using System;
 using UnityEngine;
 #if UNITY_EDITOR
 using UnityEditor;
@@ -7,121 +6,12 @@ using UnityEditor;
 namespace Framework.ExpandComponent.UnitMover
 {
     /// <summary>
-    /// 保存单个 UnitMover 对 CapsuleCollider 的基础形状快照，供浮动胶囊恢复使用。
-    /// </summary>
-    [Serializable]
-    public sealed class FloatingCapsuleAuthoringState
-    {
-        [Tooltip("是否已从关联 CapsuleCollider 记录基础形状")]
-        [HideInInspector] [SerializeField] private bool _captured;
-        [Tooltip("浮动胶囊关闭时应恢复的局部中心")]
-        [HideInInspector] [SerializeField] private Vector3 _baseCenter;
-        [Tooltip("浮动胶囊关闭时应恢复的高度，单位：米")]
-        [HideInInspector] [SerializeField] private float _baseHeight;
-        [Tooltip("浮动胶囊关闭时应恢复的半径，单位：米")]
-        [HideInInspector] [SerializeField] private float _baseRadius;
-        [Tooltip("浮动胶囊关闭时应恢复的轴向索引")]
-        [HideInInspector] [SerializeField] private int _baseDirection;
-        [Tooltip("上一次同步是否已将浮动形状写入 CapsuleCollider")]
-        [HideInInspector] [SerializeField] private bool _floatingShapeApplied;
-        [Tooltip("由浮动胶囊自动维护的脚底 BoxCollider")]
-        [HideInInspector] [SerializeField] private BoxCollider _footCollider;
-
-        /// <summary>获取是否已记录基础 CapsuleCollider 形状。</summary>
-        public bool Captured => _captured;
-
-        /// <summary>获取基础胶囊局部中心，仅在启用浮动时可用于绘制间隙。</summary>
-        public Vector3 BaseCenter => _baseCenter;
-        /// <summary>获取基础胶囊高度，单位：米。</summary>
-        public float BaseHeight => _baseHeight;
-        /// <summary>获取基础胶囊半径，单位：米。</summary>
-        public float BaseRadius => _baseRadius;
-        /// <summary>获取基础胶囊轴向索引。</summary>
-        public int BaseDirection => _baseDirection;
-        /// <summary>浮动形状是否已写回 CapsuleCollider。</summary>
-        public bool FloatingShapeApplied => _floatingShapeApplied;
-        /// <summary>由浮动胶囊自动维护的脚底 BoxCollider。</summary>
-        public BoxCollider FootCollider => _footCollider;
-
-        /// <summary>
-        /// 记录由浮动胶囊创建和管理的脚底 BoxCollider。
-        /// </summary>
-        public void SetFootCollider(BoxCollider footCollider)
-        {
-            _footCollider = footCollider;
-        }
-
-        /// <summary>
-        /// 根据浮动开关同步实际胶囊，并在功能关闭期间持续把作者编辑的形状记录为新的基础形状。
-        /// </summary>
-        /// <param name="capsule">需要同步形状的 CapsuleCollider。</param>
-        /// <param name="floatingEnabled">当前是否启用浮动胶囊。</param>
-        /// <param name="clearance">从基础胶囊底部移除的高度，单位：米。</param>
-        public void Synchronize(CapsuleCollider capsule, bool floatingEnabled, float clearance)
-        {
-            if (capsule == null) return;
-
-            if (!floatingEnabled)
-            {
-                // 从开启切换到关闭时先恢复基础形状；持续关闭时则接收作者的最新编辑。
-                if (_floatingShapeApplied)
-                    RestoreBaseShape(capsule);
-                else
-                    CaptureBaseShape(capsule);
-
-                _floatingShapeApplied = false;
-                return;
-            }
-
-            // 首次启用必须从当前实际 Collider 记录基础形状，避免把旧快照误用于新作者尺寸。
-            if (!_captured || !_floatingShapeApplied) CaptureBaseShape(capsule);
-
-            // 高度不能小于两个半径，避免生成无效胶囊。
-            float maximumClearance = Mathf.Max(0f, _baseHeight - _baseRadius * 2f);
-            float clampedClearance = Mathf.Clamp(clearance, 0f, maximumClearance);
-            Vector3 localAxis = ColliderShapeModule.GetCapsuleLocalAxis(_baseDirection);
-            capsule.center = _baseCenter + localAxis * (clampedClearance * 0.5f);
-            capsule.height = _baseHeight - clampedClearance;
-            capsule.radius = _baseRadius;
-            capsule.direction = _baseDirection;
-            _floatingShapeApplied = true;
-        }
-
-        /// <summary>
-        /// 将当前未浮动的 CapsuleCollider 形状记录为可恢复的作者基础形状。
-        /// </summary>
-        /// <param name="capsule">当前由作者调整后的 CapsuleCollider。</param>
-        private void CaptureBaseShape(CapsuleCollider capsule)
-        {
-            _baseCenter = capsule.center;
-            _baseHeight = capsule.height;
-            _baseRadius = capsule.radius;
-            _baseDirection = capsule.direction;
-            _captured = true;
-        }
-
-        /// <summary>
-        /// 将最近一次记录的基础形状恢复到目标 CapsuleCollider。
-        /// </summary>
-        /// <param name="capsule">需要恢复形状的 CapsuleCollider。</param>
-        private void RestoreBaseShape(CapsuleCollider capsule)
-        {
-            if (!_captured) return;
-
-            capsule.center = _baseCenter;
-            capsule.height = _baseHeight;
-            capsule.radius = _baseRadius;
-            capsule.direction = _baseDirection;
-        }
-    }
-
-    /// <summary>
     /// 统一同步浮动胶囊形状和脚底 BoxCollider，并向所有物理模块提供实际参与检测的 Collider 边界数据。
     /// </summary>
     public sealed class ColliderShapeModule
     {
-        // 参与移动和物理检测的实际碰撞体。
-        private readonly Collider _movementCollider;
+        // 参与移动和物理检测的主胶囊碰撞体。
+        private readonly CapsuleCollider _movementCollider;
         // 持有所有组件的 GameObject，用于管理脚底 BoxCollider 的创建与销毁。
         private readonly GameObject _owner;
         // 浮动胶囊的可序列化开关与留空高度。
@@ -132,14 +22,13 @@ namespace Framework.ExpandComponent.UnitMover
         private BoxCollider _footCollider;
 
         /// <summary>
-        /// 初始化与单个 Collider 绑定的形状模块。
+        /// 初始化与单个 CapsuleCollider 绑定的形状模块。
         /// </summary>
-        /// <param name="movementCollider">参与移动检测的 CapsuleCollider 或 BoxCollider。</param>
+        /// <param name="movementCollider">参与移动检测的主 CapsuleCollider。</param>
         /// <param name="owner">持有所有组件的 GameObject。</param>
         /// <param name="settings">浮动胶囊配置。</param>
-        /// <param name="authoringState">需要跨编辑器重载保存的基础胶囊快照。</param>
         public ColliderShapeModule(
-            Collider movementCollider,
+            CapsuleCollider movementCollider,
             GameObject owner,
             FloatingCapsuleModule settings)
         {
@@ -150,16 +39,15 @@ namespace Framework.ExpandComponent.UnitMover
             _footCollider = _authoringState != null ? _authoringState.FootCollider : null;
         }
 
-        /// <summary>获取实际参与物理查询的碰撞体。</summary>
-        public Collider MovementCollider => _movementCollider;
+        /// <summary>获取实际参与移动和物理查询的主胶囊碰撞体。</summary>
+        public CapsuleCollider MovementCollider => _movementCollider;
 
         /// <summary>
-        /// 获取当前接地、悬浮与支撑检测使用的碰撞体。
-        /// 浮动胶囊启用时，脚底 BoxCollider 是实际最先接触地面的支撑形状。
+        /// 获取当前启用且由浮动胶囊自动维护的脚底 BoxCollider。
         /// </summary>
-        public Collider SupportCollider => _footCollider != null && _footCollider.enabled
+        public BoxCollider ActiveFootCollider => _footCollider != null && _footCollider.enabled
             ? _footCollider
-            : _movementCollider;
+            : null;
 
         /// <summary>获取当前绑定的浮动胶囊配置。</summary>
         public FloatingCapsuleModule FloatingCapsuleModule => _settings;
@@ -187,36 +75,26 @@ namespace Framework.ExpandComponent.UnitMover
         /// <returns>当前有效支撑底部相对基础胶囊底部的竖直留空高度，单位：米。</returns>
         public float GetFloatingBottomClearance()
         {
-            if (!(_movementCollider is CapsuleCollider capsule)) return 0f;
-            if (_authoringState == null || !_authoringState.Captured
-                || !_authoringState.FloatingShapeApplied) return 0f;
+            if (_movementCollider == null || _settings == null) return 0f;
 
-            // 以基础和有效胶囊的真实底部差值为准，保证缩放后的支撑距离仍然正确。
-            Vector3 localAxis = GetCapsuleLocalAxis(_authoringState.BaseDirection);
-            Vector3 baseBottom = _authoringState.BaseCenter
-                - localAxis * (_authoringState.BaseHeight * 0.5f);
-            Vector3 effectiveBottom = capsule.center - localAxis * (capsule.height * 0.5f);
-            Vector3 worldOffset = capsule.transform.TransformVector(effectiveBottom - baseBottom);
-            float clearance = Mathf.Max(0f, Vector3.Dot(worldOffset, Vector3.up));
-            return clearance;
+            // 浮动留空的数学定义由 FloatingCapsuleModule 解释，形状模块只提供当前实际组件。
+            return _settings.GetFloatingBottomClearance(_movementCollider);
         }
 
         /// <summary>
-        /// 同步基础或浮动后的胶囊形状和脚底 BoxCollider；BoxCollider 保持原始形状并继续受支持。
+        /// 同步基础或浮动后的胶囊形状和脚底 BoxCollider。
         /// </summary>
         public void Synchronize()
         {
-            if (!(_movementCollider is CapsuleCollider capsule) || _authoringState == null)
+            if (_movementCollider == null || _settings == null || _authoringState == null)
             {
                 DestroyFootCollider();
                 return;
             }
 
             bool floatingEnabled = _settings != null && _settings.Enabled;
-            _authoringState.Synchronize(
-                capsule,
-                floatingEnabled,
-                _settings != null ? _settings.BottomClearance : 0f);
+            FloatingCapsuleShape effectiveShape = _settings.GetEffectiveShape(_movementCollider);
+            ApplyCapsuleShape(effectiveShape);
 
             // 浮动胶囊形状同步完成后，按需创建、更新或删除脚底 BoxCollider。
             SyncFootCollider(floatingEnabled);
@@ -252,23 +130,23 @@ namespace Framework.ExpandComponent.UnitMover
         }
 
         /// <summary>
-        /// 获取指定脚底 BoxCollider 用于悬浮接地检测的半尺寸。
+        /// 获取自动脚底 BoxCollider 用于悬浮接地检测的半尺寸。
         /// 物理碰撞保持完整 Box，接地检测仅收缩水平边缘，避免台阶前缘被误判为脚下支撑。
         /// </summary>
-        public Vector3 GetSupportProbeHalfExtents(BoxCollider box)
+        /// <returns>脚底辅助体参与接地检测的世界空间半尺寸；不存在时返回零。</returns>
+        public Vector3 GetFootSupportProbeHalfExtents()
         {
-            if (box == null) return Vector3.zero;
+            if (_footCollider == null) return Vector3.zero;
 
-            Vector3 scale = box.transform.lossyScale;
+            Vector3 scale = _footCollider.transform.lossyScale;
             Vector3 absoluteScale = new Vector3(
                 Mathf.Abs(scale.x),
                 Mathf.Abs(scale.y),
                 Mathf.Abs(scale.z));
-            Vector3 halfExtents = Vector3.Scale(box.size * 0.5f, absoluteScale);
-            if (box != _footCollider || !(_movementCollider is CapsuleCollider capsule)) return halfExtents;
+            Vector3 halfExtents = Vector3.Scale(_footCollider.size * 0.5f, absoluteScale);
 
             float widthScale = _settings != null ? _settings.FootBoxSupportWidthScale : 1f;
-            switch (capsule.direction)
+            switch (_movementCollider.direction)
             {
                 case 0:
                     halfExtents.y *= widthScale;
@@ -287,25 +165,21 @@ namespace Framework.ExpandComponent.UnitMover
             return halfExtents;
         }
 
-        /// <summary>
-        /// 获取 CapsuleCollider.direction 对应的局部单位轴。
-        /// </summary>
-        /// <param name="direction">CapsuleCollider 的轴向索引。</param>
-        /// <returns>对应的局部坐标轴。</returns>
-        public static Vector3 GetCapsuleLocalAxis(int direction)
-        {
-            switch (direction)
-            {
-                case 0:
-                    return Vector3.right;
-                case 1:
-                    return Vector3.up;
-                default:
-                    return Vector3.forward;
-            }
-        }
-
         #region Foot BoxCollider
+
+        /// <summary>
+        /// 将浮动胶囊模块计算出的形状结果写入实际 CapsuleCollider。
+        /// </summary>
+        /// <param name="shape">由 FloatingCapsuleModule 生成的有效局部胶囊形状。</param>
+        private void ApplyCapsuleShape(in FloatingCapsuleShape shape)
+        {
+            if (_movementCollider == null) return;
+
+            _movementCollider.center = shape.Center;
+            _movementCollider.height = shape.Height;
+            _movementCollider.radius = shape.Radius;
+            _movementCollider.direction = shape.Direction;
+        }
 
         /// <summary>
         /// 根据浮动胶囊状态同步脚底 BoxCollider：
@@ -342,18 +216,17 @@ namespace Framework.ExpandComponent.UnitMover
             _footCollider.hideFlags = HideFlags.None;
             _footCollider.enabled = true;
 
-            CapsuleCollider capsule = (CapsuleCollider)_movementCollider;
-            Vector3 localAxis = GetCapsuleLocalAxis(capsule.direction);
+            Vector3 localAxis = FloatingCapsuleModule.GetCapsuleLocalAxis(_movementCollider.direction);
 
             // 有效胶囊底部的局部坐标。
-            float effectiveHalfHeight = capsule.height * 0.5f;
-            Vector3 effectiveBottomLocal = capsule.center - localAxis * effectiveHalfHeight;
+            float effectiveHalfHeight = _movementCollider.height * 0.5f;
+            Vector3 effectiveBottomLocal = _movementCollider.center - localAxis * effectiveHalfHeight;
 
             // 脚底 BoxCollider 的底面与有效胶囊最低点共面，向上填充下半球区域。
             Vector3 footCenterLocal = effectiveBottomLocal + localAxis * (thickness * 0.5f);
 
-            float capsuleDiameter = capsule.radius * 2f;
-            Vector3 footSize = capsule.direction switch
+            float capsuleDiameter = _movementCollider.radius * 2f;
+            Vector3 footSize = _movementCollider.direction switch
             {
                 0 => new Vector3(thickness, capsuleDiameter, capsuleDiameter),
                 1 => new Vector3(capsuleDiameter, thickness, capsuleDiameter),
@@ -402,9 +275,9 @@ namespace Framework.ExpandComponent.UnitMover
         /// </summary>
         private float GetFootColliderHeight()
         {
-            if (!(_movementCollider is CapsuleCollider capsule) || _settings == null) return 0f;
+            if (_movementCollider == null || _settings == null) return 0f;
             if (_settings.FootBoxHeight <= 0f) return 0f;
-            return Mathf.Min(_settings.FootBoxHeight, capsule.radius);
+            return Mathf.Min(_settings.FootBoxHeight, _movementCollider.radius);
         }
 
         #endregion

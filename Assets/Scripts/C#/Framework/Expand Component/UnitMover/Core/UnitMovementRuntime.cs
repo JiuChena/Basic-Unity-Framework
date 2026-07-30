@@ -21,6 +21,8 @@ namespace Framework.ExpandComponent.UnitMover
         private readonly HoverModule _hoverModule;
         // 在空中施加重力并限制下落速度的模块。
         private readonly GravityModule _gravityModule;
+        // 在不可站立斜坡上沿下坡方向施加速度修正的模块。
+        private readonly SteepSlopeSlideModule _steepSlopeSlideModule;
         // 约束危险边缘速度并记录安全快照的模块。
         private readonly EdgeProtectionModule _edgeProtection;
         // 命令来源标识到纯 C# 实例的显式注册表。
@@ -51,7 +53,64 @@ namespace Framework.ExpandComponent.UnitMover
         private Vector3 _lastCommittedVelocity;
 
         /// <summary>
-        /// 以 Unity 适配器和各功能配置构造完整的纯 C# 运动运行时。
+        /// 创建并组装完整的纯 C# 运动运行时，收口 Unity 适配器与物理模块的连线职责。
+        /// </summary>
+        /// <param name="rigidbody">需要由 UnitMover 接管的刚体组件。</param>
+        /// <param name="movementCollider">作为唯一主碰撞体的胶囊碰撞体。</param>
+        /// <param name="owner">持有 UnitMover 及其辅助碰撞体的 GameObject。</param>
+        /// <param name="shapeModule">编辑模式已创建的形状模块；为 null 时按传入引用创建。</param>
+        /// <param name="profile">聚合策略与接地参数的运动 Profile。</param>
+        /// <param name="jumpModule">保存跳跃配置和瞬态状态的模块。</param>
+        /// <param name="gravityModule">保存重力配置和运行时重力基准的模块。</param>
+        /// <param name="edgeProtectionModule">保存边缘保护配置和安全位置状态的模块。</param>
+        /// <param name="floatingCapsuleModule">保存浮动胶囊与脚底辅助碰撞体配置的模块。</param>
+        /// <param name="initialMovementStrategy">由 Inspector 选择并用于初始化缓存的默认移动策略。</param>
+        /// <returns>已完成适配器、接地探针与运动模块连线的运行时实例。</returns>
+        public static UnitMovementRuntime Create(
+            Rigidbody rigidbody,
+            CapsuleCollider movementCollider,
+            GameObject owner,
+            ColliderShapeModule shapeModule,
+            UnitMovementProfile profile,
+            JumpModule jumpModule,
+            GravityModule gravityModule,
+            EdgeProtectionModule edgeProtectionModule,
+            FloatingCapsuleModule floatingCapsuleModule,
+            UnitMovementStrategy initialMovementStrategy)
+        {
+            if (rigidbody == null) throw new ArgumentNullException(nameof(rigidbody));
+            if (movementCollider == null) throw new ArgumentNullException(nameof(movementCollider));
+            if (owner == null) throw new ArgumentNullException(nameof(owner));
+
+            // 运行时复用编辑模式的形状模块，避免丢失浮动胶囊和脚底辅助体的连续状态。
+            ColliderShapeModule runtimeShapeModule = shapeModule != null
+                && shapeModule.MovementCollider == movementCollider
+                && shapeModule.FloatingCapsuleModule == floatingCapsuleModule
+                ? shapeModule
+                : new ColliderShapeModule(movementCollider, owner, floatingCapsuleModule);
+            runtimeShapeModule.Synchronize();
+
+            // Unity 适配器和依赖它们的物理模块只在工厂内创建并完成连线。
+            IUnitBody body = new RigidbodyUnitBody(rigidbody);
+            IPhysicsQuery physicsQuery = new UnityPhysicsQuery();
+            GroundProbeModule groundProbe = new GroundProbeModule(
+                runtimeShapeModule,
+                owner.transform,
+                physicsQuery,
+                profile != null ? profile.Ground : null);
+            return new UnitMovementRuntime(
+                body,
+                runtimeShapeModule,
+                groundProbe,
+                profile,
+                jumpModule,
+                gravityModule,
+                edgeProtectionModule,
+                initialMovementStrategy);
+        }
+
+        /// <summary>
+        /// 以已组装的适配器和各功能配置构造完整的纯 C# 运动运行时。
         /// </summary>
         /// <param name="body">统一提交刚体结果的边界。</param>
         /// <param name="shapeModule">当前有效 Collider 形状模块。</param>
@@ -61,7 +120,7 @@ namespace Framework.ExpandComponent.UnitMover
         /// <param name="gravityModule">保存重力配置和运行时重力基准的模块。</param>
         /// <param name="edgeProtectionModule">保存边缘保护配置和安全位置状态的模块。</param>
         /// <param name="initialMovementStrategy">由 Inspector 选择并用于初始化缓存的默认移动策略。</param>
-        public UnitMovementRuntime(
+        private UnitMovementRuntime(
             IUnitBody body,
             ColliderShapeModule shapeModule,
             GroundProbeModule groundProbe,
@@ -84,6 +143,7 @@ namespace Framework.ExpandComponent.UnitMover
             _hoverModule = new HoverModule(ground, groundProbe);
             _gravityModule = gravityModule ?? new GravityModule();
             _gravityModule.Initialize(Physics.gravity);
+            _steepSlopeSlideModule = new SteepSlopeSlideModule(ground);
             _edgeProtection = edgeProtectionModule ?? new EdgeProtectionModule();
             _edgeProtection.Initialize(shapeModule, groundProbe);
             _edgeProtection.ResetRuntimeState();
@@ -253,8 +313,13 @@ namespace Framework.ExpandComponent.UnitMover
                 : _groundProbe.ProbeGround();
             if (_activeMovementStrategy == null) return;
 
-            MovementMode mode = _activeMovementStrategy.ResolveMovementMode(contact.HasContact);
-            _state = CreateState(contact, mode, _body.Velocity, _jumpModule.IsJumping);
+            // 接地模块输出基础地面状态；策略在此基础上参与跨模块运动模式协同。
+            MovementMode mode = _activeMovementStrategy.ResolveMovementMode(contact.IsGrounded);
+            _state = _groundProbe.CreateMovementState(
+                contact,
+                mode,
+                _body.Velocity,
+                _jumpModule.IsJumping);
 
             // 稳定支撑会更新可回退安全位置；离地时先检查是否需要提前结束本步。
             _edgeProtection.UpdateSafePosition(_state, _body.Position, _body.Rotation);
@@ -301,7 +366,7 @@ namespace Framework.ExpandComponent.UnitMover
             if (startJump)
             {
                 float upwardSpeed = Vector3.Dot(finalVelocity, Vector3.up);
-                float jumpDelta = Mathf.Max(0f, GetJumpInitialSpeed() - upwardSpeed);
+                float jumpDelta = Mathf.Max(0f, _jumpModule.InitialSpeed - upwardSpeed);
                 finalVelocity += Vector3.up * jumpDelta;
                 _groundIgnoreUntil = currentTime + 0.1f;
                 _edgeProtection.NotifyJumpStarted();
@@ -309,19 +374,21 @@ namespace Framework.ExpandComponent.UnitMover
             else if (cutJump && finalVelocity.y > 0f)
                 finalVelocity = new Vector3(
                     finalVelocity.x,
-                    finalVelocity.y * GetJumpCutMultiplier(),
+                    finalVelocity.y * _jumpModule.CutMultiplier,
                     finalVelocity.z);
 
-            if (useGroundNormal)
-                finalVelocity = _hoverModule.Apply(finalVelocity, _state, fixedDeltaTime);
-            else
-                finalVelocity = _gravityModule.Apply(finalVelocity, false, fixedDeltaTime);
+            // Runtime 只传递跳跃与接地协同后的支撑结果；重力和陡坡模块自行决定是否修正速度。
+            finalVelocity = _gravityModule.Apply(finalVelocity, useGroundNormal, fixedDeltaTime);
+            finalVelocity = _steepSlopeSlideModule.Apply(finalVelocity, contact, fixedDeltaTime);
+
+            // Runtime 只按固定顺序调度模块；浮动胶囊自身决定本步是否需要支撑修正。
+            finalVelocity = _hoverModule.Apply(finalVelocity, contact, startJump, fixedDeltaTime);
 
             _body.Commit(finalVelocity);
             _lastCommittedVelocity = finalVelocity;
             _state = new UnitMovementState(
                 useGroundNormal,
-                useGroundNormal,
+                useGroundNormal && _state.IsStableGrounded,
                 _state.GroundNormal,
                 _state.GroundPoint,
                 _state.GroundDistance,
@@ -406,47 +473,5 @@ namespace Framework.ExpandComponent.UnitMover
                 pair.Value.ClearState();
         }
 
-        /// <summary>
-        /// 根据地面命中和当前刚体速度创建供本固定步使用的状态快照。
-        /// </summary>
-        /// <param name="contact">经过过滤的接地结果。</param>
-        /// <param name="mode">本物理步选定的运动模式。</param>
-        /// <param name="velocity">刚体开始时的线速度。</param>
-        /// <param name="isJumping">是否处于主动跳跃阶段。</param>
-        /// <returns>已填充地面数据的只读状态快照。</returns>
-        private static UnitMovementState CreateState(
-            GroundContact contact,
-            MovementMode mode,
-            Vector3 velocity,
-            bool isJumping)
-        {
-            return new UnitMovementState(
-                contact.HasContact,
-                contact.HasContact,
-                contact.HasContact ? contact.Hit.normal : Vector3.up,
-                contact.HasContact ? contact.Hit.point : Vector3.zero,
-                contact.HasContact ? contact.Distance : float.PositiveInfinity,
-                velocity,
-                mode,
-                isJumping);
-        }
-
-        /// <summary>
-        /// 从当前 Profile 的跳跃配置读取起跳速度，配置缺失时返回零。
-        /// </summary>
-        /// <returns>本次普通跳跃应达到的初始向上速度。</returns>
-        private float GetJumpInitialSpeed()
-        {
-            return _jumpModule != null ? _jumpModule.InitialSpeed : 0f;
-        }
-
-        /// <summary>
-        /// 从当前 Profile 的跳跃配置读取截断速度比例，配置缺失时返回一。
-        /// </summary>
-        /// <returns>松开跳跃键后保留的向上速度比例。</returns>
-        private float GetJumpCutMultiplier()
-        {
-            return _jumpModule != null ? _jumpModule.CutMultiplier : 1f;
-        }
     }
 }

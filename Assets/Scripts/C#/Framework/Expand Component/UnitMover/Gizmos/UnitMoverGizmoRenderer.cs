@@ -10,14 +10,14 @@ namespace Framework.ExpandComponent.UnitMover
         /// <summary>
         /// 绘制当前已存在的浮动胶囊、接地参考线和边缘防跌落诊断快照。
         /// </summary>
-        /// <param name="movementCollider">UnitMover 实际使用的碰撞体；不是胶囊时跳过浮动间隙预览。</param>
+        /// <param name="movementCollider">UnitMover 实际使用的主 CapsuleCollider。</param>
         /// <param name="shapeModule">提供有效形状边界与基础胶囊快照的形状模块；为 null 时不绘制形状相关预览。</param>
         /// <param name="floatingCapsuleModule">浮动胶囊配置和组件专属快照容器；为 null 时不绘制浮动间隙。</param>
         /// <param name="groundSettings">接地悬浮配置；为 null 时不绘制接地参考线。</param>
         /// <param name="edgeDebugState">本次运行的边缘检测诊断快照；为 null 时不绘制边缘检测结果。</param>
         /// <param name="showEdgeDetectionGizmos">是否绘制运行时边缘检测射线及速度诊断。</param>
         internal static void DrawAll(
-            Collider movementCollider,
+            CapsuleCollider movementCollider,
             ColliderShapeModule shapeModule,
             FloatingCapsuleModule floatingCapsuleModule,
             GroundSettings groundSettings,
@@ -37,16 +37,15 @@ namespace Framework.ExpandComponent.UnitMover
         /// <summary>
         /// 在基础胶囊底部和当前有效碰撞底部之间绘制浮动胶囊留下的黄色间隙。
         /// </summary>
-        /// <param name="movementCollider">UnitMover 实际使用的碰撞体；仅 CapsuleCollider 支持本预览。</param>
+        /// <param name="movementCollider">UnitMover 实际使用的主 CapsuleCollider。</param>
         /// <param name="shapeModule">包含基础胶囊快照的形状模块。</param>
         /// <param name="floatingCapsuleModule">包含浮动胶囊开关和留空高度的模块。</param>
         private static void DrawFloatingCapsuleGapPreview(
-            Collider movementCollider,
+            CapsuleCollider movementCollider,
             ColliderShapeModule shapeModule,
             FloatingCapsuleModule floatingCapsuleModule)
         {
-            if (shapeModule == null || floatingCapsuleModule == null) return;
-            if (movementCollider is not CapsuleCollider capsule) return;
+            if (movementCollider == null || shapeModule == null || floatingCapsuleModule == null) return;
 
             FloatingCapsuleAuthoringState state = shapeModule.AuthoringState;
             if (state == null || !floatingCapsuleModule.Enabled) return;
@@ -57,12 +56,12 @@ namespace Framework.ExpandComponent.UnitMover
             float clearance = Mathf.Clamp(floatingCapsuleModule.BottomClearance, 0f, maximumClearance);
             if (clearance <= 0.0001f) return;
 
-            Vector3 localAxis = ColliderShapeModule.GetCapsuleLocalAxis(capsule.direction);
-            float diameter = capsule.radius * 2f;
-            Vector3 effectiveBottom = capsule.center - localAxis * (capsule.height * 0.5f);
+            Vector3 localAxis = FloatingCapsuleModule.GetCapsuleLocalAxis(movementCollider.direction);
+            float diameter = movementCollider.radius * 2f;
+            Vector3 effectiveBottom = movementCollider.center - localAxis * (movementCollider.height * 0.5f);
             Vector3 baseBottom = effectiveBottom - localAxis * clearance;
             Vector3 gapCenter = (effectiveBottom + baseBottom) * 0.5f;
-            Vector3 gapSize = capsule.direction switch
+            Vector3 gapSize = movementCollider.direction switch
             {
                 0 => new Vector3(clearance, diameter, diameter),
                 1 => new Vector3(diameter, clearance, diameter),
@@ -71,7 +70,7 @@ namespace Framework.ExpandComponent.UnitMover
 
             Color previousColor = Gizmos.color;
             Matrix4x4 previousMatrix = Gizmos.matrix;
-            Gizmos.matrix = capsule.transform.localToWorldMatrix;
+            Gizmos.matrix = movementCollider.transform.localToWorldMatrix;
 
             // 使用半透明填充和轮廓同时标识无碰撞空间的体积范围。
             Gizmos.color = new Color(1f, 0.92f, 0.016f, 0.35f);
@@ -84,7 +83,7 @@ namespace Framework.ExpandComponent.UnitMover
 
 #if UNITY_EDITOR
             // 在世界空间显示经过动态上限约束后的实际底部留空高度。
-            Vector3 labelPosition = capsule.transform.TransformPoint(gapCenter);
+            Vector3 labelPosition = movementCollider.transform.TransformPoint(gapCenter);
             UnityEditor.Handles.color = new Color(1f, 0.92f, 0.016f, 0.9f);
             UnityEditor.Handles.Label(labelPosition, $"{clearance:0.###} m",
                 new GUIStyle(UnityEditor.EditorStyles.miniLabel)
