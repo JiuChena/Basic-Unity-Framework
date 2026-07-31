@@ -36,11 +36,11 @@ namespace Framework.ExpandComponent.UnitMover
         }
 
         /// <summary>
-        /// 根据接地结果决定本物理步应使用的通用运动状态。
+        /// 根据脚底支撑接触决定本物理步应使用的通用运动状态。
         /// </summary>
-        /// <param name="isGrounded">当前是否检测到可行走地面。</param>
+        /// <param name="hasGroundContact">当前脚底是否检测到有效支撑面，包含不可行走斜坡。</param>
         /// <returns>本物理步写入运动状态的模式枚举。</returns>
-        public abstract MovementMode ResolveMovementMode(bool isGrounded);
+        public abstract MovementMode ResolveMovementMode(bool hasGroundContact);
 
         /// <summary>
         /// 将通用移动命令转换为尚未经过边缘保护处理的候选平面速度。
@@ -70,13 +70,13 @@ namespace Framework.ExpandComponent.UnitMover
         public override string DisplayName => "默认刚体移动";
 
         /// <summary>
-        /// 根据接地结果在地面和空中状态之间自动切换。
+        /// 根据脚底支撑接触在地面和空中状态之间自动切换。
         /// </summary>
-        /// <param name="isGrounded">当前是否检测到可行走地面。</param>
+        /// <param name="hasGroundContact">当前脚底是否检测到有效支撑面，包含不可行走斜坡。</param>
         /// <returns>当前应采用的地面或空中状态。</returns>
-        public override MovementMode ResolveMovementMode(bool isGrounded)
+        public override MovementMode ResolveMovementMode(bool hasGroundContact)
         {
-            return isGrounded ? MovementMode.Ground : MovementMode.Air;
+            return hasGroundContact ? MovementMode.Ground : MovementMode.Air;
         }
 
         /// <summary>

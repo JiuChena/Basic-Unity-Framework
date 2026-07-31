@@ -165,6 +165,41 @@ namespace Framework.ExpandComponent.UnitMover
             return halfExtents;
         }
 
+        /// <summary>
+        /// 获取覆盖浮动胶囊底部无碰撞区域的瘦版接地探测体。
+        /// </summary>
+        /// <param name="center">返回无碰撞区域的世界中心点。</param>
+        /// <param name="halfExtents">返回按接地宽度比例收窄 X/Z 后的世界半尺寸。</param>
+        /// <param name="clearanceHeight">返回探测体完整竖直高度，等于实际底部无碰撞留空，单位：米。</param>
+        /// <returns>浮动胶囊有效且能够构建探测体时返回 true。</returns>
+        public bool TryGetFloatingClearanceProbe(
+            out Vector3 center,
+            out Vector3 halfExtents,
+            out float clearanceHeight)
+        {
+            center = Vector3.zero;
+            halfExtents = Vector3.zero;
+            clearanceHeight = 0f;
+            if (_footCollider == null || !_footCollider.enabled) return false;
+
+            // 无碰撞区域从有效胶囊底部向下延伸到底层基础胶囊底部，Y 尺寸必须完整保留。
+            clearanceHeight = GetFloatingBottomClearance();
+            if (clearanceHeight <= 0.0001f) return false;
+
+            // X/Z 复用脚底支撑宽度比例，避免加宽探测体在台阶前缘或侧面提前认定接地。
+            Bounds footBounds = _footCollider.bounds;
+            float widthScale = _settings != null ? _settings.FootBoxSupportWidthScale : 1f;
+            center = new Vector3(
+                footBounds.center.x,
+                footBounds.min.y - clearanceHeight * 0.5f,
+                footBounds.center.z);
+            halfExtents = new Vector3(
+                Mathf.Max(0.001f, footBounds.extents.x * widthScale),
+                clearanceHeight * 0.5f,
+                Mathf.Max(0.001f, footBounds.extents.z * widthScale));
+            return true;
+        }
+
         #region Foot BoxCollider
 
         /// <summary>

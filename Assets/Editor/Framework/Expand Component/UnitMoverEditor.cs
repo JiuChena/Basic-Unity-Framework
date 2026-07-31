@@ -305,6 +305,10 @@ namespace Framework.ExpandComponent.UnitMover.Editor
                 EditorGUILayout.Space(3f);
                 DrawRelativeProperty(ground, "_groundLayer");
                 DrawRelativeProperty(ground, "_slopeLimit");
+                DrawRelativeProperty(ground, "_steepSlopeEnterAngleMargin");
+                DrawRelativeProperty(ground, "_steepSlopeExitAngleMargin");
+                DrawRelativeProperty(ground, "_steepSlopeContactConfirmTime");
+                DrawRelativeProperty(ground, "_steepSlopeLostContactGraceTime");
                 DrawRelativeProperty(ground, "_steepSlopeSlideFactor");
                 DrawRelativeProperty(ground, "_steepSlopeSlideCurve");
                 DrawRelativeProperty(ground, "_steepSlopeSlideSpeedLimit");

@@ -48,15 +48,17 @@ namespace Framework.ExpandComponent.UnitMover
         /// <summary>
         /// 初始化当前物理步的运动状态快照。
         /// </summary>
+        /// <param name="hasGroundContact">脚底是否命中有效支撑面，包含不可行走斜坡。</param>
         /// <param name="isGrounded">是否检测到可行走地面。</param>
         /// <param name="isStableGrounded">脚底支撑是否满足稳定规则。</param>
-        /// <param name="groundNormal">当前可行走地面的法线。</param>
+        /// <param name="groundNormal">当前有效支撑面的法线。</param>
         /// <param name="groundPoint">当前地面命中点。</param>
         /// <param name="groundDistance">碰撞体到地面的检测距离。</param>
         /// <param name="currentVelocity">刚体在本步开始时的速度。</param>
         /// <param name="mode">当前实际生效的运动模式。</param>
         /// <param name="isJumping">是否处于跳跃起跳后的豁免阶段。</param>
         public UnitMovementState(
+            bool hasGroundContact,
             bool isGrounded,
             bool isStableGrounded,
             Vector3 groundNormal,
@@ -66,6 +68,7 @@ namespace Framework.ExpandComponent.UnitMover
             MovementMode mode,
             bool isJumping)
         {
+            HasGroundContact = hasGroundContact;
             IsGrounded = isGrounded;
             IsStableGrounded = isStableGrounded;
             GroundNormal = groundNormal;
@@ -76,13 +79,16 @@ namespace Framework.ExpandComponent.UnitMover
             IsJumping = isJumping;
         }
 
+        /// <summary>脚底是否命中有效支撑面，包含超过可行走限制的斜坡。</summary>
+        public bool HasGroundContact { get; }
+
         /// <summary>是否检测到可站立的地面。</summary>
         public bool IsGrounded { get; }
 
         /// <summary>脚底支撑是否足以记录安全位置并启用边缘保护。</summary>
         public bool IsStableGrounded { get; }
 
-        /// <summary>当前可行走地面的世界法线。</summary>
+        /// <summary>当前有效支撑面的世界法线。</summary>
         public Vector3 GroundNormal { get; }
 
         /// <summary>当前地面检测的世界命中点。</summary>

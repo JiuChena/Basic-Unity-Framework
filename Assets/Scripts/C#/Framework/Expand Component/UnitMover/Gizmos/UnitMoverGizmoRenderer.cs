@@ -8,7 +8,7 @@ namespace Framework.ExpandComponent.UnitMover
     internal static class UnitMoverGizmoRenderer
     {
         /// <summary>
-        /// 绘制当前已存在的浮动胶囊、接地参考线和边缘防跌落诊断快照。
+        /// 绘制当前已存在的浮动胶囊、接地探测范围、接地参考线和边缘防跌落诊断快照。
         /// </summary>
         /// <param name="movementCollider">UnitMover 实际使用的主 CapsuleCollider。</param>
         /// <param name="shapeModule">提供有效形状边界与基础胶囊快照的形状模块；为 null 时不绘制形状相关预览。</param>
@@ -26,6 +26,9 @@ namespace Framework.ExpandComponent.UnitMover
         {
             // 编辑模式和运行模式共用实际生效的胶囊间隙预览。
             DrawFloatingCapsuleGapPreview(movementCollider, shapeModule, floatingCapsuleModule);
+
+            // 接地范围与 GroundProbeModule 的实际 BoxCast 参数保持一致，便于在编辑模式下核对浮动留空覆盖范围。
+            DrawGroundProbeVolumePreview(shapeModule, groundSettings);
 
             // 接地参考线由有效碰撞底部、底部留空和额外悬浮高度共同决定。
             DrawGroundPreview(shapeModule, groundSettings);
@@ -110,6 +113,84 @@ namespace Framework.ExpandComponent.UnitMover
             Color previousColor = Gizmos.color;
             Gizmos.color = new Color(1f, 0.85f, 0.15f, 0.75f);
             Gizmos.DrawLine(origin, origin + Vector3.down * supportDistance);
+            Gizmos.color = previousColor;
+        }
+
+        /// <summary>
+        /// 绘制浮动胶囊接地时用于确认支撑的完整无碰撞区 BoxCast 扫掠范围。
+        /// </summary>
+        /// <param name="shapeModule">提供脚底辅助体、无碰撞区尺寸和实际接地探测半尺寸的形状模块。</param>
+        /// <param name="groundSettings">提供额外悬浮高度和向下探测长度的接地配置。</param>
+        private static void DrawGroundProbeVolumePreview(
+            ColliderShapeModule shapeModule,
+            GroundSettings groundSettings)
+        {
+            if (shapeModule == null || groundSettings == null) return;
+            if (!shapeModule.TryGetFloatingClearanceProbe(
+                    out Vector3 probeCenter,
+                    out Vector3 halfExtents,
+                    out _)) return;
+
+            BoxCollider footCollider = shapeModule.ActiveFootCollider;
+            if (footCollider == null) return;
+
+            // 此距离与 GroundProbeModule.GroundCheckDistance 相同，BoxCast 从上端扫至下端以覆盖下陷和悬浮两种修正范围。
+            float castDistance = shapeModule.GetFloatingBottomClearance()
+                                 + groundSettings.HoverHeight
+                                 + groundSettings.ProbeDistance;
+            if (castDistance <= 0f) return;
+
+            Vector3 castStartCenter = probeCenter + Vector3.up * castDistance;
+            Vector3 castEndCenter = probeCenter - Vector3.up * castDistance;
+            Quaternion rotation = footCollider.transform.rotation;
+            Color previousColor = Gizmos.color;
+            Matrix4x4 previousMatrix = Gizmos.matrix;
+
+            // 实心青色盒表示 BoxCast 的起始体积，浅蓝轮廓表示扫描结束时的体积。
+            DrawOrientedBox(castStartCenter, halfExtents, rotation, new Color(0.1f, 0.75f, 1f, 0.16f), true);
+            DrawOrientedBox(castStartCenter, halfExtents, rotation, new Color(0.1f, 0.75f, 1f, 0.9f), false);
+            DrawOrientedBox(castEndCenter, halfExtents, rotation, new Color(0.3f, 0.55f, 1f, 0.85f), false);
+
+            // 连接八个对应角点，明确显示实际参与接地确认的整段扫掠体，而非仅显示脚底的薄层区域。
+            for (int index = 0; index < 8; index++)
+            {
+                Vector3 localCorner = new Vector3(
+                    (index & 1) == 0 ? -halfExtents.x : halfExtents.x,
+                    (index & 2) == 0 ? -halfExtents.y : halfExtents.y,
+                    (index & 4) == 0 ? -halfExtents.z : halfExtents.z);
+                Vector3 startCorner = castStartCenter + rotation * localCorner;
+                Vector3 endCorner = castEndCenter + rotation * localCorner;
+                Gizmos.color = new Color(0.15f, 0.65f, 1f, 0.48f);
+                Gizmos.DrawLine(startCorner, endCorner);
+            }
+
+            Gizmos.matrix = previousMatrix;
+            Gizmos.color = previousColor;
+        }
+
+        /// <summary>
+        /// 以给定世界中心、半尺寸和旋转绘制一个与 Physics.BoxCast 同方向的盒体。
+        /// </summary>
+        /// <param name="center">盒体的世界空间中心点。</param>
+        /// <param name="halfExtents">盒体在旋转前局部坐标系中的半尺寸。</param>
+        /// <param name="rotation">盒体相对世界空间的旋转。</param>
+        /// <param name="color">绘制盒体时使用的颜色。</param>
+        /// <param name="filled">为 true 时绘制半透明实心盒，否则仅绘制轮廓。</param>
+        private static void DrawOrientedBox(
+            Vector3 center,
+            Vector3 halfExtents,
+            Quaternion rotation,
+            Color color,
+            bool filled)
+        {
+            // 使用 Gizmos 矩阵保留检测盒的实际旋转，避免对象旋转后预览与物理查询脱节。
+            Matrix4x4 previousMatrix = Gizmos.matrix;
+            Color previousColor = Gizmos.color;
+            Gizmos.matrix = Matrix4x4.TRS(center, rotation, Vector3.one);
+            Gizmos.color = color;
+            if (filled) Gizmos.DrawCube(Vector3.zero, halfExtents * 2f);
+            else Gizmos.DrawWireCube(Vector3.zero, halfExtents * 2f);
+            Gizmos.matrix = previousMatrix;
             Gizmos.color = previousColor;
         }
 

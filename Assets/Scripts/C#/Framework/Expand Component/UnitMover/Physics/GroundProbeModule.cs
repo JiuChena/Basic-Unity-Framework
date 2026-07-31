@@ -133,7 +133,7 @@ namespace Framework.ExpandComponent.UnitMover
         }
 
         /// <summary>
-        /// 以脚底 BoxCast 为主探针，并在区域未命中时使用中心射线兜底。
+        /// 以覆盖底部无碰撞区的瘦版 BoxCast 确认支撑，并优先采用同碰撞体中心射线的真实坡面法线。
         /// </summary>
         /// <param name="footCollider">仅由浮动胶囊内部维护的脚底 BoxCollider。</param>
         /// <param name="distance">碰撞体底部额外向下检测的距离，单位：米。</param>
@@ -142,11 +142,25 @@ namespace Framework.ExpandComponent.UnitMover
         {
             if (_physicsQuery == null) return new GroundContact(false, default);
 
-            // 区域检测优先覆盖脚底实际占地，并以最近命中面提供坡度法线。
-            Vector3 halfExtents = _shapeModule.GetFootSupportProbeHalfExtents();
-            Vector3 center = footCollider.transform.TransformPoint(footCollider.center) + Vector3.up * distance;
+            // 浮动胶囊优先覆盖完整无碰撞区；没有实际留空时退回扁平脚底探测体。
+            Vector3 probeCenter = Vector3.zero;
+            Vector3 halfExtents = Vector3.zero;
+            float clearanceHeight = 0f;
+            bool hasClearanceProbe = _shapeModule != null && _shapeModule.TryGetFloatingClearanceProbe(
+                out probeCenter,
+                out halfExtents,
+                out clearanceHeight);
+            if (!hasClearanceProbe)
+            {
+                probeCenter = footCollider.transform.TransformPoint(footCollider.center);
+                halfExtents = _shapeModule.GetFootSupportProbeHalfExtents();
+                clearanceHeight = 0f;
+            }
+
+            // 从探测体上方开始向下扫描，既覆盖下陷回正范围，也避免查询初始体积与地面重叠。
+            Vector3 castCenter = probeCenter + Vector3.up * distance;
             int hitCount = _physicsQuery.FootBoxCastNonAlloc(
-                center,
+                castCenter,
                 halfExtents,
                 Vector3.down,
                 footCollider.transform.rotation,
@@ -154,22 +168,20 @@ namespace Framework.ExpandComponent.UnitMover
                 _settings.GroundLayer.value,
                 _castHits);
             bool hasBoxGroundHit = TrySelectGroundHit(_castHits, hitCount, out RaycastHit boxHit);
-            if (hasBoxGroundHit)
-            {
-                // BoxCast 起点比当前脚底底面高 distance，因此需要换算回真实脚底间隙。
-                float boxBottomDistance = Mathf.Max(0f, boxHit.distance - distance);
-                return CreateGroundContact(boxHit, boxBottomDistance);
-            }
+            if (!hasBoxGroundHit) return new GroundContact(false, default);
 
-            // 区域未命中时才使用有界中心射线，避免窄平台或数值边界导致瞬间失去接地。
+            // 中心射线命中同一地面时优先使用其三角面法线；范围命中仍可在中心线恰好越过坡边时维持有效接触。
             bool hasCenterGroundHit = TryProbeFootCenterGround(
                 footCollider,
                 distance,
                 out RaycastHit centerHit,
                 out float centerBottomDistance);
-            if (!hasCenterGroundHit) return new GroundContact(false, default);
+            if (hasCenterGroundHit && centerHit.collider == boxHit.collider)
+                return CreateGroundContact(centerHit, centerBottomDistance);
 
-            return CreateGroundContact(centerHit, centerBottomDistance);
+            // 中心线未命中时从查询体底面反推有效胶囊底部距离，避免错误按探测体底部驱动悬浮回正。
+            float bottomDistance = Mathf.Max(0f, boxHit.distance - distance + clearanceHeight);
+            return CreateGroundContact(boxHit, bottomDistance);
         }
 
         /// <summary>
@@ -324,11 +336,13 @@ namespace Framework.ExpandComponent.UnitMover
             bool isJumping)
         {
             // 稳定支撑只在普通可行走接地时查询，避免无接触时产生额外 Physics 查询。
+            bool hasGroundContact = contact.HasContact;
             bool isGrounded = contact.IsGrounded;
             bool isStableGrounded = HasStableSupport(contact);
 
             // 地面几何数据只由接地探测模块解释，调用方不需要重复判断命中有效性。
             return new UnitMovementState(
+                hasGroundContact,
                 isGrounded,
                 isStableGrounded,
                 contact.HasContact ? contact.Hit.normal : Vector3.up,
@@ -437,8 +451,18 @@ namespace Framework.ExpandComponent.UnitMover
     {
         // 提供坡度限制、曲线下滑因数和速度上限的地面配置。
         private readonly GroundSettings _settings;
-        // 当前是否已连续处于同一段不可站立斜坡；首次进入时只阻止上坡。
-        private bool _isOnSteepSlope;
+        // 当前是否已确认锁定不可行走陡坡，锁定期间持续限制上坡输入。
+        private bool _isSteepSlopeConstraintActive;
+        // 连续命中进入阈值的累计时间，单位：秒。
+        private float _steepSlopeEnterElapsedTime;
+        // 连续命中退出阈值的累计时间，单位：秒。
+        private float _steepSlopeExitElapsedTime;
+        // 锁定陡坡后短暂丢失接触的累计时间，单位：秒。
+        private float _lostGroundContactElapsedTime;
+        // 锁定陡坡后用于下滑强度计算的坡度角，单位：度。
+        private float _lockedSlopeAngle;
+        // 由锁定斜面法线计算出的沿坡向下单位方向。
+        private Vector3 _lockedDownhillDirection;
 
         /// <summary>
         /// 创建陡坡下滑模块并缓存地面配置。
@@ -450,52 +474,189 @@ namespace Framework.ExpandComponent.UnitMover
         }
 
         /// <summary>
-        /// 首次进入不可站立斜面时阻止上坡，后续物理步补充最小下坡目标速度。
+        /// 在已锁定的不可行走斜面上逐物理步叠加曲线控制的下坡速度。
         /// </summary>
         /// <param name="velocity">完成重力计算后、尚未提交给刚体的速度。</param>
-        /// <param name="contact">本物理步最近的地面接触结果。</param>
-        /// <returns>首次进入时仅清除上坡分量；已在斜坡上时会补足目标下坡速度。</returns>
-        internal Vector3 Apply(Vector3 velocity, in GroundContact contact)
+        /// <param name="fixedDeltaTime">当前固定物理步时长，单位：秒。</param>
+        /// <returns>返回叠加本步下坡速度后的结果；没有有效下滑配置时保持原速度。</returns>
+        internal Vector3 Apply(Vector3 velocity, float fixedDeltaTime)
         {
-            if (_settings == null) return velocity;
-            if (!contact.HasContact || contact.IsWalkable)
-            {
-                // 离开陡坡或回到可行走面后，下一次命中陡坡需再次走首次阻止分支。
-                _isOnSteepSlope = false;
-                return velocity;
-            }
+            if (_settings == null || fixedDeltaTime <= 0f) return velocity;
+            if (!_isSteepSlopeConstraintActive) return velocity;
 
-            // 将重力方向投影到斜面上，得到严格沿坡面向下的修正方向。
-            Vector3 downhillDirection = Vector3.ProjectOnPlane(Vector3.down, contact.Hit.normal);
-            if (downhillDirection.sqrMagnitude <= 0.000001f)
-                return velocity;
-
-            downhillDirection.Normalize();
-            float uphillSpeed = Vector3.Dot(velocity, -downhillDirection);
-            float uphillCorrectionSpeed = Mathf.Max(0f, uphillSpeed);
-
-            // 首次进入陡坡只阻止上坡推进，避免当前帧被完整目标下坡速度突然反推。
-            bool justEnteredSteepSlope = !_isOnSteepSlope;
-            _isOnSteepSlope = true;
-            if (justEnteredSteepSlope)
-            {
-                return velocity + downhillDirection * uphillCorrectionSpeed;
-            }
-
-            // 已在斜坡上时恢复正常下坡目标速度，使持续停留时仍能自然滑落。
-            float normalizedSlopeDifference = CalculateNormalizedSlopeDifference(contact.SlopeAngle);
+            // 锁定期间只使用缓存的斜面方向；当前接触可短暂丢失或切换到相邻网格三角面。
+            if (_lockedDownhillDirection.sqrMagnitude <= 0.000001f) return velocity;
+            // 以锁定时的超限坡度差、曲线倍率和下滑因数计算本步速度增量。
+            float slopeDifference = Mathf.Max(0f, _lockedSlopeAngle - _settings.SlopeLimit);
+            float normalizedSlopeDifference = CalculateNormalizedSlopeDifference(_lockedSlopeAngle);
             float slideRatio = _settings.EvaluateSteepSlopeSlideRatio(normalizedSlopeDifference);
-            float downhillSpeed = Vector3.Dot(velocity, downhillDirection);
-            float targetDownhillSpeed = Mathf.Clamp(
-                _settings.SteepSlopeSlideFactor * slideRatio,
-                0f,
-                _settings.SteepSlopeSlideSpeedLimit);
+            if (slideRatio <= 0f || _settings.SteepSlopeSlideFactor <= 0f) return velocity;
 
-            // 先完整抵消上坡速度，再把下坡分量补足到由逆坡比例决定的目标速度。
-            float targetSpeedCorrection = Mathf.Max(0f, targetDownhillSpeed - downhillSpeed);
-            float downhillCorrectionSpeed = Mathf.Max(uphillCorrectionSpeed, targetSpeedCorrection);
-            Vector3 downhillVelocityAddition = downhillDirection * downhillCorrectionSpeed;
+            float downhillSpeed = Vector3.Dot(velocity, _lockedDownhillDirection);
+            float maximumSpeedIncrement = Mathf.Max(0f, _settings.SteepSlopeSlideSpeedLimit - downhillSpeed);
+            if (maximumSpeedIncrement <= 0f) return velocity;
+
+            // 上限确保叠加后不会超过配置的最大沿坡下滑速度。
+            float calculatedSpeedIncrement = slopeDifference * slideRatio * _settings.SteepSlopeSlideFactor * fixedDeltaTime;
+            float downhillSpeedIncrement = Mathf.Min(calculatedSpeedIncrement, maximumSpeedIncrement);
+            Vector3 downhillVelocityAddition = _lockedDownhillDirection * downhillSpeedIncrement;
             return velocity + downhillVelocityAddition;
+        }
+
+        /// <summary>
+        /// 更新陡坡约束状态，并在状态锁定期间移除本步上坡输入。
+        /// </summary>
+        /// <param name="command">待由移动策略消费的通用移动命令；没有上坡分量时保持不变。</param>
+        /// <param name="contact">当前物理步真实地面接触，用于更新陡坡状态。</param>
+        /// <param name="fixedDeltaTime">当前固定物理步时长，单位：秒。</param>
+        internal void ConstrainUphillInput(ref UnitMovementCommand command, in GroundContact contact, float fixedDeltaTime)
+        {
+            if (_settings == null || fixedDeltaTime <= 0f) return;
+
+            // 每个固定步只在构建命令前更新一次状态，Apply 仅消费缓存结果，避免同一帧出现相互矛盾的判定。
+            UpdateSteepSlopeConstraint(contact, fixedDeltaTime);
+            if (!_isSteepSlopeConstraintActive) return;
+
+            // 以锁定下坡方向的水平投影识别输入中的上坡分量，保留横向和下坡输入。
+            Vector3 planarDownhillDirection = Vector3.ProjectOnPlane(_lockedDownhillDirection, Vector3.up);
+            if (planarDownhillDirection.sqrMagnitude <= 0.000001f) return;
+
+            planarDownhillDirection.Normalize();
+            float uphillInput = Vector3.Dot(command.WorldMoveDirection, -planarDownhillDirection);
+            if (uphillInput <= 0f) return;
+
+            command.WorldMoveDirection += planarDownhillDirection * uphillInput;
+        }
+
+        /// <summary>
+        /// 以进入、退出滞回和丢失接触宽限维护稳定的陡坡约束状态。
+        /// </summary>
+        /// <param name="contact">当前物理步的实时地面接触。</param>
+        /// <param name="fixedDeltaTime">当前固定物理步时长，单位：秒。</param>
+        private void UpdateSteepSlopeConstraint(in GroundContact contact, float fixedDeltaTime)
+        {
+            // 无实时接触时，已锁定状态在短暂宽限内保持，避免浮动胶囊的接触波动反复放开输入。
+            if (!contact.HasContact)
+            {
+                _steepSlopeEnterElapsedTime = 0f;
+                _steepSlopeExitElapsedTime = 0f;
+                if (!_isSteepSlopeConstraintActive) return;
+
+                _lostGroundContactElapsedTime += fixedDeltaTime;
+                if (_lostGroundContactElapsedTime > _settings.SteepSlopeLostContactGraceTime)
+                    ResetRuntimeState();
+
+                return;
+            }
+
+            // 有效接触恢复后不再累计丢失时间，并依据不同状态应用进入或退出阈值。
+            _lostGroundContactElapsedTime = 0f;
+            if (_isSteepSlopeConstraintActive)
+            {
+                UpdateActiveConstraint(contact, fixedDeltaTime);
+                return;
+            }
+
+            UpdatePendingConstraint(contact, fixedDeltaTime);
+        }
+
+        /// <summary>
+        /// 在未锁定状态下连续确认超过进入阈值的不可行走坡面。
+        /// </summary>
+        /// <param name="contact">当前物理步的实时地面接触。</param>
+        /// <param name="fixedDeltaTime">当前固定物理步时长，单位：秒。</param>
+        private void UpdatePendingConstraint(in GroundContact contact, float fixedDeltaTime)
+        {
+            // 只有明显超过进入阈值的坡面才累计确认时间，阈值附近的接触不应限制玩家输入。
+            if (!IsAboveEnterThreshold(contact))
+            {
+                _steepSlopeEnterElapsedTime = 0f;
+                return;
+            }
+
+            _steepSlopeEnterElapsedTime += fixedDeltaTime;
+            if (_steepSlopeEnterElapsedTime < _settings.SteepSlopeContactConfirmTime) return;
+
+            // 锁定首次确认的坡面几何，之后下滑方向和强度不受相邻三角面法线波动影响。
+            if (!TryLockSteepSlope(contact))
+            {
+                _steepSlopeEnterElapsedTime = 0f;
+                return;
+            }
+
+            _isSteepSlopeConstraintActive = true;
+            _steepSlopeExitElapsedTime = 0f;
+        }
+
+        /// <summary>
+        /// 在已锁定状态下仅在连续稳定回到退出阈值以下后解除约束。
+        /// </summary>
+        /// <param name="contact">当前物理步的实时地面接触。</param>
+        /// <param name="fixedDeltaTime">当前固定物理步时长，单位：秒。</param>
+        private void UpdateActiveConstraint(in GroundContact contact, float fixedDeltaTime)
+        {
+            // 坡度重新明显超过进入阈值或停留在滞回带内时，继续保持已锁定的方向和约束。
+            if (!IsBelowExitThreshold(contact))
+            {
+                _steepSlopeExitElapsedTime = 0f;
+                return;
+            }
+
+            // 只有连续确认处于明显可行走区域后才退出，避免边缘平面与斜坡命中交替导致抖动。
+            _steepSlopeExitElapsedTime += fixedDeltaTime;
+            if (_steepSlopeExitElapsedTime >= _settings.SteepSlopeContactConfirmTime)
+                ResetRuntimeState();
+        }
+
+        /// <summary>
+        /// 判断接触是否足够陡，可以开始进入陡坡约束确认。
+        /// </summary>
+        /// <param name="contact">当前物理步的实时地面接触。</param>
+        /// <returns>坡度达到进入阈值且不允许站立时返回 true。</returns>
+        private bool IsAboveEnterThreshold(in GroundContact contact)
+        {
+            return !contact.IsWalkable
+                   && contact.SlopeAngle >= _settings.SlopeLimit + _settings.SteepSlopeEnterAngleMargin;
+        }
+
+        /// <summary>
+        /// 判断接触是否已稳定回落到可以解除陡坡约束的坡度。
+        /// </summary>
+        /// <param name="contact">当前物理步的实时地面接触。</param>
+        /// <returns>坡度低于退出阈值时返回 true。</returns>
+        private bool IsBelowExitThreshold(in GroundContact contact)
+        {
+            float exitThreshold = Mathf.Max(0f, _settings.SlopeLimit - _settings.SteepSlopeExitAngleMargin);
+            return contact.SlopeAngle <= exitThreshold;
+        }
+
+        /// <summary>
+        /// 缓存当前陡坡的几何信息，供锁定期间稳定地约束输入和叠加下滑速度。
+        /// </summary>
+        /// <param name="contact">满足进入阈值的当前地面接触。</param>
+        /// <returns>成功得到有效沿坡下滑方向时返回 true。</returns>
+        private bool TryLockSteepSlope(in GroundContact contact)
+        {
+            // 将重力方向投影到锁定斜面上，得到严格沿坡面向下的修正方向。
+            Vector3 downhillDirection = Vector3.ProjectOnPlane(Vector3.down, contact.Hit.normal);
+            if (downhillDirection.sqrMagnitude <= 0.000001f) return false;
+
+            _lockedDownhillDirection = downhillDirection.normalized;
+            _lockedSlopeAngle = contact.SlopeAngle;
+            return true;
+        }
+
+        /// <summary>
+        /// 清除陡坡进入确认、锁定和接触宽限状态。
+        /// </summary>
+        internal void ResetRuntimeState()
+        {
+            _isSteepSlopeConstraintActive = false;
+            _steepSlopeEnterElapsedTime = 0f;
+            _steepSlopeExitElapsedTime = 0f;
+            _lostGroundContactElapsedTime = 0f;
+            _lockedSlopeAngle = 0f;
+            _lockedDownhillDirection = Vector3.zero;
         }
 
         /// <summary>

@@ -76,8 +76,10 @@ namespace Framework.ExpandComponent.UnitMover
                 return;
             }
 
-            // 稳定接地会重置土狼时间并结束上一段跳跃状态。
-            if (state.IsStableGrounded)
+            // 主动跳跃上升期间即使仍在扩大后的探测范围内，也不能被误判为重新落地而提前结束跳跃。
+            bool hasCompletedJumpLanding = state.IsStableGrounded
+                                           && (!_jumping || state.CurrentVelocity.y <= 0f);
+            if (hasCompletedJumpLanding)
             {
                 _coyoteRemaining = _coyoteTime;
                 _jumping = false;

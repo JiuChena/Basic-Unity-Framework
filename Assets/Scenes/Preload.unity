@@ -221,13 +221,13 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 213722647}
   serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0.17858389, w: 0.98392475}
-  m_LocalPosition: {x: -25.42, y: 4.29, z: 0.8126044}
+  m_LocalRotation: {x: 0, y: 0, z: -0.258819, w: 0.9659259}
+  m_LocalPosition: {x: -24.64, y: 5.64, z: 0.8126044}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: -20.575}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: -30}
 --- !u!1 &330585543
 GameObject:
   m_ObjectHideFlags: 0
@@ -617,13 +617,13 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 478837044}
   serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0.17858389, w: 0.98392475}
+  m_LocalRotation: {x: 0, y: 0, z: -0.258819, w: 0.9659259}
   m_LocalPosition: {x: -16.62, y: 0.985962, z: 0.8126044}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: -20.575}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: -30}
 --- !u!1 &555119911
 GameObject:
   m_ObjectHideFlags: 0
@@ -1007,14 +1007,18 @@ MonoBehaviour:
       _groundLayer:
         serializedVersion: 2
         m_Bits: 1
-      _slopeLimit: 11.1
-      _steepSlopeSlideFactor: 20
+      _slopeLimit: 20
+      _steepSlopeEnterAngleMargin: 1
+      _steepSlopeExitAngleMargin: 1
+      _steepSlopeContactConfirmTime: 0.2
+      _steepSlopeLostContactGraceTime: 0.2
+      _steepSlopeSlideFactor: 8
       _steepSlopeSlideCurve:
         serializedVersion: 2
         m_Curve:
         - serializedVersion: 3
           time: 0
-          value: 0
+          value: 0.3
           inSlope: 2
           outSlope: 2
           tangentMode: 0
@@ -1023,20 +1027,20 @@ MonoBehaviour:
           outWeight: 0
         - serializedVersion: 3
           time: 1
-          value: 1
-          inSlope: 0.1
-          outSlope: 0.1
+          value: 0.85
+          inSlope: 0.051376432
+          outSlope: 0.051376432
           tangentMode: 0
           weightedMode: 0
-          inWeight: 0
+          inWeight: 0.039527655
           outWeight: 0
         m_PreInfinity: 2
         m_PostInfinity: 2
         m_RotationOrder: 4
-      _steepSlopeSlideSpeedLimit: 20
+      _steepSlopeSlideSpeedLimit: 10
       _hoverHeight: 0.01
       _probeDistance: 0.3
-      _springStrength: 70
+      _springStrength: 80
       _springDamping: 10
   _jumpModule:
     _enabled: 1

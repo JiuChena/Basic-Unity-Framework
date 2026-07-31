@@ -313,8 +313,9 @@ namespace Framework.ExpandComponent.UnitMover
                 : _groundProbe.ProbeGround();
             if (_activeMovementStrategy == null) return;
 
-            // 接地模块输出基础地面状态；策略在此基础上参与跨模块运动模式协同。
-            MovementMode mode = _activeMovementStrategy.ResolveMovementMode(contact.IsGrounded);
+            // 主动跳跃未结束时保持空中模式，避免扩大后的接地范围在上升阶段把策略切回地面模式。
+            MovementMode detectedMode = _activeMovementStrategy.ResolveMovementMode(contact.HasContact);
+            MovementMode mode = _jumpModule.IsJumping ? MovementMode.Air : detectedMode;
             _state = _groundProbe.CreateMovementState(
                 contact,
                 mode,
@@ -335,6 +336,7 @@ namespace Framework.ExpandComponent.UnitMover
             }
 
             UnitMovementCommand command = ConsumeCommand();
+            _steepSlopeSlideModule.ConstrainUphillInput(ref command, contact, fixedDeltaTime);
             _lastCommand = command;
             _jumpModule.Update(_state, command, fixedDeltaTime, out bool startJump, out bool cutJump);
 
@@ -353,8 +355,11 @@ namespace Framework.ExpandComponent.UnitMover
                 out Vector3 constrainedCandidate,
                 out Vector3 constrainedCurrent);
 
-            bool useGroundNormal = _state.IsGrounded && !startJump;
-            Vector3 supportNormal = useGroundNormal ? _state.GroundNormal : Vector3.up;
+            // 主动跳跃阶段不能把范围探测到的地面当作支撑，否则会停用重力并让悬浮弹簧拉回上升速度。
+            bool isJumping = _jumpModule.IsJumping;
+            bool hasSupportContact = _state.HasGroundContact && !isJumping;
+            bool isWalkableGrounded = _state.IsGrounded && !isJumping;
+            Vector3 supportNormal = hasSupportContact ? _state.GroundNormal : Vector3.up;
             Vector3 constrainedTangent = Vector3.ProjectOnPlane(constrainedCandidate, supportNormal);
             Vector3 adjustedCurrentVelocity = new Vector3(
                 constrainedCurrent.x,
@@ -377,24 +382,25 @@ namespace Framework.ExpandComponent.UnitMover
                     finalVelocity.y * _jumpModule.CutMultiplier,
                     finalVelocity.z);
 
-            // Runtime 只传递跳跃与接地协同后的支撑结果；重力和陡坡模块自行决定是否修正速度。
-            finalVelocity = _gravityModule.Apply(finalVelocity, useGroundNormal, fixedDeltaTime);
-            finalVelocity = _steepSlopeSlideModule.Apply(finalVelocity, contact);
+            // Runtime 只传递跳跃与支撑协同后的结果；重力和陡坡模块自行决定是否修正速度。
+            finalVelocity = _gravityModule.Apply(finalVelocity, hasSupportContact, fixedDeltaTime);
+            finalVelocity = _steepSlopeSlideModule.Apply(finalVelocity, fixedDeltaTime);
 
             // Runtime 只按固定顺序调度模块；浮动胶囊自身决定本步是否需要支撑修正。
-            finalVelocity = _hoverModule.Apply(finalVelocity, contact, startJump, fixedDeltaTime);
+            finalVelocity = _hoverModule.Apply(finalVelocity, contact, isJumping, fixedDeltaTime);
 
             _body.Commit(finalVelocity);
             _lastCommittedVelocity = finalVelocity;
             _state = new UnitMovementState(
-                useGroundNormal,
-                useGroundNormal && _state.IsStableGrounded,
+                hasSupportContact,
+                isWalkableGrounded,
+                isWalkableGrounded && _state.IsStableGrounded,
                 _state.GroundNormal,
                 _state.GroundPoint,
                 _state.GroundDistance,
                 finalVelocity,
-                startJump ? MovementMode.Air : mode,
-                _jumpModule.IsJumping);
+                isJumping ? MovementMode.Air : mode,
+                isJumping);
         }
 
         /// <summary>
@@ -416,6 +422,7 @@ namespace Framework.ExpandComponent.UnitMover
             _activeMovementStrategy = null;
             _jumpModule.ResetRuntimeState();
             _gravityModule.ResetRuntimeState();
+            _steepSlopeSlideModule.ResetRuntimeState();
             _edgeProtection.ResetRuntimeState();
             _body?.RestoreInitialSettings();
         }
