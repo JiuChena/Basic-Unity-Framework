@@ -17,9 +17,16 @@ namespace Framework.ExpandComponent.UnitMover
         // 参与移动、接地和边缘保护查询的主胶囊碰撞体。
         [Tooltip("UnitMover 唯一支持的主碰撞体；用于移动、接地和边缘保护")]
         [SerializeField] private CapsuleCollider _movementCollider;
+        [Header("引用")]
         // 向 UnitMover 提供通用移动输入黑板的同对象 DataProvider 组件。
         [Tooltip("提供 IUnitMovementInput 黑板的同对象 DataProvider；手动指定时优先使用，为空时自动查找")]
         [SerializeField] private MonoBehaviour _dataProvider;
+        // 用于把本地平面输入换算为世界方向的可选摄像机参考。
+        [Tooltip("提供世界空间移动方向的摄像机；为空时支持该契约的黑板回退 Camera.main")]
+        [SerializeField] private Camera _movementReferenceCamera;
+        // 是否在 UnitMover 接管期间冻结刚体旋转。
+        [Tooltip("是否冻结刚体旋转；关闭后保留并提交物理角速度")]
+        [SerializeField] private bool _freezeRigidbodyRotation = true;
         // 按功能大类聚合的可序列化纯 C# 运动配置。
         [Tooltip("包含移动策略和接地参数的模块化配置")]
         [SerializeField] private UnitMovementProfile _profile = new UnitMovementProfile();
@@ -58,8 +65,6 @@ namespace Framework.ExpandComponent.UnitMover
         private IUnitMovementInput _movementInput;
         // UnitMover 作为当前黑板消费者独立维护的跳跃按下事件游标。
         private uint _jumpPressedVersion;
-        // 已报告过 DataProvider 缺失或失效，避免固定步重复输出日志。
-        private bool _reportedMissingDataProvider;
 
         /// <summary>获取最近完成固定步的只读运动状态；未运行时返回默认状态。</summary>
         public UnitMovementState State => _runtime != null ? _runtime.State : default;
@@ -99,6 +104,19 @@ namespace Framework.ExpandComponent.UnitMover
             ? _rigidbody.constraints
             : RigidbodyConstraints.None;
 
+        /// <summary>
+        /// 获取或设置用于世界空间移动方向的摄像机参考，并立即同步到支持该契约的输入黑板。
+        /// </summary>
+        public Camera MovementReferenceCamera
+        {
+            get => _movementReferenceCamera;
+            set
+            {
+                _movementReferenceCamera = value;
+                SynchronizeMovementReference();
+            }
+        }
+
         #region Unity Lifecycle
 
         /// <summary>
@@ -118,7 +136,6 @@ namespace Framework.ExpandComponent.UnitMover
         {
             if (!Application.isPlaying) return;
 
-            _reportedMissingDataProvider = false;
             CreateRuntime();
         }
 
@@ -159,7 +176,7 @@ namespace Framework.ExpandComponent.UnitMover
                 CreateRuntime();
             if (_runtime == null) return;
 
-            if (!SubmitDataProviderCommand()) return;
+            SubmitDataProviderCommand();
             _runtime.Simulate(Time.fixedDeltaTime, Time.time);
         }
 
@@ -242,7 +259,8 @@ namespace Framework.ExpandComponent.UnitMover
                 _gravityModule,
                 _edgeProtectionModule,
                 _floatingCapsuleModule,
-                _movementStrategy);
+                _movementStrategy,
+                _freezeRigidbodyRotation);
             ResolveMovementDataProvider();
             _reportedMissingDependencies = false;
         }
@@ -279,6 +297,36 @@ namespace Framework.ExpandComponent.UnitMover
         }
 
         /// <summary>
+        /// 将当前刚体位置作为业务层显式检查点记录；运行时尚未创建时不执行任何操作。
+        /// </summary>
+        public void SetCheckpoint()
+        {
+            if (_runtime == null) return;
+
+            _runtime.SetCheckpoint();
+        }
+
+        /// <summary>
+        /// 恢复到最近一次显式记录的检查点。
+        /// </summary>
+        /// <returns>存在检查点并已恢复时返回 true。</returns>
+        public bool RestoreCheckpoint()
+        {
+            return _runtime != null && _runtime.RestoreCheckpoint();
+        }
+
+        /// <summary>
+        /// 将调用方刚写入的主胶囊形状记录为浮动胶囊的新基础形状，并立即同步有效形状。
+        /// </summary>
+        public void RecaptureFloatingCapsuleBaseShape()
+        {
+            if (_movementCollider == null || _floatingCapsuleModule == null) return;
+
+            _floatingCapsuleModule.RecaptureBaseShape(_movementCollider);
+            SynchronizeColliderShape();
+        }
+
+        /// <summary>
         /// 验证运行时组装所需的 Rigidbody 与主 CapsuleCollider 是否都已配置。
         /// </summary>
         /// <returns>依赖是否足以创建运动运行时。</returns>
@@ -312,7 +360,6 @@ namespace Framework.ExpandComponent.UnitMover
                 if (TryResolveMovementDataProvider(component)) return;
             }
 
-            ReportMissingDataProvider();
         }
 
         /// <summary>
@@ -330,20 +377,17 @@ namespace Framework.ExpandComponent.UnitMover
             _movementDataProvider = provider;
             _movementInput = movementInput;
             _movementInput.InitializeJumpPressedCursor(ref _jumpPressedVersion);
+            SynchronizeMovementReference();
             return true;
         }
 
         /// <summary>
         /// 将当前缓存的 DataProvider 黑板数据直接提交给本物理步运行时。
-        /// 该路径不依赖命令来源注册表，确保实体基础输入始终由 UnitMover 主动消费。
+        /// DataProvider 不可用时不提交命令，由 Runtime 消费默认空命令或外部手动命令。
         /// </summary>
-        private bool SubmitDataProviderCommand()
+        private void SubmitDataProviderCommand()
         {
-            if (!IsDataProviderInputActive)
-            {
-                ReportMissingDataProvider();
-                return false;
-            }
+            if (!IsDataProviderInputActive) return;
 
             // 只消费已经在运行时创建阶段绑定的黑板，固定步不执行任何组件查找。
             UnitMovementCommand command = UnitMovementCommand.CreateDefault();
@@ -354,7 +398,6 @@ namespace Framework.ExpandComponent.UnitMover
                 command.RequestJump = true;
 
             _runtime.SubmitCommand(command);
-            return true;
         }
 
         /// <summary>
@@ -376,14 +419,15 @@ namespace Framework.ExpandComponent.UnitMover
         }
 
         /// <summary>
-        /// 仅首次报告 DataProvider 缺失或失效，随后持续阻断物理步以避免产生重复日志和热路径分配。
+        /// 将 Inspector 摄像机引用注入支持移动参考系契约的当前输入黑板。
         /// </summary>
-        private void ReportMissingDataProvider()
+        private void SynchronizeMovementReference()
         {
-            if (_reportedMissingDataProvider) return;
+            if (_movementInput is not IUnitMovementReferenceFrame referenceFrame) return;
 
-            Debug.LogError("UnitMover 未能绑定实现 IUnitMovementInput 的同对象 DataProvider，运动物理步已阻断。", this);
-            _reportedMissingDataProvider = true;
+            referenceFrame.MovementReference = _movementReferenceCamera != null
+                ? _movementReferenceCamera.transform
+                : null;
         }
 
         #endregion

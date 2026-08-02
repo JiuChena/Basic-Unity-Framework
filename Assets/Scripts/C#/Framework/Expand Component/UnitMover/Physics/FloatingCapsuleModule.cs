@@ -49,6 +49,16 @@ namespace Framework.ExpandComponent.UnitMover
         }
 
         /// <summary>
+        /// 将调用方刚写入的主胶囊形状明确记录为新的浮动基础形状。
+        /// </summary>
+        /// <param name="capsule">已由调用方完成外部形状修改的主胶囊。</param>
+        public void RecaptureBaseShape(CapsuleCollider capsule)
+        {
+            EnsureAuthoringState();
+            _authoringState.RecaptureBaseShape(capsule);
+        }
+
+        /// <summary>
         /// 根据当前 Authoring 配置生成应写入主胶囊碰撞体的有效形状。
         /// </summary>
         /// <param name="capsule">提供作者基础形状的主 CapsuleCollider；为 null 时返回默认形状。</param>
@@ -138,6 +148,19 @@ namespace Framework.ExpandComponent.UnitMover
 
         /// <summary>获取由 ColliderShapeModule 自动维护的脚底 BoxCollider。</summary>
         public BoxCollider FootCollider => _footCollider;
+
+        /// <summary>
+        /// 将调用方刚写入的 CapsuleCollider 形状明确记录为新的浮动基础形状。
+        /// </summary>
+        /// <param name="capsule">已由调用方完成外部形状修改的主胶囊。</param>
+        public void RecaptureBaseShape(CapsuleCollider capsule)
+        {
+            if (capsule == null) return;
+
+            // 显式调用表示当前形状就是作者期望的基础形状，不自动推断其他写入的意图。
+            CaptureBaseShape(capsule);
+            _floatingShapeApplied = false;
+        }
 
         /// <summary>
         /// 记录由 ColliderShapeModule 创建或销毁的脚底 BoxCollider。

@@ -21,6 +21,9 @@ namespace Framework.ExpandComponent.UnitMover
         // 接收到跳跃请求后等待接地消费的时间。
         [Tooltip("落地前缓存跳跃请求的时间，单位：秒")]
         [Min(0f)] [SerializeField] private float _bufferTime = 0.12f;
+        // 起跳后暂时忽略接地探测的时长，避免扩大后的探测范围过早重新判定接地。
+        [Tooltip("起跳后暂时忽略接地探测的时长，单位：秒")]
+        [Min(0f)] [SerializeField] private float _groundIgnoreAfterStartDuration = 0.1f;
         // 提前松开跳跃键时保留的上升速度比例。
         [Tooltip("提前松开跳跃键时保留的上升速度比例，范围：0-1")]
         [Range(0f, 1f)] [SerializeField] private float _cutMultiplier = 0.5f;
@@ -41,6 +44,9 @@ namespace Framework.ExpandComponent.UnitMover
 
         /// <summary>获取提前松开跳跃键时保留的上升速度比例。</summary>
         public float CutMultiplier => _cutMultiplier;
+
+        /// <summary>获取起跳后暂时忽略接地探测的时长。</summary>
+        public float GroundIgnoreAfterStartDuration => _groundIgnoreAfterStartDuration;
 
         /// <summary>
         /// 清空本组件保存的全部瞬态跳跃状态，保留 Inspector 配置供下一次运行时复用。

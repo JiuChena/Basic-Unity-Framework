@@ -98,30 +98,30 @@ namespace Framework.ExpandComponent.UnitMover
     }
 
     /// <summary>
-    /// 保存经过稳定支撑验证后可用于异常跌落回退的位置快照。
+    /// 保存由业务层显式记录并可手动恢复的检查点位置快照。
     /// </summary>
-    public readonly struct SafePositionSnapshot
+    public readonly struct CheckpointSnapshot
     {
         /// <summary>
-        /// 创建安全位置快照。
+        /// 创建检查点位置快照。
         /// </summary>
-        /// <param name="position">稳定接地时的刚体位置。</param>
-        /// <param name="rotation">稳定接地时的刚体旋转。</param>
-        public SafePositionSnapshot(Vector3 position, Quaternion rotation)
+        /// <param name="position">业务层记录的刚体位置。</param>
+        /// <param name="rotation">业务层记录的刚体旋转。</param>
+        public CheckpointSnapshot(Vector3 position, Quaternion rotation)
         {
             Position = position;
             Rotation = rotation;
         }
 
-        /// <summary>安全位置的世界坐标。</summary>
+        /// <summary>检查点的世界坐标。</summary>
         public Vector3 Position { get; }
 
-        /// <summary>安全位置的世界旋转。</summary>
+        /// <summary>检查点的世界旋转。</summary>
         public Quaternion Rotation { get; }
     }
 
     /// <summary>
-    /// 基于预测脚底支撑约束目标速度和已有外向速度，并提供有限的异常跌落回退判断。
+    /// 基于预测脚底支撑约束目标速度和已有外向速度，并保存业务层显式检查点。
     /// </summary>
     [Serializable]
     public sealed class EdgeProtectionModule
@@ -137,26 +137,18 @@ namespace Framework.ExpandComponent.UnitMover
         // 是否启用预测支撑式边缘防跌落。
         [Tooltip("是否启用预测支撑式边缘防跌落")]
         [SerializeField] private bool _enabled = true;
-        // 允许自然落到较低可站立地面的最大高度。
-        [Tooltip("允许自然落到较低可站立地面的最大高度，单位：米")]
+        // 支撑采样允许向下确认较低可行走地面的最大高度。
+        [Tooltip("支撑检测允许向下确认较低可行走地面的最大高度，单位：米")]
         [Min(0f)] [SerializeField] private float _maxFallHeight = 2f;
-        // 是否在异常跌落且无落脚点时恢复最近安全位置。
-        [Tooltip("是否在异常跌落且无落脚点时恢复到最近安全位置")]
-        [SerializeField] private bool _fallRecoveryEnabled = true;
-        // 是否只回退非主动跳跃导致的异常跌落。
-        [Tooltip("是否只回退非主动跳跃导致的异常跌落")]
-        [SerializeField] private bool _recoverUnexpectedFallsOnly = true;
         // 允许确认后跨越的最大短缝宽度。
         [Tooltip("允许确认后跨越的最大短缝宽度，单位：米")]
         [Min(0f)] [SerializeField] private float _maxBridgeableGapWidth = 0.15f;
         // 供 Scene Gizmos 读取的固定缓冲诊断数据。
         [NonSerialized] private readonly EdgeProtectionDebugState _debugState = new EdgeProtectionDebugState();
-        // 最近一次完全安全位置是否有效。
-        private bool _hasSafePosition;
-        // 最近一次完全安全位置快照。
-        private SafePositionSnapshot _safePosition;
-        // 主动跳跃后是否暂时禁止异常跌落回退。
-        private bool _recoveryDisarmedByJump;
+        // 当前是否存在业务层显式记录的检查点。
+        private bool _hasCheckpoint;
+        // 当前业务层显式记录的检查点位置和旋转。
+        private CheckpointSnapshot _checkpoint;
 
         /// <summary>
         /// 初始化边缘保护模块。
@@ -175,14 +167,16 @@ namespace Framework.ExpandComponent.UnitMover
         /// <summary>获取最近一次边缘保护调试数据。</summary>
         public EdgeProtectionDebugState DebugState => _debugState;
 
+        /// <summary>获取边缘防跌落是否启用。</summary>
+        public bool IsEnabled => _enabled;
+
         /// <summary>
-        /// 清空安全位置、跳跃豁免和 Gizmo 诊断等全部运行时状态，保留 Inspector 配置。
+        /// 清空检查点和 Gizmo 诊断等全部运行时状态，保留 Inspector 配置。
         /// </summary>
         public void ResetRuntimeState()
         {
-            _hasSafePosition = false;
-            _safePosition = default;
-            _recoveryDisarmedByJump = false;
+            _hasCheckpoint = false;
+            _checkpoint = default;
             _debugState.ClearRayData();
             _debugState.EdgeOutNormal = Vector3.zero;
             _debugState.ConstrainedVelocity = Vector3.zero;
@@ -190,26 +184,25 @@ namespace Framework.ExpandComponent.UnitMover
         }
 
         /// <summary>
-        /// 在稳定地面上记录安全位置，并在重新稳定接地后重新武装异常回退。
+        /// 由业务层显式记录可恢复的检查点位置。
         /// </summary>
-        /// <param name="state">当前已更新的运动状态。</param>
-        /// <param name="position">当前刚体世界位置。</param>
-        /// <param name="rotation">当前刚体世界旋转。</param>
-        public void UpdateSafePosition(in UnitMovementState state, Vector3 position, Quaternion rotation)
+        /// <param name="position">需要恢复的刚体世界位置。</param>
+        /// <param name="rotation">需要恢复的刚体世界旋转。</param>
+        public void SetCheckpoint(Vector3 position, Quaternion rotation)
         {
-            if (!state.IsStableGrounded) return;
-
-            _safePosition = new SafePositionSnapshot(position, rotation);
-            _hasSafePosition = true;
-            _recoveryDisarmedByJump = false;
+            _checkpoint = new CheckpointSnapshot(position, rotation);
+            _hasCheckpoint = true;
         }
 
         /// <summary>
-        /// 标记当前离地由主动跳跃触发，避免跳跃过程被安全位置回退打断。
+        /// 获取当前显式记录的检查点。
         /// </summary>
-        public void NotifyJumpStarted()
+        /// <param name="checkpoint">存在检查点时返回对应的位置快照。</param>
+        /// <returns>是否存在可恢复的检查点。</returns>
+        public bool TryGetCheckpoint(out CheckpointSnapshot checkpoint)
         {
-            _recoveryDisarmedByJump = true;
+            checkpoint = _checkpoint;
+            return _hasCheckpoint;
         }
 
         /// <summary>
@@ -236,9 +229,12 @@ namespace Framework.ExpandComponent.UnitMover
             _debugState.ConstrainedVelocity = candidateVelocity;
 
             if (!_enabled || !state.IsStableGrounded) return;
-            if (candidateVelocity.sqrMagnitude <= 0.000001f) return;
 
-            Vector3 direction = candidateVelocity.normalized;
+            // 候选速度不能代表外力或反向输入时，使用当前实际水平速度继续预测外向运动。
+            Vector3 predictionVelocity = SelectPredictionVelocity(candidateVelocity, currentVelocity);
+            if (predictionVelocity.sqrMagnitude <= 0.000001f) return;
+
+            Vector3 direction = predictionVelocity.normalized;
             SupportStatus supportStatus = EvaluatePredictedSupport(direction, candidateVelocity, currentVelocity, fixedDeltaTime);
             _debugState.SupportStatus = supportStatus;
             if (supportStatus == SupportStatus.Stable) return;
@@ -270,29 +266,6 @@ namespace Framework.ExpandComponent.UnitMover
             constrainedCandidate = tangentCandidate;
             _debugState.EdgeOutNormal = edgeOutNormal;
             _debugState.ConstrainedVelocity = constrainedCandidate;
-        }
-
-        /// <summary>
-        /// 判断当前无支撑状态是否满足异常跌落回退条件。
-        /// </summary>
-        /// <param name="state">当前运动状态。</param>
-        /// <param name="snapshot">满足条件时返回最近完全安全位置。</param>
-        /// <returns>是否应在当前物理步提前执行安全位置回退。</returns>
-        public bool TryGetFallRecovery(in UnitMovementState state, out SafePositionSnapshot snapshot)
-        {
-            snapshot = default;
-            if (!_enabled || !_fallRecoveryEnabled || !_hasSafePosition) return false;
-            if (state.IsGrounded) return false;
-            if (_recoverUnexpectedFallsOnly && _recoveryDisarmedByJump) return false;
-            if (_shapeModule == null || _groundProbe == null) return false;
-
-            Bounds bounds = _shapeModule.Bounds;
-            Vector3 origin = bounds.center + Vector3.up * bounds.extents.y;
-            float distance = bounds.size.y + _groundProbe.HoverHeight + _maxFallHeight + SkinWidth;
-            if (_groundProbe.TryGetWalkableGround(origin, Vector3.down, distance, out _)) return false;
-
-            snapshot = _safePosition;
-            return true;
         }
 
         /// <summary>
@@ -381,9 +354,23 @@ namespace Framework.ExpandComponent.UnitMover
         /// <returns>候选速度是否拥有稳定支撑。</returns>
         private bool HasStableSupportForVelocity(Vector3 candidateVelocity, Vector3 currentVelocity, float fixedDeltaTime)
         {
-            if (candidateVelocity.sqrMagnitude <= 0.000001f) return true;
-            return EvaluatePredictedSupport(candidateVelocity.normalized, candidateVelocity, currentVelocity, fixedDeltaTime)
+            Vector3 predictionVelocity = SelectPredictionVelocity(candidateVelocity, currentVelocity);
+            if (predictionVelocity.sqrMagnitude <= 0.000001f) return true;
+            return EvaluatePredictedSupport(predictionVelocity.normalized, candidateVelocity, currentVelocity, fixedDeltaTime)
                 == SupportStatus.Stable;
+        }
+
+        /// <summary>
+        /// 选择本物理步最能代表可能越界位移的水平速度。
+        /// </summary>
+        /// <param name="candidateVelocity">策略计算出的候选水平速度。</param>
+        /// <param name="currentVelocity">刚体当前实际水平速度。</param>
+        /// <returns>速度较大的一方；两者均近零时返回零。</returns>
+        private static Vector3 SelectPredictionVelocity(Vector3 candidateVelocity, Vector3 currentVelocity)
+        {
+            return currentVelocity.sqrMagnitude > candidateVelocity.sqrMagnitude
+                ? currentVelocity
+                : candidateVelocity;
         }
 
         /// <summary>

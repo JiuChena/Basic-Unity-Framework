@@ -65,6 +65,7 @@ namespace Framework.ExpandComponent.UnitMover
         /// <param name="edgeProtectionModule">保存边缘保护配置和安全位置状态的模块。</param>
         /// <param name="floatingCapsuleModule">保存浮动胶囊与脚底辅助碰撞体配置的模块。</param>
         /// <param name="initialMovementStrategy">由 Inspector 选择并用于初始化缓存的默认移动策略。</param>
+        /// <param name="freezeRotation">是否在运行时接管期间冻结刚体旋转。</param>
         /// <returns>已完成适配器、接地探针与运动模块连线的运行时实例。</returns>
         public static UnitMovementRuntime Create(
             Rigidbody rigidbody,
@@ -76,7 +77,8 @@ namespace Framework.ExpandComponent.UnitMover
             GravityModule gravityModule,
             EdgeProtectionModule edgeProtectionModule,
             FloatingCapsuleModule floatingCapsuleModule,
-            UnitMovementStrategy initialMovementStrategy)
+            UnitMovementStrategy initialMovementStrategy,
+            bool freezeRotation)
         {
             if (rigidbody == null) throw new ArgumentNullException(nameof(rigidbody));
             if (movementCollider == null) throw new ArgumentNullException(nameof(movementCollider));
@@ -91,7 +93,7 @@ namespace Framework.ExpandComponent.UnitMover
             runtimeShapeModule.Synchronize();
 
             // Unity 适配器和依赖它们的物理模块只在工厂内创建并完成连线。
-            IUnitBody body = new RigidbodyUnitBody(rigidbody);
+            IUnitBody body = new RigidbodyUnitBody(rigidbody, freezeRotation);
             IPhysicsQuery physicsQuery = new UnityPhysicsQuery();
             GroundProbeModule groundProbe = new GroundProbeModule(
                 runtimeShapeModule,
@@ -265,6 +267,35 @@ namespace Framework.ExpandComponent.UnitMover
         }
 
         /// <summary>
+        /// 将当前刚体位置和旋转作为业务层显式检查点记录。
+        /// </summary>
+        public void SetCheckpoint()
+        {
+            if (_body == null || !_body.IsValid) return;
+
+            _edgeProtection.SetCheckpoint(_body.Position, _body.Rotation);
+        }
+
+        /// <summary>
+        /// 恢复到业务层最近记录的检查点，并清空等待消费的移动命令。
+        /// </summary>
+        /// <returns>存在检查点并已恢复时返回 true。</returns>
+        public bool RestoreCheckpoint()
+        {
+            if (_body == null || !_body.IsValid) return false;
+            if (!_edgeProtection.TryGetCheckpoint(out CheckpointSnapshot checkpoint)) return false;
+
+            // 恢复位置后清空本步命令与诊断速度，避免旧输入立即覆盖检查点状态。
+            _body.RestoreCheckpoint(checkpoint.Position, checkpoint.Rotation);
+            _hasSubmittedCommand = false;
+            _submittedCommand = UnitMovementCommand.CreateDefault();
+            _lastCommand = UnitMovementCommand.CreateDefault();
+            _lastCandidateVelocity = Vector3.zero;
+            _lastCommittedVelocity = Vector3.zero;
+            return true;
+        }
+
+        /// <summary>
         /// 按策略类型选择当前移动策略；首次使用时创建实例，后续切回时复用原实例及其运行时状态。
         /// </summary>
         /// <typeparam name="TStrategy">需要选择的具体移动策略类型。</typeparam>
@@ -320,20 +351,8 @@ namespace Framework.ExpandComponent.UnitMover
                 contact,
                 mode,
                 _body.Velocity,
-                _jumpModule.IsJumping);
-
-            // 稳定支撑会更新可回退安全位置；离地时先检查是否需要提前结束本步。
-            _edgeProtection.UpdateSafePosition(_state, _body.Position, _body.Rotation);
-            if (_edgeProtection.TryGetFallRecovery(_state, out SafePositionSnapshot safePosition))
-            {
-                _body.RestoreSafePosition(safePosition.Position, safePosition.Rotation);
-                _hasSubmittedCommand = false;
-                _submittedCommand = UnitMovementCommand.CreateDefault();
-                _lastCommand = UnitMovementCommand.CreateDefault();
-                _lastCandidateVelocity = Vector3.zero;
-                _lastCommittedVelocity = Vector3.zero;
-                return;
-            }
+                _jumpModule.IsJumping,
+                _edgeProtection.IsEnabled);
 
             UnitMovementCommand command = ConsumeCommand();
             _steepSlopeSlideModule.ConstrainUphillInput(ref command, contact, fixedDeltaTime);
@@ -361,6 +380,22 @@ namespace Framework.ExpandComponent.UnitMover
             bool isWalkableGrounded = _state.IsGrounded && !isJumping;
             Vector3 supportNormal = hasSupportContact ? _state.GroundNormal : Vector3.up;
             Vector3 constrainedTangent = Vector3.ProjectOnPlane(constrainedCandidate, supportNormal);
+            if (isWalkableGrounded && candidateHorizontal.sqrMagnitude > 0.000001f)
+            {
+                // 边缘保护没有改变候选速度时，直接保留策略已归一化的坡面切向速度和方向。
+                if ((constrainedCandidate - candidateHorizontal).sqrMagnitude <= 0.000001f)
+                    constrainedTangent = candidateVelocity;
+                else if (constrainedTangent.sqrMagnitude > 0.000001f)
+                {
+                    // 边缘保护只在水平面约束方向；映射回坡面后按约束比例恢复长度，避免坡度额外降低移动速度。
+                    float constraintRatioSquared = Mathf.Clamp01(
+                        constrainedCandidate.sqrMagnitude / candidateHorizontal.sqrMagnitude);
+                    float targetTangentSqrMagnitude = candidateVelocity.sqrMagnitude * constraintRatioSquared;
+                    constrainedTangent *= Mathf.Sqrt(
+                        targetTangentSqrMagnitude / constrainedTangent.sqrMagnitude);
+                }
+            }
+
             Vector3 adjustedCurrentVelocity = new Vector3(
                 constrainedCurrent.x,
                 _body.Velocity.y,
@@ -373,8 +408,7 @@ namespace Framework.ExpandComponent.UnitMover
                 float upwardSpeed = Vector3.Dot(finalVelocity, Vector3.up);
                 float jumpDelta = Mathf.Max(0f, _jumpModule.InitialSpeed - upwardSpeed);
                 finalVelocity += Vector3.up * jumpDelta;
-                _groundIgnoreUntil = currentTime + 0.1f;
-                _edgeProtection.NotifyJumpStarted();
+                _groundIgnoreUntil = currentTime + _jumpModule.GroundIgnoreAfterStartDuration;
             }
             else if (cutJump && finalVelocity.y > 0f)
                 finalVelocity = new Vector3(

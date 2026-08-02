@@ -113,8 +113,52 @@ namespace Framework.ExpandComponent.UnitMover
             if (direction.sqrMagnitude <= 0.000001f) return 0f;
 
             direction.Normalize();
+            if (TryGetCircularHorizontalRadius(out float circularRadius)) return circularRadius;
+
+            // 非直立或水平非等比缩放的胶囊无法保证圆形截面，保留 AABB 前缘避免低估越界距离。
             Vector3 extents = _movementCollider.bounds.extents;
             return Mathf.Abs(direction.x) * extents.x + Mathf.Abs(direction.z) * extents.z;
+        }
+
+        /// <summary>
+        /// 判断主胶囊在世界水平面上是否具有可直接使用的圆形截面。
+        /// </summary>
+        /// <param name="radius">满足条件时返回世界空间圆形半径。</param>
+        /// <returns>胶囊轴与世界向上对齐且两个水平半径等比时返回 true。</returns>
+        private bool TryGetCircularHorizontalRadius(out float radius)
+        {
+            radius = 0f;
+            if (_movementCollider == null) return false;
+
+            // 只有胶囊轴竖直时，世界 X/Z 截面才是其端面圆形。
+            Vector3 localAxis = FloatingCapsuleModule.GetCapsuleLocalAxis(_movementCollider.direction);
+            Vector3 worldAxis = _movementCollider.transform.TransformDirection(localAxis).normalized;
+            if (Mathf.Abs(Vector3.Dot(worldAxis, Vector3.up)) < 0.9999f) return false;
+
+            // 胶囊半径沿两个垂直于轴的局部方向必须采用相同世界缩放。
+            Vector3 scale = _movementCollider.transform.lossyScale;
+            float firstRadiusScale;
+            float secondRadiusScale;
+            switch (_movementCollider.direction)
+            {
+                case 0:
+                    firstRadiusScale = Mathf.Abs(scale.y);
+                    secondRadiusScale = Mathf.Abs(scale.z);
+                    break;
+                case 1:
+                    firstRadiusScale = Mathf.Abs(scale.x);
+                    secondRadiusScale = Mathf.Abs(scale.z);
+                    break;
+                default:
+                    firstRadiusScale = Mathf.Abs(scale.x);
+                    secondRadiusScale = Mathf.Abs(scale.y);
+                    break;
+            }
+
+            if (Mathf.Abs(firstRadiusScale - secondRadiusScale) > 0.0001f) return false;
+
+            radius = _movementCollider.radius * firstRadiusScale;
+            return radius > 0.000001f;
         }
 
         /// <summary>

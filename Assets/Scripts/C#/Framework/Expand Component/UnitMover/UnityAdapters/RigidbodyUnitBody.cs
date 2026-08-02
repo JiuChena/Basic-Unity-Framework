@@ -13,25 +13,24 @@ namespace Framework.ExpandComponent.UnitMover
         private readonly bool _initialUseGravity;
         // 接管前的刚体插值模式快照。
         private readonly RigidbodyInterpolation _initialInterpolation;
-        // 接管前的碰撞检测模式快照。
-        private readonly CollisionDetectionMode _initialCollisionDetectionMode;
         // 接管前的运动学状态快照。
         private readonly bool _initialIsKinematic;
         // 接管前的位置与旋转约束快照。
         private readonly RigidbodyConstraints _initialConstraints;
+        // 是否由 UnitMover 冻结刚体旋转并清空角速度。
+        private readonly bool _freezeRotation;
 
         /// <summary>
         /// 记录刚体初始状态并切换到由 UnitMover 统一处理重力的模式。
         /// </summary>
         /// <param name="rigidbody">需要接管的刚体组件。</param>
-        public RigidbodyUnitBody(Rigidbody rigidbody)
+        /// <param name="freezeRotation">是否在接管期间冻结刚体旋转。</param>
+        public RigidbodyUnitBody(Rigidbody rigidbody, bool freezeRotation)
         {
             _rigidbody = rigidbody;
+            _freezeRotation = freezeRotation;
             _initialUseGravity = rigidbody != null && rigidbody.useGravity;
             _initialInterpolation = rigidbody != null ? rigidbody.interpolation : RigidbodyInterpolation.None;
-            _initialCollisionDetectionMode = rigidbody != null
-                ? rigidbody.collisionDetectionMode
-                : CollisionDetectionMode.Discrete;
             _initialIsKinematic = rigidbody != null && rigidbody.isKinematic;
             _initialConstraints = rigidbody != null
                 ? rigidbody.constraints
@@ -43,9 +42,11 @@ namespace Framework.ExpandComponent.UnitMover
             _rigidbody.isKinematic = false;
             _rigidbody.useGravity = false;
             _rigidbody.interpolation = RigidbodyInterpolation.Interpolate;
-            _rigidbody.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
-            _rigidbody.constraints = _initialConstraints | RigidbodyConstraints.FreezeRotation;
-            _rigidbody.angularVelocity = Vector3.zero;
+            if (_freezeRotation)
+            {
+                _rigidbody.constraints = _initialConstraints | RigidbodyConstraints.FreezeRotation;
+                _rigidbody.angularVelocity = Vector3.zero;
+            }
         }
 
         /// <summary>获取底层刚体是否仍然可用。</summary>
@@ -70,22 +71,22 @@ namespace Framework.ExpandComponent.UnitMover
 
             // Rigidbody 速度仅在本适配器中写入，其他模块只能返回计算结果。
             _rigidbody.velocity = velocity;
-            _rigidbody.angularVelocity = Vector3.zero;
+            if (_freezeRotation) _rigidbody.angularVelocity = Vector3.zero;
         }
 
         /// <summary>
-        /// 回到最近稳定支撑点并清除线速度和角速度，避免同一惯性再次带离平台。
+        /// 回到业务层显式记录的检查点并清除线速度；旋转冻结时同时清除角速度。
         /// </summary>
         /// <param name="position">安全快照中的世界位置。</param>
         /// <param name="rotation">安全快照中的世界旋转。</param>
-        public void RestoreSafePosition(Vector3 position, Quaternion rotation)
+        public void RestoreCheckpoint(Vector3 position, Quaternion rotation)
         {
             if (_rigidbody == null) return;
 
             _rigidbody.position = position;
             _rigidbody.rotation = rotation;
             _rigidbody.velocity = Vector3.zero;
-            _rigidbody.angularVelocity = Vector3.zero;
+            if (_freezeRotation) _rigidbody.angularVelocity = Vector3.zero;
         }
 
         /// <summary>
@@ -97,7 +98,6 @@ namespace Framework.ExpandComponent.UnitMover
 
             _rigidbody.useGravity = _initialUseGravity;
             _rigidbody.interpolation = _initialInterpolation;
-            _rigidbody.collisionDetectionMode = _initialCollisionDetectionMode;
             _rigidbody.isKinematic = _initialIsKinematic;
             _rigidbody.constraints = _initialConstraints;
         }

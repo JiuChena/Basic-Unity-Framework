@@ -8,7 +8,7 @@ namespace Framework.ExpandComponent.DataProvider.Example
     /// 可移动角色的基础数据面板。注册所有角色共有的移动和姿态属性。
     /// 具体实体类型（玩家、敌人、NPC）从此类继承并追加领域特有属性。
     /// </summary>
-    public abstract class CharacterBlackboard : Blackboard, IUnitMovementInput
+    public abstract class CharacterBlackboard : Blackboard, IUnitMovementInput, IUnitMovementReferenceFrame
     {
         /// <summary>平面移动输入（自动归一化）。</summary>
         public MoveAttribute Move { get; }
@@ -25,6 +25,18 @@ namespace Framework.ExpandComponent.DataProvider.Example
         /// <summary>跳跃按钮。</summary>
         public JumpAttribute Jump { get; }
 
+        // 由 UnitMover 注入的世界空间移动参考；为空时回退主摄像机。
+        private Transform _movementReference;
+        // 未显式注入参考时缓存的主摄像机，避免每个固定步重复查找。
+        private Camera _fallbackCamera;
+
+        /// <summary>获取或设置用于将平面输入转换为世界方向的参考 Transform。</summary>
+        public Transform MovementReference
+        {
+            get => _movementReference;
+            set => _movementReference = value;
+        }
+
         /// <summary>获取相对于主摄像机朝向的世界空间平面移动方向。</summary>
         public Vector3 WorldMoveDirection
         {
@@ -33,11 +45,11 @@ namespace Framework.ExpandComponent.DataProvider.Example
                 Vector2 input = Move.Value;
                 if (input.sqrMagnitude <= 0.0001f) return Vector3.zero;
 
-                Camera camera = Camera.main;
-                if (camera == null) return new Vector3(input.x, 0f, input.y);
+                Transform reference = ResolveMovementReference();
+                if (reference == null) return new Vector3(input.x, 0f, input.y);
 
-                Vector3 forward = Vector3.ProjectOnPlane(camera.transform.forward, Vector3.up).normalized;
-                Vector3 right = Vector3.ProjectOnPlane(camera.transform.right, Vector3.up).normalized;
+                Vector3 forward = Vector3.ProjectOnPlane(reference.forward, Vector3.up).normalized;
+                Vector3 right = Vector3.ProjectOnPlane(reference.right, Vector3.up).normalized;
                 return (forward * input.y + right * input.x).normalized;
             }
         }
@@ -78,6 +90,19 @@ namespace Framework.ExpandComponent.DataProvider.Example
         public bool ConsumeJumpPressed(ref uint pressedVersion, out bool pressed)
         {
             return Jump.ConsumePressed(ref pressedVersion, out pressed);
+        }
+
+        /// <summary>
+        /// 优先返回 UnitMover 注入的参考 Transform；未注入时缓存并回退主摄像机。
+        /// </summary>
+        /// <returns>可用于转换移动输入的参考 Transform；没有可用摄像机时返回 null。</returns>
+        private Transform ResolveMovementReference()
+        {
+            if (_movementReference != null) return _movementReference;
+
+            // 仅在没有缓存或缓存对象已销毁时查找主摄像机。
+            if (_fallbackCamera == null) _fallbackCamera = Camera.main;
+            return _fallbackCamera != null ? _fallbackCamera.transform : null;
         }
     }
 }

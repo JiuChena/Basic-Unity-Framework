@@ -168,24 +168,26 @@ namespace Framework.ExpandComponent.UnitMover
                 _settings.GroundLayer.value,
                 _castHits);
             bool hasBoxGroundHit = TrySelectGroundHit(_castHits, hitCount, out RaycastHit boxHit);
-            if (!hasBoxGroundHit) return new GroundContact(false, default);
+            if (hasBoxGroundHit)
+            {
+                // 区域命中直接决定支撑，避免中心射线把台阶前缘或相邻表面误判为脚下地面。
+                float bottomDistance = Mathf.Max(0f, boxHit.distance - distance + clearanceHeight);
+                return CreateGroundContact(boxHit, bottomDistance);
+            }
 
-            // 中心射线命中同一地面时优先使用其三角面法线；范围命中仍可在中心线恰好越过坡边时维持有效接触。
-            bool hasCenterGroundHit = TryProbeFootCenterGround(
-                footCollider,
-                distance,
-                out RaycastHit centerHit,
-                out float centerBottomDistance);
-            if (hasCenterGroundHit && centerHit.collider == boxHit.collider)
-                return CreateGroundContact(centerHit, centerBottomDistance);
+            // 区域没有任何有效命中时，才以同一接地距离范围内的中心射线兜底窄支撑。
+            if (!TryProbeFootCenterGround(
+                    footCollider,
+                    distance,
+                    out RaycastHit centerHit,
+                    out float centerBottomDistance))
+                return new GroundContact(false, default);
 
-            // 中心线未命中时从查询体底面反推有效胶囊底部距离，避免错误按探测体底部驱动悬浮回正。
-            float bottomDistance = Mathf.Max(0f, boxHit.distance - distance + clearanceHeight);
-            return CreateGroundContact(boxHit, bottomDistance);
+            return CreateGroundContact(centerHit, centerBottomDistance);
         }
 
         /// <summary>
-        /// 从脚底辅助体上方的恢复范围向下执行有界中心射线，获取对应三角面的可靠法线。
+        /// 在区域接地检测没有有效命中时，从脚底辅助体上方向下执行有界中心射线兜底。
         /// </summary>
         /// <param name="footCollider">浮动胶囊维护的脚底 BoxCollider。</param>
         /// <param name="groundDistance">脚底上下两侧各自允许的最大接地恢复距离，单位：米。</param>
@@ -328,17 +330,19 @@ namespace Framework.ExpandComponent.UnitMover
         /// <param name="mode">由运动策略选择的当前运动模式。</param>
         /// <param name="velocity">当前物理步开始时的刚体速度。</param>
         /// <param name="isJumping">是否处于跳跃起跳后的短暂地面豁免阶段。</param>
+        /// <param name="evaluateStableSupport">是否为边缘保护执行五点稳定支撑检查。</param>
         /// <returns>包含接地、稳定支撑和地面几何信息的状态快照。</returns>
         public UnitMovementState CreateMovementState(
             in GroundContact contact,
             MovementMode mode,
             Vector3 velocity,
-            bool isJumping)
+            bool isJumping,
+            bool evaluateStableSupport)
         {
-            // 稳定支撑只在普通可行走接地时查询，避免无接触时产生额外 Physics 查询。
+            // 边缘保护关闭时跳过五点稳定支撑查询；可行走接地仍视作足以驱动跳跃的稳定结果。
             bool hasGroundContact = contact.HasContact;
             bool isGrounded = contact.IsGrounded;
-            bool isStableGrounded = HasStableSupport(contact);
+            bool isStableGrounded = isGrounded && (!evaluateStableSupport || HasStableSupport(contact));
 
             // 地面几何数据只由接地探测模块解释，调用方不需要重复判断命中有效性。
             return new UnitMovementState(
@@ -451,8 +455,10 @@ namespace Framework.ExpandComponent.UnitMover
     {
         // 提供坡度限制、曲线下滑因数和速度上限的地面配置。
         private readonly GroundSettings _settings;
-        // 当前是否已确认锁定不可行走陡坡，锁定期间持续限制上坡输入。
+        // 当前是否已确认锁定不可行走陡坡，锁定期间持续限制上坡输入和上坡速度。
         private bool _isSteepSlopeConstraintActive;
+        // 当前物理步是否为刚确认锁定陡坡的首次约束步；该步只阻止上坡，不叠加下坡速度。
+        private bool _isFirstConstraintStep;
         // 连续命中进入阈值的累计时间，单位：秒。
         private float _steepSlopeEnterElapsedTime;
         // 连续命中退出阈值的累计时间，单位：秒。
@@ -474,15 +480,20 @@ namespace Framework.ExpandComponent.UnitMover
         }
 
         /// <summary>
-        /// 在已锁定的不可行走斜面上逐物理步叠加曲线控制的下坡速度。
+        /// 在已锁定的不可行走斜面上清除上坡速度，并在首次约束步后叠加曲线控制的下坡速度。
         /// </summary>
         /// <param name="velocity">完成重力计算后、尚未提交给刚体的速度。</param>
         /// <param name="fixedDeltaTime">当前固定物理步时长，单位：秒。</param>
         /// <returns>返回叠加本步下坡速度后的结果；没有有效下滑配置时保持原速度。</returns>
         internal Vector3 Apply(Vector3 velocity, float fixedDeltaTime)
         {
-            if (_settings == null || fixedDeltaTime <= 0f) return velocity;
             if (!_isSteepSlopeConstraintActive) return velocity;
+
+            // 锁定坡面后始终移除实际速度中的上坡分量，防止惯性或策略残余继续把玩家推上不可行走坡。
+            velocity = RemoveUphillVelocity(velocity);
+            bool isFirstConstraintStep = _isFirstConstraintStep;
+            _isFirstConstraintStep = false;
+            if (isFirstConstraintStep || _settings == null || fixedDeltaTime <= 0f) return velocity;
 
             // 锁定期间只使用缓存的斜面方向；当前接触可短暂丢失或切换到相邻网格三角面。
             if (_lockedDownhillDirection.sqrMagnitude <= 0.000001f) return velocity;
@@ -501,6 +512,21 @@ namespace Framework.ExpandComponent.UnitMover
             float downhillSpeedIncrement = Mathf.Min(calculatedSpeedIncrement, maximumSpeedIncrement);
             Vector3 downhillVelocityAddition = _lockedDownhillDirection * downhillSpeedIncrement;
             return velocity + downhillVelocityAddition;
+        }
+
+        /// <summary>
+        /// 移除给定速度中沿已锁定坡面向上的分量。
+        /// </summary>
+        /// <param name="velocity">待约束的世界空间速度。</param>
+        /// <returns>不再包含沿锁定斜面向上分量的速度。</returns>
+        private Vector3 RemoveUphillVelocity(Vector3 velocity)
+        {
+            if (_lockedDownhillDirection.sqrMagnitude <= 0.000001f) return velocity;
+
+            // 与下坡反向的投影即沿坡向上速度；只移除正向部分，保留横向、法线和下坡运动。
+            Vector3 uphillDirection = -_lockedDownhillDirection;
+            float uphillSpeed = Vector3.Dot(velocity, uphillDirection);
+            return uphillSpeed > 0f ? velocity - uphillDirection * uphillSpeed : velocity;
         }
 
         /// <summary>
@@ -585,6 +611,7 @@ namespace Framework.ExpandComponent.UnitMover
             }
 
             _isSteepSlopeConstraintActive = true;
+            _isFirstConstraintStep = true;
             _steepSlopeExitElapsedTime = 0f;
         }
 
@@ -652,6 +679,7 @@ namespace Framework.ExpandComponent.UnitMover
         internal void ResetRuntimeState()
         {
             _isSteepSlopeConstraintActive = false;
+            _isFirstConstraintStep = false;
             _steepSlopeEnterElapsedTime = 0f;
             _steepSlopeExitElapsedTime = 0f;
             _lostGroundContactElapsedTime = 0f;

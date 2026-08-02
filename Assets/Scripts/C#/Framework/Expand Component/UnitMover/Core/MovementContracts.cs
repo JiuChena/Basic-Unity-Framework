@@ -26,11 +26,11 @@ namespace Framework.ExpandComponent.UnitMover
         void Commit(Vector3 velocity);
 
         /// <summary>
-        /// 恢复到安全位置并清空惯性，用于异常跌落回退。
+        /// 恢复到业务层显式记录的检查点并清空惯性。
         /// </summary>
         /// <param name="position">需要恢复到的世界位置。</param>
         /// <param name="rotation">需要恢复到的世界旋转。</param>
-        void RestoreSafePosition(Vector3 position, Quaternion rotation);
+        void RestoreCheckpoint(Vector3 position, Quaternion rotation);
 
         /// <summary>
         /// 接管刚体前记录的物理设置恢复给外部系统。
@@ -150,6 +150,15 @@ namespace Framework.ExpandComponent.UnitMover
         /// <param name="pressed">是否存在未消费的跳跃按下事件。</param>
         /// <returns>是否成功读取跳跃输入。</returns>
         bool ConsumeJumpPressed(ref uint pressedVersion, out bool pressed);
+    }
+
+    /// <summary>
+    /// 允许 UnitMover 向输入黑板注入世界空间移动方向的参考 Transform。
+    /// </summary>
+    public interface IUnitMovementReferenceFrame
+    {
+        /// <summary>获取或设置用于将平面输入转换为世界方向的参考 Transform；为 null 时由实现自行回退。</summary>
+        Transform MovementReference { get; set; }
     }
 
 }
