@@ -101,6 +101,20 @@ namespace Framework.ExpandComponent.UnitMover
         }
 
         /// <summary>
+        /// 恢复模块接管前的基础胶囊形状，并移除本模块创建的脚底辅助碰撞体。
+        /// </summary>
+        public void RestoreAuthoringShape()
+        {
+            // 基础快照属于 FloatingCapsuleAuthoringState，组件写入与附加组件回收属于形状模块。
+            if (_authoringState != null
+                && _authoringState.TryRestoreBaseShape(out FloatingCapsuleShape baseShape))
+                ApplyCapsuleShape(baseShape);
+
+            // 只回收当前模块登记的辅助体，不影响业务层自行挂载的其他 BoxCollider。
+            DestroyFootCollider();
+        }
+
+        /// <summary>
         /// 计算给定世界水平移动方向上的 Collider 前缘半径或半宽。
         /// </summary>
         /// <param name="worldDirection">需要评估的世界空间方向。</param>

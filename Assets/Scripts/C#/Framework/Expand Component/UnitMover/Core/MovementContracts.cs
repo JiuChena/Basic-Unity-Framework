@@ -88,43 +88,8 @@ namespace Framework.ExpandComponent.UnitMover
     }
 
     /// <summary>
-    /// 由业务层实现的纯 C# 命令来源，例如玩家输入、AI 或网络回放。
-    /// </summary>
-    public interface IUnitMovementCommandSource
-    {
-        /// <summary>
-        /// 命令来源注册到运行时时调用一次。
-        /// </summary>
-        /// <param name="runtime">接收该来源命令的运行时实例。</param>
-        void OnRegistered(UnitMovementRuntime runtime);
-
-        /// <summary>
-        /// 命令来源成为当前激活来源时接收状态快照。
-        /// </summary>
-        /// <param name="state">切换时的当前运动状态。</param>
-        void OnActivated(in UnitMovementState state);
-
-        /// <summary>
-        /// 生成本物理步的通用移动命令。
-        /// </summary>
-        /// <param name="state">本物理步开始时的运动状态。</param>
-        /// <param name="command">需要写入或覆盖的命令数据。</param>
-        void BuildCommand(in UnitMovementState state, ref UnitMovementCommand command);
-
-        /// <summary>
-        /// 命令来源不再是当前激活来源时调用。
-        /// </summary>
-        void OnDeactivated();
-
-        /// <summary>
-        /// 命令来源从运行时注册表移除时调用。
-        /// </summary>
-        void OnUnregistered();
-    }
-
-    /// <summary>
     /// 由数据黑板实现的通用移动输入读取契约。
-    /// UnitMover 只依赖该契约，不依赖任何具体 Provider、Blackboard 或 Attribute 类型。
+    /// 具体移动策略按需读取该契约，不依赖任何具体 Provider、Blackboard 或 Attribute 类型。
     /// </summary>
     public interface IUnitMovementInput
     {

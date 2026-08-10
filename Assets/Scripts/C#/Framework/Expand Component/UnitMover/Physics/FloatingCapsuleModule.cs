@@ -231,6 +231,22 @@ namespace Framework.ExpandComponent.UnitMover
         }
 
         /// <summary>
+        /// 获取已捕获的基础胶囊形状，并将当前 Authoring 状态标记为未应用浮动形状。
+        /// </summary>
+        /// <param name="shape">成功时返回应恢复到主胶囊的基础局部形状。</param>
+        /// <returns>存在有效基础形状快照时返回 true。</returns>
+        internal bool TryRestoreBaseShape(out FloatingCapsuleShape shape)
+        {
+            shape = default;
+            _floatingShapeApplied = false;
+            if (!_captured) return false;
+
+            // 形状写入仍由 ColliderShapeModule 负责，AuthoringState 只提供可恢复的纯数据。
+            shape = CreateBaseShape();
+            return true;
+        }
+
+        /// <summary>
         /// 将当前未浮动的 CapsuleCollider 形状记录为可恢复的作者基础形状。
         /// </summary>
         /// <param name="capsule">当前由作者调整后的 CapsuleCollider。</param>

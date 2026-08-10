@@ -1,79 +1,68 @@
 using System;
 using System.Collections.Generic;
-using UnityEditor;
-using UnityEngine;
+using System.Reflection;
 using Framework.ExpandComponent.DataProvider;
 using Framework.ExpandComponent.UnitMover;
+using UnityEditor;
+using UnityEngine;
 using UnitMoverComponent = Framework.ExpandComponent.UnitMover.UnitMover;
 
 namespace Framework.ExpandComponent.UnitMover.Editor
 {
     /// <summary>
-    /// 以材质面板风格的模块分区呈现 UnitMover 组装引用和各项独立运动配置。
+    /// 以模块化深色折叠栏展示 UnitMover 引用、策略与策略持有的序列化配置。
     /// </summary>
     [CustomEditor(typeof(UnitMoverComponent))]
     public sealed class UnitMoverEditor : UnityEditor.Editor
     {
-        // 功能模块标题栏的固定高度，保持所有分区的纵向节奏一致。
+        // 功能模块标题栏固定高度，保证 Inspector 各分区视觉节奏一致。
         private const float ModuleHeaderHeight = 24f;
-        // 深色 Inspector 皮肤下标题栏使用的整行背景色。
+        // 深色 Inspector 皮肤下的标题栏背景颜色。
         private static readonly Color ProSkinModuleHeaderColor = new Color(0.19f, 0.19f, 0.19f, 1f);
-        // 浅色 Inspector 皮肤下标题栏使用的整行背景色。
+        // 浅色 Inspector 皮肤下的标题栏背景颜色。
         private static readonly Color LightSkinModuleHeaderColor = new Color(0.72f, 0.72f, 0.72f, 1f);
-        // 当前 Editor 实例在 OnEnable 后缓存的粗体折叠标题样式。
-        private GUIStyle _moduleFoldoutStyle;
-        // 可供 Inspector 选择的具体移动策略类型缓存，仅在编辑器域重载后重新收集。
+        // 可供 Inspector 选择的具体策略类型缓存。
         private static List<Type> _movementStrategyTypes;
-
-        // 相关组件引用模块的展开状态。
+        // 策略类型和字段名到自定义模块标题的编辑器域缓存。
+        private static readonly Dictionary<string, string> _strategyModuleTitles = new Dictionary<string, string>();
+        // 当前 Inspector GUI 可用后按需创建的粗体标题样式。
+        private GUIStyle _moduleFoldoutStyle;
+        // 相关组件引用分区的展开状态。
         private bool _componentsFoldout = true;
-        // 运行时命令来源和模式模块的展开状态。
-        private bool _commandSourcesFoldout = true;
-        // 地面最大速度和加减速模块的展开状态。
-        private bool _locomotionFoldout = true;
-        // 普通跳跃模块的展开状态。
-        private bool _jumpFoldout = true;
-        // 浮动胶囊、接地和坡面模块的展开状态。
-        private bool _groundAdaptationFoldout = true;
-        // 空中速度和重力模块的展开状态。
-        private bool _airAndGravityFoldout = true;
-        // 边缘保护模块的展开状态。
-        private bool _edgeProtectionFoldout = true;
-        // Scene 预览模块的展开状态。
+        // 初始策略选择和运行时诊断分区的展开状态。
+        private bool _strategyFoldout = true;
+        // 策略一级序列化字段路径到展开状态的缓存。
+        private readonly Dictionary<string, bool> _strategyFieldFoldouts = new Dictionary<string, bool>();
+        // Scene 预览开关分区的展开状态。
         private bool _previewFoldout = true;
 
         /// <summary>
-        /// 以固定顺序绘制 Script、组装引用和模块化运动 Profile。
+        /// 以固定顺序绘制脚本、组件引用、策略配置和只读运行时诊断。
         /// </summary>
         public override void OnInspectorGUI()
         {
             serializedObject.Update();
             UnitMoverComponent mover = (UnitMoverComponent)target;
 
+            // 外壳字段与策略字段分开显示，避免将纯 C# 模块塞回 UnitMover 的序列化面板。
             DrawScriptReference(mover);
             DrawComponentReferences(mover);
-            DrawCommandSourcePanel(mover);
-            DrawLocomotionPanel();
-            DrawJumpPanel();
-            DrawGroundAdaptationPanel(mover);
-            DrawAirAndGravityPanel();
-            DrawEdgeProtectionPanel();
+            DrawStrategyPanel(mover);
             DrawPreviewPanel();
 
+            // 改动策略 Authoring 数据后立即同步形状，确保编辑模式 Scene 视图即时反映胶囊变化。
             bool propertiesChanged = serializedObject.ApplyModifiedProperties();
-            if (propertiesChanged)
-                mover.SynchronizeColliderShape();
-
-            if (GUI.changed || propertiesChanged)
-                SceneView.RepaintAll();
+            if (propertiesChanged) mover.SynchronizeColliderShape();
+            if (GUI.changed || propertiesChanged) SceneView.RepaintAll();
         }
 
         /// <summary>
-        /// 绘制始终可见且不可编辑的 Script 引用行。
+        /// 绘制始终可见且不可编辑的脚本引用。
         /// </summary>
-        /// <param name="mover">当前正在编辑的 UnitMover 组件。</param>
+        /// <param name="mover">当前编辑的 UnitMover 组件。</param>
         private static void DrawScriptReference(UnitMoverComponent mover)
         {
+            // Script 引用遵循 Unity 默认 Inspector 的只读呈现方式。
             EditorGUI.BeginDisabledGroup(true);
             EditorGUILayout.ObjectField("Script", MonoScript.FromMonoBehaviour(mover), typeof(MonoScript), false);
             EditorGUI.EndDisabledGroup();
@@ -81,65 +70,80 @@ namespace Framework.ExpandComponent.UnitMover.Editor
         }
 
         /// <summary>
-        /// 绘制 Rigidbody、主 CapsuleCollider 和移动数据 Provider 引用。
+        /// 绘制刚体、胶囊、Provider、摄像机参考和刚体旋转接管选项。
         /// </summary>
-        /// <param name="mover">当前正在编辑的 UnitMover 组件。</param>
+        /// <param name="mover">当前编辑的 UnitMover 组件。</param>
         private void DrawComponentReferences(UnitMoverComponent mover)
         {
             _componentsFoldout = BeginModulePanel(_componentsFoldout, "相关组件引用");
             if (_componentsFoldout)
             {
+                // 这些字段属于 Unity 外壳本身，策略只会收到解析完成后的直接引用。
                 EditorGUI.indentLevel++;
                 EditorGUILayout.PropertyField(serializedObject.FindProperty("_rigidbody"));
                 EditorGUILayout.PropertyField(serializedObject.FindProperty("_movementCollider"));
                 SerializedProperty dataProvider = serializedObject.FindProperty("_dataProvider");
                 EditorGUILayout.PropertyField(dataProvider);
-                if (dataProvider.objectReferenceValue != null
-                    && dataProvider.objectReferenceValue is not IDataProvider)
-                    EditorGUILayout.HelpBox(
-                        "Data Provider 必须是实现 IDataProvider 的同对象组件。",
-                        MessageType.Warning);
-                else if (dataProvider.objectReferenceValue is MonoBehaviour dataProviderComponent
-                         && dataProviderComponent.gameObject != mover.gameObject)
-                    EditorGUILayout.HelpBox(
-                        "Data Provider 必须挂载在当前 UnitMover 所在的 GameObject 上。",
-                        MessageType.Warning);
+                EditorGUILayout.PropertyField(serializedObject.FindProperty("_movementReferenceCamera"));
+                EditorGUILayout.PropertyField(serializedObject.FindProperty("_freezeRigidbodyRotation"));
+                DrawDataProviderValidation(dataProvider, mover);
                 EditorGUI.indentLevel--;
             }
             EndModulePanel();
         }
 
         /// <summary>
-        /// 绘制 Inspector 初始移动策略、业务层命令来源和运行时自动状态说明。
+        /// 对手动指定的 DataProvider 做同对象与接口类型的编辑期提示。
         /// </summary>
-        /// <param name="mover">当前正在编辑的 UnitMover 组件。</param>
-        private void DrawCommandSourcePanel(UnitMoverComponent mover)
+        /// <param name="dataProvider">DataProvider 序列化引用属性。</param>
+        /// <param name="mover">当前编辑的 UnitMover 组件。</param>
+        private static void DrawDataProviderValidation(SerializedProperty dataProvider, UnitMoverComponent mover)
         {
-            _commandSourcesFoldout = BeginModulePanel(_commandSourcesFoldout, "移动策略与命令来源");
-            if (_commandSourcesFoldout)
+            if (dataProvider == null || dataProvider.objectReferenceValue == null) return;
+
+            // UnitMover 只验证引用资格，不读取或验证具体 Blackboard 的业务输入契约。
+            if (dataProvider.objectReferenceValue is not IDataProvider)
+                EditorGUILayout.HelpBox("Data Provider 必须是实现 IDataProvider 的组件。", MessageType.Warning);
+            else if (dataProvider.objectReferenceValue is MonoBehaviour behaviour
+                     && behaviour.gameObject != mover.gameObject)
+                EditorGUILayout.HelpBox("Data Provider 必须挂载在当前 UnitMover 所在的 GameObject 上。", MessageType.Warning);
+        }
+
+        /// <summary>
+        /// 绘制策略类型选择器、当前策略诊断和策略所有一级序列化字段的自动模块面板。
+        /// </summary>
+        /// <param name="mover">当前编辑的 UnitMover 组件。</param>
+        private void DrawStrategyPanel(UnitMoverComponent mover)
+        {
+            _strategyFoldout = BeginModulePanel(_strategyFoldout, "移动策略");
+            if (_strategyFoldout)
             {
+                // 策略类型是唯一需要专用创建逻辑的 SerializeReference 字段。
                 EditorGUI.indentLevel++;
-                DrawMovementStrategySelector();
-                EditorGUI.BeginDisabledGroup(true);
-                EditorGUILayout.TextField("当前移动策略", mover.ActiveMovementStrategyName ?? "未配置");
-                EditorGUILayout.TextField("当前命令输入", GetCommandSourceStatus(mover));
-                EditorGUILayout.TextField("当前运动模式", GetMovementModeStatus(mover));
-                DrawRuntimeMotionDiagnostics(mover);
-                EditorGUI.EndDisabledGroup();
-                EditorGUILayout.HelpBox("Inspector 选择首次启用的移动策略；业务层可在运行时通过 UseMovementStrategy<TStrategy>() 切换，UnitMover 会按策略类型复用缓存实例。指定 Data Provider 后，UnitMover 会在每个物理步主动提交其黑板输入；AI、Root Motion、网络等独立持续来源仍可通过命令来源 API 注册。", MessageType.Info);
+                SerializedProperty strategyProperty = serializedObject.FindProperty("_movementStrategy");
+                DrawMovementStrategySelector(strategyProperty, mover);
+                DrawRuntimeDiagnostics(mover);
                 EditorGUI.indentLevel--;
             }
             EndModulePanel();
+
+            // 策略内部模块完全由递归序列化字段驱动，新增策略字段无需改此 Editor。
+            SerializedProperty strategy = serializedObject.FindProperty("_movementStrategy");
+            DrawStrategyConfiguration(strategy, mover);
         }
 
         /// <summary>
-        /// 绘制可序列化移动策略的类型选择器和当前策略的附属配置字段。
+        /// 绘制当前策略类型的下拉选择器，并在切换后创建新的序列化策略实例。
         /// </summary>
-        private void DrawMovementStrategySelector()
+        /// <param name="strategyProperty">UnitMover 的 SerializeReference 策略属性。</param>
+        /// <param name="mover">当前编辑的 UnitMover 组件。</param>
+        private static void DrawMovementStrategySelector(
+            SerializedProperty strategyProperty,
+            UnitMoverComponent mover)
         {
-            SerializedProperty strategyProperty = serializedObject.FindProperty("_movementStrategy");
             if (strategyProperty == null) return;
 
+            // TypeCache 只在编辑器域重载后重新扫描，避免每次 Inspector 重绘执行反射。
             List<Type> strategyTypes = GetMovementStrategyTypes();
             if (strategyTypes.Count == 0)
             {
@@ -154,270 +158,187 @@ namespace Framework.ExpandComponent.UnitMover.Editor
             for (int index = 0; index < strategyTypes.Count; index++)
                 displayNames[index] = ObjectNames.NicifyVariableName(strategyTypes[index].Name);
 
+            // 编辑模式替换初始配置；播放模式则必须调用 UnitMover 的真实运行时切换入口。
             EditorGUI.BeginChangeCheck();
-            int selectedIndex = EditorGUILayout.Popup("初始移动策略", currentIndex, displayNames);
+            string selectorLabel = Application.isPlaying ? "运行时移动策略" : "初始移动策略";
+            int selectedIndex = EditorGUILayout.Popup(selectorLabel, currentIndex, displayNames);
             if (EditorGUI.EndChangeCheck())
-                strategyProperty.managedReferenceValue = (UnitMovementStrategy)Activator.CreateInstance(
-                    strategyTypes[selectedIndex]);
-
-            EditorGUILayout.PropertyField(strategyProperty, new GUIContent("策略配置"), true);
-        }
-
-        /// <summary>
-        /// 获取所有可由 Inspector 创建的具体移动策略类型，并以稳定名称顺序排列。
-        /// </summary>
-        /// <returns>具有公开无参构造函数的非抽象移动策略类型列表。</returns>
-        private static List<Type> GetMovementStrategyTypes()
-        {
-            if (_movementStrategyTypes != null) return _movementStrategyTypes;
-
-            _movementStrategyTypes = new List<Type>();
-            foreach (Type strategyType in TypeCache.GetTypesDerivedFrom<UnitMovementStrategy>())
             {
-                if (strategyType.IsAbstract || strategyType.ContainsGenericParameters) continue;
-                if (strategyType.GetConstructor(Type.EmptyTypes) == null) continue;
-
-                _movementStrategyTypes.Add(strategyType);
-            }
-
-            _movementStrategyTypes.Sort((left, right) => string.Compare(
-                left.Name,
-                right.Name,
-                StringComparison.Ordinal));
-            return _movementStrategyTypes;
-        }
-
-        /// <summary>
-        /// 获取当前 Inspector 应显示的命令输入状态，区分默认通用命令接口和可选连续来源两种情况。
-        /// </summary>
-        /// <param name="mover">当前正在编辑的 UnitMover 组件。</param>
-        /// <returns>供只读 Inspector 字段显示的命令输入状态文本。</returns>
-        private static string GetCommandSourceStatus(UnitMoverComponent mover)
-        {
-            if (mover == null || !mover.IsRuntimeReady) return "仅运行时创建";
-            if (mover.IsDataProviderInputActive) return "DataProvider";
-            return string.IsNullOrEmpty(mover.ActiveCommandSourceId)
-                ? "通用命令接口（SubmitCommand）"
-                : mover.ActiveCommandSourceId;
-        }
-
-        /// <summary>
-        /// 获取当前 Inspector 应显示的自动运动模式状态。
-        /// </summary>
-        /// <param name="mover">当前正在编辑的 UnitMover 组件。</param>
-        /// <returns>供只读 Inspector 字段显示的自动运动模式状态文本。</returns>
-        private static string GetMovementModeStatus(UnitMoverComponent mover)
-        {
-            if (mover == null || !mover.IsRuntimeReady) return "仅运行时自动选择";
-            return mover.State.Mode == MovementMode.Ground && !mover.State.IsGrounded
-                ? "等待首次物理步"
-                : mover.State.Mode.ToString();
-        }
-
-        /// <summary>
-        /// 绘制从命令输入到刚体提交的关键速度诊断，便于定位移动链路在哪一阶段归零。
-        /// </summary>
-        /// <param name="mover">当前正在编辑的 UnitMover 组件。</param>
-        private static void DrawRuntimeMotionDiagnostics(UnitMoverComponent mover)
-        {
-            if (mover == null || !mover.IsRuntimeReady) return;
-
-            UnitMovementCommand command = mover.LastCommand;
-            EditorGUILayout.Vector3Field("命令世界方向", command.WorldMoveDirection);
-            EditorGUILayout.FloatField("命令速度倍率", command.SpeedScale);
-            EditorGUILayout.Vector3Field("策略候选速度", mover.LastCandidateVelocity);
-            EditorGUILayout.Vector3Field("刚体提交速度", mover.LastCommittedVelocity);
-            EditorGUILayout.TextField("Rigidbody 约束", mover.RigidbodyConstraints.ToString());
-        }
-
-        /// <summary>
-        /// 绘制地面速度、加速和减速配置。
-        /// </summary>
-        private void DrawLocomotionPanel()
-        {
-            SerializedProperty locomotion = GetProfileModule("_locomotion");
-            if (locomotion == null) return;
-
-            _locomotionFoldout = BeginModulePanel(_locomotionFoldout, "基础移动");
-            if (_locomotionFoldout)
-            {
-                EditorGUI.indentLevel++;
-                DrawRelativeProperty(locomotion, "_groundMaxSpeed");
-                DrawRelativeProperty(locomotion, "_groundAcceleration");
-                DrawRelativeProperty(locomotion, "_groundDeceleration");
-                EditorGUI.indentLevel--;
-            }
-            EndModulePanel();
-        }
-
-        /// <summary>
-        /// 绘制跳跃启用开关，并只在启用时显示其从属手感参数。
-        /// </summary>
-        private void DrawJumpPanel()
-        {
-            SerializedProperty jump = serializedObject.FindProperty("_jumpModule");
-            if (jump == null) return;
-
-            _jumpFoldout = BeginModulePanel(_jumpFoldout, "跳跃功能");
-            if (_jumpFoldout)
-            {
-                EditorGUI.indentLevel++;
-                SerializedProperty enabled = jump.FindPropertyRelative("_enabled");
-                EditorGUILayout.PropertyField(enabled);
-                if (enabled.boolValue)
+                if (Application.isPlaying)
                 {
-                    DrawRelativeProperty(jump, "_initialSpeed");
-                    DrawRelativeProperty(jump, "_coyoteTime");
-                    DrawRelativeProperty(jump, "_bufferTime");
-                    DrawRelativeProperty(jump, "_cutMultiplier");
-                }
-                EditorGUI.indentLevel--;
-            }
-            EndModulePanel();
-        }
-
-        /// <summary>
-        /// 绘制浮动胶囊、接地悬浮和坡面配置。
-        /// </summary>
-        private void DrawGroundAdaptationPanel(UnitMoverComponent mover)
-        {
-            SerializedProperty floatingCapsule = serializedObject.FindProperty("_floatingCapsuleModule");
-            SerializedProperty ground = GetProfileModule("_ground");
-            if (floatingCapsule == null || ground == null) return;
-
-            _groundAdaptationFoldout = BeginModulePanel(
-                _groundAdaptationFoldout,
-                "浮动胶囊与接地");
-            if (_groundAdaptationFoldout)
-            {
-                EditorGUI.indentLevel++;
-                SerializedProperty enabled = floatingCapsule.FindPropertyRelative("_enabled");
-                EditorGUILayout.PropertyField(enabled);
-                if (enabled.boolValue)
-                {
-                    DrawBottomClearanceProperty(
-                        floatingCapsule.FindPropertyRelative("_bottomClearance"),
-                        mover);
-                    DrawRelativeProperty(floatingCapsule, "_footBoxHeight");
-                    DrawRelativeProperty(floatingCapsule, "_footBoxSupportWidthScale");
+                    // 播放中不能只替换 SerializeReference；真实活动策略必须同步切换并执行停用生命周期。
+                    UnitMovementStrategy activeStrategy = mover != null
+                        ? mover.UseMovementStrategy(strategyTypes[selectedIndex])
+                        : null;
+                    if (activeStrategy != null) strategyProperty.managedReferenceValue = activeStrategy;
+                    return;
                 }
 
-                EditorGUILayout.Space(3f);
-                DrawRelativeProperty(ground, "_groundLayer");
-                DrawRelativeProperty(ground, "_slopeLimit");
-                DrawRelativeProperty(ground, "_steepSlopeEnterAngleMargin");
-                DrawRelativeProperty(ground, "_steepSlopeExitAngleMargin");
-                DrawRelativeProperty(ground, "_steepSlopeContactConfirmTime");
-                DrawRelativeProperty(ground, "_steepSlopeLostContactGraceTime");
-                DrawRelativeProperty(ground, "_steepSlopeSlideFactor");
-                DrawRelativeProperty(ground, "_steepSlopeSlideCurve");
-                DrawRelativeProperty(ground, "_steepSlopeSlideSpeedLimit");
-                DrawRelativeProperty(ground, "_hoverHeight");
-                DrawRelativeProperty(ground, "_probeDistance");
-                DrawRelativeProperty(ground, "_springStrength");
-                DrawRelativeProperty(ground, "_springDamping");
-
-                EditorGUI.indentLevel--;
+                // 编辑模式替换初始策略前，旧策略必须归还其 Authoring 共享组件状态。
+                mover?.RestoreInitialStrategyAuthoring();
+                strategyProperty.managedReferenceValue = (UnitMovementStrategy)Activator.CreateInstance(strategyTypes[selectedIndex]);
             }
-            EndModulePanel();
         }
 
         /// <summary>
-        /// 按基础胶囊的合法最小高度限制底部留空，并以滑条形式绘制唯一的最大可通过台阶高度。
+        /// 绘制策略所有直接一级序列化字段，每个字段使用与现有 Inspector 一致的全宽模块标题栏。
         /// </summary>
-        /// <param name="clearance">浮动胶囊底部留空的序列化属性。</param>
-        /// <param name="mover">当前正在编辑的 UnitMover 组件。</param>
-        private void DrawBottomClearanceProperty(SerializedProperty clearance, UnitMoverComponent mover)
+        /// <param name="strategyProperty">当前 SerializeReference 策略属性。</param>
+        /// <param name="mover">当前编辑的 UnitMover 组件。</param>
+        private void DrawStrategyConfiguration(SerializedProperty strategyProperty, UnitMoverComponent mover)
+        {
+            if (strategyProperty == null || strategyProperty.managedReferenceValue == null) return;
+
+            // 只遍历策略的直接子字段，PropertyField 的 includeChildren 负责字段内部递归显示。
+            SerializedProperty iterator = strategyProperty.Copy();
+            SerializedProperty end = iterator.GetEndProperty();
+            Type strategyType = strategyProperty.managedReferenceValue.GetType();
+            int childDepth = strategyProperty.depth + 1;
+            bool enterChildren = true;
+            while (iterator.NextVisible(enterChildren)
+                   && !SerializedProperty.EqualContents(iterator, end))
+            {
+                enterChildren = false;
+                if (iterator.depth != childDepth) continue;
+
+                // 每个策略一级字段独立成为一条完整宽度的模块面板，新增模块无需 Editor 硬编码。
+                string key = iterator.propertyPath;
+                bool expanded = GetStrategyFieldFoldout(key);
+                string title = GetStrategyModuleTitle(strategyType, iterator);
+                expanded = BeginModulePanel(expanded, title);
+                _strategyFieldFoldouts[key] = expanded;
+                if (expanded)
+                {
+                    EditorGUI.indentLevel++;
+                    DrawStrategyField(iterator, mover, title);
+                    EditorGUI.indentLevel--;
+                }
+                EndModulePanel();
+            }
+        }
+
+        /// <summary>
+        /// 绘制一个策略一级字段，并仅对浮动胶囊的底部留空应用动态合法上限。
+        /// </summary>
+        /// <param name="property">需要递归绘制的策略一级字段。</param>
+        /// <param name="mover">当前编辑的 UnitMover 组件。</param>
+        /// <param name="displayName">当前字段应显示在内层属性折叠栏中的模块标题。</param>
+        private static void DrawStrategyField(
+            SerializedProperty property,
+            UnitMoverComponent mover,
+            string displayName)
+        {
+            if (property.name != "_floatingCapsuleModule")
+            {
+                EditorGUILayout.PropertyField(property, new GUIContent(displayName), true);
+                return;
+            }
+
+            // 浮动胶囊仅替换底部留空的控件，其他新增字段仍按 Unity 的递归规则自动显示。
+            DrawFloatingCapsuleFields(property, mover);
+        }
+
+        /// <summary>
+        /// 绘制浮动胶囊的直接子字段，并将底部留空限制为基础胶囊允许的最大高度。
+        /// </summary>
+        /// <param name="floatingCapsule">浮动胶囊序列化模块字段。</param>
+        /// <param name="mover">当前编辑的 UnitMover 组件。</param>
+        private static void DrawFloatingCapsuleFields(SerializedProperty floatingCapsule, UnitMoverComponent mover)
+        {
+            // 此处只遍历一层，避免 Authoring 快照等隐藏子数据破坏 Inspector 的正常递归表现。
+            SerializedProperty iterator = floatingCapsule.Copy();
+            SerializedProperty end = iterator.GetEndProperty();
+            int childDepth = floatingCapsule.depth + 1;
+            bool enterChildren = true;
+            while (iterator.NextVisible(enterChildren)
+                   && !SerializedProperty.EqualContents(iterator, end))
+            {
+                enterChildren = false;
+                if (iterator.depth != childDepth) continue;
+
+                if (iterator.name == "_bottomClearance") DrawBottomClearanceProperty(iterator, floatingCapsule, mover);
+                else EditorGUILayout.PropertyField(iterator, true);
+            }
+        }
+
+        /// <summary>
+        /// 以滑条绘制底部无碰撞留空，并保证有效胶囊高度始终不低于直径。
+        /// </summary>
+        /// <param name="clearance">浮动胶囊底部留空字段。</param>
+        /// <param name="mover">当前编辑的 UnitMover 组件。</param>
+        private static void DrawBottomClearanceProperty(
+            SerializedProperty clearance,
+            SerializedProperty floatingCapsule,
+            UnitMoverComponent mover)
         {
             if (clearance == null) return;
 
-            // 上限来自浮动前的基础胶囊，保证实际高度始终不小于胶囊直径。
-            float maximumClearance = GetMaximumBottomClearance(mover);
+            // 上限优先读取浮动前基础快照，防止启用后按已缩短高度重复扣减。
+            float maximumClearance = GetMaximumBottomClearance(floatingCapsule, mover);
             clearance.floatValue = Mathf.Clamp(clearance.floatValue, 0f, maximumClearance);
             EditorGUILayout.Slider(
                 clearance,
                 0f,
                 maximumClearance,
-                new GUIContent("底部留空 / 最大台阶高度", "单位：米；同时决定浮动胶囊留空和可通过的最大台阶高度"));
+                new GUIContent("底部留空 / 最大台阶高度", "单位：米；同时决定浮动胶囊留空与可通过的最大台阶高度"));
         }
 
         /// <summary>
-        /// 根据已保存的基础胶囊快照或当前 CapsuleCollider 计算底部留空的最大合法高度。
+        /// 根据当前策略的基础胶囊快照或指定的主胶囊计算合法底部留空上限。
         /// </summary>
-        /// <param name="mover">当前正在编辑的 UnitMover 组件。</param>
-        /// <returns>基础胶囊在保持最小直径高度前提下允许移除的最大底部高度，单位：米。</returns>
-        private float GetMaximumBottomClearance(UnitMoverComponent mover)
+        /// <param name="floatingCapsule">当前策略的浮动胶囊序列化模块属性。</param>
+        /// <param name="mover">当前编辑的 UnitMover 组件。</param>
+        /// <returns>在保持胶囊最小直径高度前提下允许移除的最大底部高度，单位：米。</returns>
+        private static float GetMaximumBottomClearance(
+            SerializedProperty floatingCapsule,
+            UnitMoverComponent mover)
         {
-            SerializedProperty floatingCapsule = serializedObject.FindProperty("_floatingCapsuleModule");
             SerializedProperty authoringState = floatingCapsule != null
                 ? floatingCapsule.FindPropertyRelative("_authoringState")
                 : null;
             if (authoringState != null
                 && authoringState.FindPropertyRelative("_captured").boolValue)
             {
-                // 启用浮动后仍读取原始快照，不能用已缩短的当前胶囊重复扣减。
+                // 快照是浮动前形状，能够准确限定顶部对齐收缩的合法范围。
                 float baseHeight = authoringState.FindPropertyRelative("_baseHeight").floatValue;
                 float baseRadius = authoringState.FindPropertyRelative("_baseRadius").floatValue;
                 return Mathf.Max(0f, baseHeight - baseRadius * 2f);
             }
 
-            // 尚未记录快照时使用当前指定的 CapsuleCollider 作为首帧编辑上限。
-            SerializedProperty colliderProperty = serializedObject.FindProperty("_movementCollider");
-            CapsuleCollider capsule = colliderProperty != null
-                ? colliderProperty.objectReferenceValue as CapsuleCollider
-                : null;
-            return capsule != null
-                ? Mathf.Max(0f, capsule.height - capsule.radius * 2f)
-                : 0f;
+            // 尚未建立快照时使用 UnitMover 已解析的主胶囊，避免 Editor 重新扫描组件。
+            CapsuleCollider capsule = mover != null ? mover.MovementCollider : null;
+            return capsule != null ? Mathf.Max(0f, capsule.height - capsule.radius * 2f) : 0f;
         }
 
         /// <summary>
-        /// 绘制空中速度、空中控制、基础重力、下落重力和最大下落速度配置。
+        /// 绘制当前策略的只读运行状态，便于确认策略缓存与输入消费是否已生效。
         /// </summary>
-        private void DrawAirAndGravityPanel()
+        /// <param name="mover">当前编辑的 UnitMover 组件。</param>
+        private static void DrawRuntimeDiagnostics(UnitMoverComponent mover)
         {
-            SerializedProperty locomotion = GetProfileModule("_locomotion");
-            SerializedProperty gravity = serializedObject.FindProperty("_gravityModule");
-            if (locomotion == null || gravity == null) return;
-
-            _airAndGravityFoldout = BeginModulePanel(_airAndGravityFoldout, "空中行为与重力");
-            if (_airAndGravityFoldout)
-            {
-                EditorGUI.indentLevel++;
-                DrawRelativeProperty(locomotion, "_airMaxSpeed");
-                DrawRelativeProperty(locomotion, "_airAcceleration");
-                DrawRelativeProperty(locomotion, "_airControl");
-                DrawRelativeProperty(gravity, "_multiplier");
-                DrawRelativeProperty(gravity, "_fallMultiplier");
-                DrawRelativeProperty(gravity, "_maxFallSpeed");
-                EditorGUI.indentLevel--;
-            }
-            EndModulePanel();
+            // 诊断只读取策略结果，UnitMover 不再显示旧 Runtime 或命令来源注册表概念。
+            EditorGUI.BeginDisabledGroup(true);
+            EditorGUILayout.TextField("当前移动策略", mover.ActiveMovementStrategyName ?? "未配置");
+            EditorGUILayout.TextField("当前运动模式", mover.IsRuntimeReady ? mover.State.Mode.ToString() : "仅运行时创建");
+            EditorGUILayout.Vector3Field("策略输入方向", mover.LastCommand.WorldMoveDirection);
+            EditorGUILayout.FloatField("策略输入倍率", mover.LastCommand.SpeedScale);
+            EditorGUILayout.Vector3Field("策略候选速度", mover.LastCandidateVelocity);
+            EditorGUILayout.Vector3Field("刚体提交速度", mover.LastCommittedVelocity);
+            EditorGUILayout.TextField("Rigidbody 约束", mover.RigidbodyConstraints.ToString());
+            EditorGUI.EndDisabledGroup();
         }
 
         /// <summary>
-        /// 绘制边缘保护开关，并只在启用时显示预测支撑、短缝和回退参数。
+        /// 绘制 Scene 预览与边缘检测 Gizmo 开关。
         /// </summary>
-        private void DrawEdgeProtectionPanel()
+        private void DrawPreviewPanel()
         {
-            SerializedProperty edgeProtection = serializedObject.FindProperty("_edgeProtectionModule");
-            if (edgeProtection == null) return;
-
-            _edgeProtectionFoldout = BeginModulePanel(_edgeProtectionFoldout, "边缘防跌落");
-            if (_edgeProtectionFoldout)
+            _previewFoldout = BeginModulePanel(_previewFoldout, "编辑器预览");
+            if (_previewFoldout)
             {
+                // Gizmo 开关属于 Unity 外壳，策略仅提供可绘制的只读模块状态。
                 EditorGUI.indentLevel++;
-                SerializedProperty enabled = edgeProtection.FindPropertyRelative("_enabled");
-                EditorGUILayout.PropertyField(enabled);
-                if (enabled.boolValue)
-                {
-                    DrawRelativeProperty(edgeProtection, "_maxFallHeight");
-                    DrawRelativeProperty(edgeProtection, "_fallRecoveryEnabled");
-                    DrawRelativeProperty(edgeProtection, "_recoverUnexpectedFallsOnly");
-                    DrawRelativeProperty(edgeProtection, "_maxBridgeableGapWidth");
-                }
-
-                EditorGUILayout.Space(3f);
+                EditorGUILayout.PropertyField(serializedObject.FindProperty("_showScenePreview"));
                 EditorGUILayout.PropertyField(serializedObject.FindProperty("_showEdgeDetectionGizmos"));
                 EditorGUI.indentLevel--;
             }
@@ -425,40 +346,129 @@ namespace Framework.ExpandComponent.UnitMover.Editor
         }
 
         /// <summary>
-        /// 绘制编辑模式下浮动、接地与运行时边缘诊断 Gizmos 的开关。
+        /// 获取所有可由 Inspector 创建的具体移动策略类型，并按名称稳定排序。
         /// </summary>
-        private void DrawPreviewPanel()
+        /// <returns>拥有公开无参构造函数的非抽象策略类型列表。</returns>
+        private static List<Type> GetMovementStrategyTypes()
         {
-            _previewFoldout = BeginModulePanel(_previewFoldout, "编辑器预览");
-            if (_previewFoldout)
+            if (_movementStrategyTypes != null) return _movementStrategyTypes;
+
+            // 类型收集只发生在编辑器域初始化后，绘制阶段直接复用缓存结果。
+            _movementStrategyTypes = new List<Type>();
+            foreach (Type strategyType in TypeCache.GetTypesDerivedFrom<UnitMovementStrategy>())
             {
-                EditorGUI.indentLevel++;
-                EditorGUILayout.PropertyField(serializedObject.FindProperty("_showScenePreview"));
-                EditorGUI.indentLevel--;
+                if (strategyType.IsAbstract || strategyType.ContainsGenericParameters) continue;
+                if (strategyType.GetConstructor(Type.EmptyTypes) == null) continue;
+                _movementStrategyTypes.Add(strategyType);
             }
-            EndModulePanel();
+
+            _movementStrategyTypes.Sort((left, right) => string.Compare(left.Name, right.Name, StringComparison.Ordinal));
+            return _movementStrategyTypes;
         }
 
         /// <summary>
-        /// 获取 UnitMovementProfile 内仍由策略和接地共享的配置模块属性。
+        /// 获取策略字段在当前 Inspector 实例中的展开状态，首次显示默认展开。
         /// </summary>
-        /// <param name="relativeName">配置模块在 Profile 中的私有序列化字段名。</param>
-        /// <returns>找到时返回模块属性，否则返回 null。</returns>
-        private SerializedProperty GetProfileModule(string relativeName)
+        /// <param name="propertyPath">策略字段完整序列化路径。</param>
+        /// <returns>当前字段模块是否处于展开状态。</returns>
+        private bool GetStrategyFieldFoldout(string propertyPath)
         {
-            SerializedProperty profile = serializedObject.FindProperty("_profile");
-            return profile != null ? profile.FindPropertyRelative(relativeName) : null;
+            if (_strategyFieldFoldouts.TryGetValue(propertyPath, out bool expanded)) return expanded;
+
+            // 新增策略字段首次显示时展开，确保配置不会因为缺少专用 Editor 而被隐藏。
+            _strategyFieldFoldouts.Add(propertyPath, true);
+            return true;
         }
 
         /// <summary>
-        /// 开始一个带边框、全宽标题栏与可折叠内容的功能模块面板。
+        /// 获取策略字段声明的中文模块标题；没有特性时回退到 Unity 默认字段显示名称。
         /// </summary>
-        /// <param name="expanded">该功能模块在当前 Inspector 中的展开状态。</param>
-        /// <param name="title">显示在模块顶部的功能名称。</param>
-        /// <returns>用户操作后的模块展开状态。</returns>
+        /// <param name="strategyType">当前 SerializeReference 策略的实际类型。</param>
+        /// <param name="property">当前策略一级序列化属性。</param>
+        /// <returns>特性声明的模块标题，或默认字段显示名称。</returns>
+        private static string GetStrategyModuleTitle(Type strategyType, SerializedProperty property)
+        {
+            if (property == null) return string.Empty;
+            if (strategyType == null || string.IsNullOrEmpty(property.name)) return property.displayName;
+
+            // 缓存键使用完整属性路径，避免 SerializeReference 内部属性名与用户字段名偶发重名。
+            string cacheKey = strategyType.AssemblyQualifiedName + ":" + property.propertyPath;
+            if (_strategyModuleTitles.TryGetValue(cacheKey, out string title))
+                return title;
+
+            // 优先按 Unity 提供的属性名精确查找；正常策略字段会在此路径命中。
+            FieldInfo field = FindStrategyField(strategyType, property.name);
+            if (field == null)
+                field = FindStrategyFieldByPropertyPath(strategyType, property.propertyPath);
+            UnitMovementModuleNameAttribute attribute = field != null
+                ? field.GetCustomAttribute<UnitMovementModuleNameAttribute>()
+                : null;
+            title = attribute != null && !string.IsNullOrWhiteSpace(attribute.DisplayName)
+                ? attribute.DisplayName
+                : property.displayName;
+            _strategyModuleTitles[cacheKey] = title;
+            return title;
+        }
+
+        /// <summary>
+        /// 在策略继承链中查找声明指定字段的类型成员。
+        /// </summary>
+        /// <param name="strategyType">需要检索的具体策略类型。</param>
+        /// <param name="fieldName">目标字段名称。</param>
+        /// <returns>找到的字段反射信息；未找到时返回 null。</returns>
+        private static FieldInfo FindStrategyField(Type strategyType, string fieldName)
+        {
+            // 逐层检索可序列化策略的私有字段，支持未来由中间策略基类声明模块字段。
+            for (Type currentType = strategyType;
+                 currentType != null && typeof(UnitMovementStrategy).IsAssignableFrom(currentType);
+                 currentType = currentType.BaseType)
+            {
+                FieldInfo field = currentType.GetField(
+                    fieldName,
+                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly);
+                if (field != null) return field;
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// 在 Unity 的完整序列化路径中反查策略字段，兼容 SerializeReference 暴露内部属性名的情况。
+        /// </summary>
+        /// <param name="strategyType">需要检索的具体策略类型。</param>
+        /// <param name="propertyPath">Unity 提供的完整序列化属性路径。</param>
+        /// <returns>与路径末尾字段匹配的策略字段；未找到时返回 null。</returns>
+        private static FieldInfo FindStrategyFieldByPropertyPath(Type strategyType, string propertyPath)
+        {
+            if (string.IsNullOrEmpty(propertyPath)) return null;
+
+            // 仅在精确名称未命中时遍历策略字段，避免常规 Inspector 重绘承担额外反射开销。
+            for (Type currentType = strategyType;
+                 currentType != null && typeof(UnitMovementStrategy).IsAssignableFrom(currentType);
+                 currentType = currentType.BaseType)
+            {
+                FieldInfo[] fields = currentType.GetFields(
+                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly);
+                foreach (FieldInfo field in fields)
+                {
+                    if (propertyPath.EndsWith("." + field.Name, StringComparison.Ordinal)
+                        || string.Equals(propertyPath, field.Name, StringComparison.Ordinal))
+                        return field;
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// 开始一个带完整横向标题栏的可折叠模块面板。
+        /// </summary>
+        /// <param name="expanded">该模块当前展开状态。</param>
+        /// <param name="title">标题栏显示文本。</param>
+        /// <returns>用户操作后的展开状态。</returns>
         private bool BeginModulePanel(bool expanded, string title)
         {
-            // 外层边框负责划分模块，标题栏单独占满面板的可用宽度。
+            // 标题栏独占完整宽度，折叠箭头预留左边距以避免 Unity 内置样式向外溢出。
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
             Rect headerRect = GUILayoutUtility.GetRect(
                 GUIContent.none,
@@ -468,32 +478,25 @@ namespace Framework.ExpandComponent.UnitMover.Editor
             EditorGUI.DrawRect(
                 headerRect,
                 EditorGUIUtility.isProSkin ? ProSkinModuleHeaderColor : LightSkinModuleHeaderColor);
-
-            // Unity 内置 foldout 会把箭头向 Rect 左侧溢出，额外预留左边距使箭头和标题都落在 Header 内。
             Rect foldoutRect = new Rect(
                 headerRect.x + 20f,
                 headerRect.y + 3f,
                 headerRect.width - 25f,
                 EditorGUIUtility.singleLineHeight);
-            bool foldout = EditorGUI.Foldout(
-                foldoutRect,
-                expanded,
-                title,
-                true,
-                GetModuleFoldoutStyle());
+            bool foldout = EditorGUI.Foldout(foldoutRect, expanded, title, true, GetModuleFoldoutStyle());
             EditorGUILayout.Space(2f);
             return foldout;
         }
 
         /// <summary>
-        /// 在 Inspector 的 GUI 皮肤已准备完成后首次创建并缓存粗体折叠标题样式。
+        /// 在 Inspector GUI 样式可用时首次创建并缓存粗体折叠标题样式。
         /// </summary>
         /// <returns>可安全用于当前 Inspector 绘制的折叠标题样式。</returns>
         private GUIStyle GetModuleFoldoutStyle()
         {
             if (_moduleFoldoutStyle != null) return _moduleFoldoutStyle;
 
-            // OnEnable 可能早于 EditorStyles 初始化；仅在 OnInspectorGUI 的绘制阶段访问当前皮肤样式。
+            // 样式仅在实际绘制阶段读取 EditorStyles，避免 ScriptableObject 构造期间访问皮肤。
             _moduleFoldoutStyle = new GUIStyle(EditorStyles.foldout)
             {
                 fontStyle = FontStyle.Bold
@@ -502,24 +505,13 @@ namespace Framework.ExpandComponent.UnitMover.Editor
         }
 
         /// <summary>
-        /// 结束当前功能模块面板并为下一分区保留稳定间距。
+        /// 结束当前模块面板并保留稳定的分区间距。
         /// </summary>
         private static void EndModulePanel()
         {
-            // 与 BeginModulePanel 成对闭合，避免后续分区嵌入当前边框。
+            // 与 BeginModulePanel 成对闭合，防止下一个分区嵌入当前边框。
             EditorGUILayout.EndVertical();
             EditorGUILayout.Space(2f);
-        }
-
-        /// <summary>
-        /// 绘制指定模块内单个私有序列化字段，并保留其 Tooltip、Undo 与 Prefab Override 行为。
-        /// </summary>
-        /// <param name="module">包含目标字段的配置模块属性。</param>
-        /// <param name="relativeName">需要绘制的私有序列化字段名。</param>
-        private static void DrawRelativeProperty(SerializedProperty module, string relativeName)
-        {
-            SerializedProperty property = module.FindPropertyRelative(relativeName);
-            if (property != null) EditorGUILayout.PropertyField(property);
         }
     }
 }
