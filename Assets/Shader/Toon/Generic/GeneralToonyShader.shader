@@ -41,8 +41,15 @@ Shader "Toony/General Toony Shader"
         [Toggle(_USERIMLIGHT_ON)] _UseRimLight("边缘光", Float) = 0
 
         [Toggle(_USEOUTLINE_ON)] _UseOutline("描边", Float) = 1
+        [KeywordEnum(ViewSpace, WorldSpace)] _OutlineMode("描边模式", Float) = 0
         _OutlineColor("描边颜色", Color) = (0,0,0,1)
         _OutlineWidth("描边宽度", Range(0, 0.01)) = 0.005
+        [Space(8)]
+        //视图空间模式参数（XY拍平 + 视线偏移）
+        _OutlineWidthParams("描边宽度参数(近距,远距,近宽,远宽)", Vector) = (0, 20, 0.8, 1.2)
+        _OutlineZOffset("描边Z偏移(防z-fighting)", Range(0, 10)) = 1
+        [Space(8)]
+        //世界空间模式参数（纯顶点外拓 + 距离自适应）
         _AdaptiveWidth("自适应描边宽度", Range(0, 1)) = 0.3
         _OutlineMaxScale("描边自适应最大宽度", Range(1, 100)) = 20
     }
@@ -66,12 +73,15 @@ Shader "Toony/General Toony Shader"
             #pragma vertex vert
             #pragma fragment frag
             #pragma shader_feature_local _USEOUTLINE_ON
+            #pragma shader_feature_local _OUTLINEMODE_VIEWSPACE _OUTLINEMODE_WORLDSPACE
             
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             
             CBUFFER_START(UnityPerMaterial)
             half4 _OutlineColor;
             float _OutlineWidth;
+            half4 _OutlineWidthParams;
+            float _OutlineZOffset;
             float _AdaptiveWidth;
             float _OutlineMaxScale;
             CBUFFER_END
@@ -90,14 +100,35 @@ Shader "Toony/General Toony Shader"
             VertexOutput vert(VertexInput v)
             {
                 VertexOutput o;
+                VertexPositionInputs vertexs = GetVertexPositionInputs(v.vertex);
+                float3 normalWS = TransformObjectToWorldNormal(v.normal);
 #ifdef _USEOUTLINE_ON
-                float3 worldPos = TransformObjectToWorld(v.vertex).xyz;
-                //距离等比自适应 + 上下限钳制：防止描边随距离无限变大（下限 1.0 = 基础宽度，上限 _OutlineMaxScale）
+#if defined(_OUTLINEMODE_VIEWSPACE)
+                // 视图空间模式：FOV 补偿 + 距离衰减 + XY拍平外扩 + 视线Z偏移
+                float fovFactor = 2.414 / UNITY_MATRIX_P[1].y;
+                float z = abs(vertexs.positionVS.z * fovFactor);
+                float4 params = _OutlineWidthParams;
+                float k = saturate((z - params.x) / max(params.y - params.x, 0.0001));
+                float width = lerp(params.z, params.w, k) * _OutlineWidth;
+
+                // 法线：世界→视图，XY 拍平（屏幕平面方向外扩）
+                float3 normalVS = TransformWorldToViewNormal(normalWS);
+                normalVS = normalize(half3(normalVS.xy, 0));
+
+                // ① Z 补偿：沿视线径向朝相机方向推一点（防被模型遮挡 / 防 z-fighting）
+                vertexs.positionVS += 0.01 * _OutlineZOffset * normalize(vertexs.positionVS);
+                // ② 沿拍平法线外扩（z 不变，纯屏幕平面方向）
+                vertexs.positionVS += width * normalVS;
+                o.pos = TransformWViewToHClip(vertexs.positionVS);
+#else
+                // 世界空间模式：纯顶点外拓 + 距离等比自适应（上下限钳制）
+                // 顶点与法线统一在世界空间外扩，避免模型旋转/缩放时方向错乱
+                float3 worldPos = TransformObjectToWorld(v.vertex.xyz);
                 float lerpResult = clamp(lerp(1.0, distance(_WorldSpaceCameraPos, worldPos), _AdaptiveWidth), 1.0, _OutlineMaxScale);
-                half3 finalOffset = lerpResult * (v.normal * _OutlineWidth);
-                v.vertex.xyz += finalOffset;
+                worldPos += normalWS * (_OutlineWidth * lerpResult);
+                o.pos = TransformWorldToHClip(worldPos);
 #endif
-                o.pos = TransformObjectToHClip(v.vertex.xyz);
+#endif
                 
                 return o;
             }

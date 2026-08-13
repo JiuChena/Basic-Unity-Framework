@@ -89,10 +89,13 @@ public class GeneralToonyShadeEditor : ShaderGUI
 
     //描边区
     MaterialProperty useOutline = null;
-    MaterialProperty outlineColor = null;
-    MaterialProperty outlineWidth = null;
-    MaterialProperty adaptiveWidth = null;
-    MaterialProperty outlineMaxScale = null;
+        MaterialProperty outlineMode = null;
+        MaterialProperty outlineColor = null;
+        MaterialProperty outlineWidth = null;
+        MaterialProperty outlineWidthParams = null;
+        MaterialProperty outlineZOffset = null;
+        MaterialProperty adaptiveWidth = null;
+        MaterialProperty outlineMaxScale = null;
 
     #endregion
 
@@ -147,8 +150,11 @@ public class GeneralToonyShadeEditor : ShaderGUI
         useRimLight = FindProperty("_UseRimLight", props);
 
         useOutline = FindProperty("_UseOutline", props);
+        outlineMode = FindProperty("_OutlineMode", props);
         outlineColor = FindProperty("_OutlineColor", props);
         outlineWidth = FindProperty("_OutlineWidth", props);
+        outlineWidthParams = FindProperty("_OutlineWidthParams", props);
+        outlineZOffset = FindProperty("_OutlineZOffset", props);
         adaptiveWidth = FindProperty("_AdaptiveWidth", props);
         outlineMaxScale = FindProperty("_OutlineMaxScale", props);
     }
@@ -376,15 +382,49 @@ public class GeneralToonyShadeEditor : ShaderGUI
     }
 
     /// <summary>
-    /// 绘制描边组：描边开关及其参数。
+    /// 绘制描边组：描边开关、模式下拉框，按模式显示各自参数。
+    /// ViewSpace：宽度参数 + Z偏移；WorldSpace：自适应 + 最大宽度。
     /// </summary>
     private void OutlineEditor()
     {
-        DrawToggleBoxScope(useOutline,
-            new List<MaterialProperty>
+        EditorGUILayout.BeginVertical(BoxScopeStyle);
+        EditorGUILayout.Space(2);
+
+        DrawToggleHeader(useOutline, "Outline");
+
+        if (!Mathf.Approximately(useOutline.floatValue, 0f))
+        {
+            EditorGUILayout.BeginVertical(BoxScopeStyle);
+            EditorGUILayout.Space(2);
+
+            // 描边颜色（两种模式共用）
+            DrawProperty(outlineColor);
+            // 基础宽度（两种模式共用）
+            DrawProperty(outlineWidth);
+            // 模式下拉框
+            m_MaterialEditor.ShaderProperty(outlineMode, outlineMode.displayName);
+
+            EditorGUILayout.Space(4);
+            bool isViewSpace = Mathf.Approximately(outlineMode.floatValue, 0f);
+            if (isViewSpace)
             {
-                outlineColor, outlineWidth, adaptiveWidth, outlineMaxScale
-            }, "Outline");
+                // 视图空间模式：XY拍平 + 视线偏移
+                DrawProperty(outlineWidthParams);
+                DrawProperty(outlineZOffset);
+            }
+            else
+            {
+                // 世界空间模式：纯顶点外拓 + 距离自适应
+                DrawProperty(adaptiveWidth);
+                DrawProperty(outlineMaxScale);
+            }
+
+            EditorGUILayout.Space(2);
+            EditorGUILayout.EndVertical();
+        }
+
+        EditorGUILayout.Space(2);
+        EditorGUILayout.EndVertical();
     }
 
     /// <summary>
