@@ -94,6 +94,8 @@ public class GeneralToonyShadeEditor : ShaderGUI
         MaterialProperty outlineWidth = null;
         MaterialProperty outlineWidthParams = null;
         MaterialProperty outlineZOffset = null;
+        MaterialProperty outlinePosBlend = null;
+        MaterialProperty tipTaper = null;
         MaterialProperty adaptiveWidth = null;
         MaterialProperty outlineMaxScale = null;
 
@@ -155,6 +157,8 @@ public class GeneralToonyShadeEditor : ShaderGUI
         outlineWidth = FindProperty("_OutlineWidth", props);
         outlineWidthParams = FindProperty("_OutlineWidthParams", props);
         outlineZOffset = FindProperty("_OutlineZOffset", props);
+        outlinePosBlend = FindProperty("_OutlinePosBlend", props);
+        tipTaper = FindProperty("_TipTaper", props);
         adaptiveWidth = FindProperty("_AdaptiveWidth", props);
         outlineMaxScale = FindProperty("_OutlineMaxScale", props);
     }
@@ -411,6 +415,8 @@ public class GeneralToonyShadeEditor : ShaderGUI
                 // 视图空间模式：XY拍平 + 视线偏移
                 DrawProperty(outlineWidthParams);
                 DrawProperty(outlineZOffset);
+                DrawProperty(outlinePosBlend);
+                DrawProperty(tipTaper);
             }
             else
             {

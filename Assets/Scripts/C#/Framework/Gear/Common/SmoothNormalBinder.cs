@@ -11,16 +11,22 @@ using UnityEngine;
 public class SmoothNormalBinder : MonoBehaviour
 {
     [SerializeField] private float mergeAngle = 60f;
+    [SerializeField, Tooltip("合并距离（mm），计算时会自动 ÷1000 转成米")] private float mergeDistance = 2f;
     [SerializeField] private List<Mesh> smoothedMeshes = new List<Mesh>();
     [SerializeField] private List<Mesh> originalMeshes = new List<Mesh>();
     [SerializeField] private List<Renderer> boundRenderers = new List<Renderer>();
 
     public float MergeAngle => mergeAngle;
+    /// <summary>合并距离（米），供法线合并计算使用（UI 配的 mm 值 ÷1000）。</summary>
+    public float MergeDistance => mergeDistance * 0.001f;
+    /// <summary>合并距离（mm），供编辑器弹窗显示/回填。</summary>
+    public float MergeDistanceMm => mergeDistance;
     public List<Mesh> SmoothedMeshes => smoothedMeshes;
     public List<Mesh> OriginalMeshes => originalMeshes;
     public List<Renderer> BoundRenderers => boundRenderers;
 
     public void SetMergeAngle(float angle) => mergeAngle = Mathf.Clamp(angle, 0f, 180f);
+    public void SetMergeDistance(float mm) => mergeDistance = Mathf.Max(0f, mm);
     public void ClearBindings()
     {
         smoothedMeshes?.Clear();

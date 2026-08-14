@@ -60,5 +60,6 @@ Material:
     - _OutlineZOffset: 0.5
     - _UseCustomMaterialType: 1
     - _UseRim: 1
+    - _UseSmoothNormal: 0
     m_Colors: []
   m_BuildTextureStacks: []

@@ -65,7 +65,7 @@ Material:
     - _UseEmission: 1
     - _UseNormalMap: 1
     - _UseRim: 1
-    - _UseSmoothNormal: 1
+    - _UseSmoothNormal: 0
     - _UseSpecular: 1
     m_Colors: []
   m_BuildTextureStacks: []

@@ -48,6 +48,8 @@ Shader "Toony/General Toony Shader"
         //视图空间模式参数（XY拍平 + 视线偏移）
         _OutlineWidthParams("描边宽度参数(近距,远距,近宽,远宽)", Vector) = (0, 20, 0.8, 1.2)
         _OutlineZOffset("描边Z偏移(防z-fighting)", Range(0, 10)) = 1
+        _OutlinePosBlend("位置外拓混合(0=法线贴型 1=径向补缝)", Range(0, 1)) = 0
+        _TipTaper("尖端收边强度(0=关)", Range(0, 1)) = 0
         [Space(8)]
         //世界空间模式参数（纯顶点外拓 + 距离自适应）
         _AdaptiveWidth("自适应描边宽度", Range(0, 1)) = 0.3
@@ -82,6 +84,8 @@ Shader "Toony/General Toony Shader"
             float _OutlineWidth;
             half4 _OutlineWidthParams;
             float _OutlineZOffset;
+            float _OutlinePosBlend;
+            float _TipTaper;
             float _AdaptiveWidth;
             float _OutlineMaxScale;
             CBUFFER_END
@@ -90,6 +94,7 @@ Shader "Toony/General Toony Shader"
             {
                 float4 vertex : POSITION;
                 float3 normal : NORMAL;
+                float4 color : COLOR;
             };
 
             struct VertexOutput
@@ -99,9 +104,11 @@ Shader "Toony/General Toony Shader"
             
             float GetOutlineWidth(float positionVS_Z)
             {
+                //FOV补偿，45度FOV为基准视野范围
                 float fovFactor = 2.414 / UNITY_MATRIX_P[1].y;
                 float z = abs(positionVS_Z * fovFactor);
 
+                //远近距离对应描边宽度倍率
                 float4 params = _OutlineWidthParams;
                 float k = saturate((z - params.x) / max(params.y - params.x, 0.0001));
                 float width = lerp(params.z, params.w, k);
@@ -116,24 +123,30 @@ Shader "Toony/General Toony Shader"
                 float3 normalWS = TransformObjectToWorldNormal(v.normal);
 #ifdef _USEOUTLINE_ON
 #if defined(_OUTLINEMODE_VIEWSPACE)
-                // 视图空间模式：FOV 补偿 + 距离衰减 + XY拍平外扩 + 视线Z偏移
-                float width = GetOutlineWidth(vertexs.positionVS.z);
+                //得出宽度乘以顶点a通道补偿描边宽度
+                // 尖端收边：color.a 由工具烘焙（1=平滑区→不变，尖端趋近0→收窄）
+                float width = GetOutlineWidth(vertexs.positionVS.z) * lerp(1.0, v.color.a, _TipTaper);
 
                 // 法线：世界→视图，XY 拍平（屏幕平面方向外扩）
                 float3 normalVS = TransformWorldToViewNormal(normalWS);
-                normalVS = normalize(half3(normalVS.xy, 0));
+                normalVS = SafeNormalize(half3(normalVS.xy, 0));
+
+                // 位置径向方向：从相机轴向屏幕外推。同位置分裂顶点方向一致 → 补上描边裂缝
+                float3 radialVS = SafeNormalize(half3(vertexs.positionVS.xy, 0));
+                // 方向混合：0=纯法线（贴型但硬边会裂），1=纯径向（无缝但丢失内部折痕线）
+                float3 outlineDir = normalize(lerp(normalVS, radialVS, _OutlinePosBlend));
 
                 // ① Z 补偿：沿视线径向朝相机方向推一点（防被模型遮挡 / 防 z-fighting）
-                vertexs.positionVS += 0.01 * _OutlineZOffset * normalize(vertexs.positionVS);
-                // ② 沿拍平法线外扩（z 不变，纯屏幕平面方向）
-                vertexs.positionVS += width * normalVS;
+                vertexs.positionVS += 0.01 * _OutlineZOffset * SafeNormalize(vertexs.positionVS);
+                // ② 沿外扩方向外扩（z 不变，纯屏幕平面方向）
+                vertexs.positionVS += width * outlineDir;
                 o.pos = TransformWViewToHClip(vertexs.positionVS);
 #else
                 // 世界空间模式：纯顶点外拓 + 距离等比自适应（上下限钳制）
                 // 顶点与法线统一在世界空间外扩，避免模型旋转/缩放时方向错乱
                 float3 worldPos = TransformObjectToWorld(v.vertex.xyz);
                 float lerpResult = clamp(lerp(1.0, distance(_WorldSpaceCameraPos, worldPos), _AdaptiveWidth), 1.0, _OutlineMaxScale);
-                worldPos += normalWS * (0.01 * _OutlineWidth * lerpResult);
+                worldPos += normalWS * (0.01 * _OutlineWidth * lerpResult * lerp(1.0, v.color.a, _TipTaper));
                 o.pos = TransformWorldToHClip(worldPos);
 #endif
 #endif

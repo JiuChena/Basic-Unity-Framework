@@ -116,7 +116,7 @@ Material:
     m_Ints: []
     m_Floats:
     - _AdaptiveThicnkess: 0.01
-    - _AdaptiveWidth: 0.391
+    - _AdaptiveWidth: 0.372
     - _AdditionalLightsAmount: 1
     - _AdditionalLightsFaloff: 0.15
     - _AdditionalLightsIntesity: 1
@@ -161,11 +161,12 @@ Material:
     - _NormalMapStrength: 1
     - _OcclusionMapScale: 0.4
     - _OcclusionStrength: 0.3
-    - _OutlineMaxScale: 0.588
+    - _OutlineMaxScale: 10
     - _OutlineMode: 0
+    - _OutlinePosBlend: 0
     - _OutlineTextureStrength: 0.6
     - _OutlineType: 0
-    - _OutlineWidth: 0.25
+    - _OutlineWidth: 0.15
     - _OutlineZOffset: 0
     - _Parallax: 0.02
     - _QueueOffset: 0
@@ -193,6 +194,7 @@ Material:
     - _Strength: 0
     - _Surface: 0
     - _Thicnkess: 0.006
+    - _TipTaper: 0
     - _UVSec: 0
     - _UseAdditionalLightsDiffuse: 1
     - _UseAdditionalLightsSpecular: 1

@@ -577,7 +577,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3242bd6c8ce67e4478811a0219418530, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  mergeAngle: 120
+  mergeAngle: 100
+  mergeDistance: 4
   smoothedMeshes:
   - {fileID: 4300000, guid: 9ec8058f8d57ac74dbb39b491d89ec34, type: 2}
   - {fileID: 4300000, guid: 7714f2f354e44184bb182a1615c6f6fe, type: 2}
