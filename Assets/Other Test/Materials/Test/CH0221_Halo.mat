@@ -179,7 +179,7 @@ Material:
     - _OutlineMode: 0
     - _OutlineTextureStrength: 0.6
     - _OutlineType: 0
-    - _OutlineWidth: 0.0025
+    - _OutlineWidth: 0.25
     - _OutlineZOffset: 0
     - _Parallax: 0.02
     - _QueueOffset: 0

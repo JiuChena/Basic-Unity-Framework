@@ -163,7 +163,7 @@ Material:
     - _OutlineMaxScale: 20
     - _OutlineTextureStrength: 0.6
     - _OutlineType: 0
-    - _OutlineWidth: 0.005
+    - _OutlineWidth: 0.5
     - _Parallax: 0.02
     - _QueueOffset: 0
     - _RampDiffuseTextureLoaded: 0

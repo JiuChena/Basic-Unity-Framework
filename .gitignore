@@ -106,12 +106,12 @@ InitTestScene*.unity*
 # Auto-generated scenes by play mode tests
 /[Aa]ssets/[Ii]nit[Tt]est[Ss]cene*.unity*
 
-".codex-tmp/"
-".codex/"
-".claude/"
-"TextMesh Pro/"
-"Temple/"
-"XLua/"
-".codex-tmp/"
-".agents/"
-"add.unitypackage.meta"
+.codex-tmp/
+.codex/
+.claude/
+TextMesh Pro/
+Temple/
+XLua/
+.agents/
+/[Aa]ssets/QFramework/
+/[Aa]ssets/QFrameworkData/

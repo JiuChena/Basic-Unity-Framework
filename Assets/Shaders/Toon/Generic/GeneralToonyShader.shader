@@ -43,7 +43,7 @@ Shader "Toony/General Toony Shader"
         [Toggle(_USEOUTLINE_ON)] _UseOutline("描边", Float) = 1
         [KeywordEnum(ViewSpace, WorldSpace)] _OutlineMode("描边模式", Float) = 0
         _OutlineColor("描边颜色", Color) = (0,0,0,1)
-        _OutlineWidth("描边宽度", Range(0, 0.01)) = 0.005
+        _OutlineWidth("描边宽度", Range(0, 1)) = 1
         [Space(8)]
         //视图空间模式参数（XY拍平 + 视线偏移）
         _OutlineWidthParams("描边宽度参数(近距,远距,近宽,远宽)", Vector) = (0, 20, 0.8, 1.2)
@@ -97,6 +97,18 @@ Shader "Toony/General Toony Shader"
                 float4 pos : SV_POSITION;
             };
             
+            float GetOutlineWidth(float positionVS_Z)
+            {
+                float fovFactor = 2.414 / UNITY_MATRIX_P[1].y;
+                float z = abs(positionVS_Z * fovFactor);
+
+                float4 params = _OutlineWidthParams;
+                float k = saturate((z - params.x) / max(params.y - params.x, 0.0001));
+                float width = lerp(params.z, params.w, k);
+
+                return 0.01 * _OutlineWidth * width;
+            }
+
             VertexOutput vert(VertexInput v)
             {
                 VertexOutput o;
@@ -105,11 +117,7 @@ Shader "Toony/General Toony Shader"
 #ifdef _USEOUTLINE_ON
 #if defined(_OUTLINEMODE_VIEWSPACE)
                 // 视图空间模式：FOV 补偿 + 距离衰减 + XY拍平外扩 + 视线Z偏移
-                float fovFactor = 2.414 / UNITY_MATRIX_P[1].y;
-                float z = abs(vertexs.positionVS.z * fovFactor);
-                float4 params = _OutlineWidthParams;
-                float k = saturate((z - params.x) / max(params.y - params.x, 0.0001));
-                float width = lerp(params.z, params.w, k) * _OutlineWidth;
+                float width = GetOutlineWidth(vertexs.positionVS.z);
 
                 // 法线：世界→视图，XY 拍平（屏幕平面方向外扩）
                 float3 normalVS = TransformWorldToViewNormal(normalWS);
@@ -125,7 +133,7 @@ Shader "Toony/General Toony Shader"
                 // 顶点与法线统一在世界空间外扩，避免模型旋转/缩放时方向错乱
                 float3 worldPos = TransformObjectToWorld(v.vertex.xyz);
                 float lerpResult = clamp(lerp(1.0, distance(_WorldSpaceCameraPos, worldPos), _AdaptiveWidth), 1.0, _OutlineMaxScale);
-                worldPos += normalWS * (_OutlineWidth * lerpResult);
+                worldPos += normalWS * (0.01 * _OutlineWidth * lerpResult);
                 o.pos = TransformWorldToHClip(worldPos);
 #endif
 #endif

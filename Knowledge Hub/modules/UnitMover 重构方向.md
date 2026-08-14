@@ -1,87 +1,126 @@
 ---
 tags: [Unity, Framework, ExpandComponent, UnitMover, Rigidbody]
 created: 2026-07-28
-updated: 2026-08-02
-status: 核心结构与 A/B/C/D 审查整改已实施，待 Unity 场景验证
+updated: 2026-08-04
+status: 策略层级重构已实施，待 Unity 场景验证
 ---
 
 # UnitMover 重构方向
 
-## 当前结论
+> [!important] 生命周期容器为当前实现
+> 本文中出现的旧策略回调 `OnActivated`、`Simulate(float, float)`、`OnDeactivated`、`OnDispose`、`OnRuntimeDependenciesChanged` 与 `RestoreAuthoring(...)` 均为历史描述。当前实现以 `UnitMoverLifecycleContainer` 为准：`UnitMover` 只持有一份容器，并且只负责更新上下文、触发阶段和管理策略切换；策略通过 `OnRegisterLifecycle()` 注入自己的无参包装方法。
 
-`UnitMover` 是 `Framework.ExpandComponent` 中的通用运动扩展组件。它组装 Unity 引用和纯 C# 运动管线，不承担 Player、Enemy、NPC 等业务实体的控制职责。
-
-```text
-DataProvider / AI / Root Motion / Network
-                  |
-                  v
-          UnitMover (MonoBehaviour)
-                  |
-                  v
-       UnitMovementRuntime (纯 C#)
-                  |
-                  v
- IUnitBody / IPhysicsQuery (Unity 适配边界)
-                  |
-                  v
-      Rigidbody + CapsuleCollider + Physics
-```
-
-Provider 仅写入自己的 Blackboard。`UnitMover` 主动消费同对象 `IDataProvider` 暴露的 `IUnitMovementInput`，不反向驱动 Provider，也不依赖具体的 Player Blackboard 或 Input Attribute。
-
-## 已实施的模块划分
+## 当前策略切换流程
 
 ```text
-Assets/Scripts/C#/Framework/Expand Component/UnitMover/
-  UnitMover.cs                       生命周期、组装和对外 API
-  Core/UnitMovementRuntime.cs        固定步运动管线
-  Profiles/UnitMovementProfile.cs    LocomotionSettings + GroundSettings
-  Motor/JumpModule.cs                跳跃参数与瞬态状态
-  Motor/GravityModule.cs             重力参数与瞬态状态
-  Motor/HoverModule.cs               悬浮运动响应
-  Physics/ColliderShapeModule.cs     有效碰撞形状与脚底 Box 同步
-  Physics/FloatingCapsuleModule.cs   浮动配置与组件专属形状快照
-  Physics/GroundProbeModule.cs       接地、支撑查询和内部陡坡下滑修正
-  Physics/EdgeProtectionModule.cs    边缘约束与诊断快照
-  Gizmos/UnitMoverGizmoRenderer.cs   只读 Scene 诊断绘制
-  Strategies/                         纯 C# 移动策略
-  UnityAdapters/                      Rigidbody 和 Physics 适配
+首次策略：Initialize(依赖注入) -> BindLifecycle -> Initialize -> DependenciesChanged -> Activated
+缓存策略切换：旧策略 Deactivated -> 容器 Clear -> 目标 BindLifecycle -> DependenciesChanged -> Activated
+新策略切换：旧策略 Deactivated -> 容器 Clear -> 创建并 Initialize(依赖注入)
+           -> BindLifecycle -> Initialize -> DependenciesChanged -> Activated
+完整释放：活动策略 Deactivated -> Disposed -> 容器 Clear；其余缓存策略临时绑定 Disposed 后释放
 ```
 
-`UnitMovementProfile` 只保留 `LocomotionSettings` 与 `GroundSettings`。`JumpModule`、`GravityModule` 和 `EdgeProtectionModule` 各自直接包含 Inspector 参数以及不参与序列化的运行时状态；它们在创建运行时时初始化，并在销毁运行时时调用 `ResetRuntimeState()`。
+容器阶段包括 `Initialize`、`Activated`、`Update`、`FixedUpdate`、`LateUpdate`、`DependenciesChanged`、`Deactivated`、`Disposed`、`AuthoringValidate`、`AuthoringRestore`、`AuthoringRecapture` 与 `DrawGizmosSelected`。固定步只由 `UnitMover` 调用容器；模块不订阅 Unity 生命周期，也不持有 `UnitMover`。
 
-`UnitMover` 只支持一个同对象 `CapsuleCollider` 作为主碰撞体；`[RequireComponent]`、Inspector 字段、自动引用解析、运行时依赖校验和 Gizmo 全部使用该强类型契约。旧的 `BoxCollider` 主碰撞体兼容路径已移除。
+## 当前结构
 
-`FloatingCapsuleModule` 聚合浮动胶囊参数和 `FloatingCapsuleAuthoringState`，并独占基础形状快照、顶部对齐、留空限幅和实际留空计算；它只返回纯形状数据，不写 Unity 组件。`ColliderShapeModule` 只负责将形状结果写入实际 `CapsuleCollider`、管理自动生成的脚底 `BoxCollider` 和提供 Bounds 查询，不再保存浮动胶囊建模算法或 AuthoringState 类型定义。脚底 Box 仅在启用浮动胶囊时由模块内部在 UnitMover 所在 GameObject 创建；其底面与有效胶囊最低点共面，物理碰撞保持完整宽度。关闭浮动时先立即禁用，再在运行时或编辑器安全时机删除。它不是可配置的第二种 UnitMover 碰撞体模式。
+`UnitMover` 是 `Framework.ExpandComponent` 中的 Unity 外壳与策略管理器。它仅解析 Unity 组件和 `IDataProvider`，创建适配器，并维护移动策略的缓存与生命周期；它不保存具体运动模块，也不读取 Provider 黑板。
 
-`UnitMovementRuntime.Create(...)` 是运行时唯一的组装入口：它创建 `RigidbodyUnitBody`、`UnityPhysicsQuery` 和 `GroundProbeModule`，并复用 UnitMover 为编辑模式预览保留的 `ColliderShapeModule`。`UnitMover` 不再保留命令源或策略的单行代理，外部系统通过只读 `Runtime` 属性访问相应纯 C# API。
+```text
+UnitMover (MonoBehaviour)
+  - Rigidbody / CapsuleCollider / IDataProvider 解析
+  - RigidbodyUnitBody / UnityPhysicsQuery 创建
+  - 策略缓存、切换、激活、释放
+                 |
+                 v
+UnitMovementStrategy (纯 C#)
+  - 自行解释 Blackboard 所需契约
+  - 自行持有 Settings 与功能模块
+  - 自行编排固定步并提交最终速度
+                 |
+                 v
+功能模块 (纯 C#)
+  - 单一功能、配置与运行时状态
+```
 
-`UnitMovementRuntime` 是跨模块运行时的组装和协同中心，不是无逻辑的转发器：当跳跃、地面探测、边缘约束、显式检查点恢复、速度提交等多个模块必须共享同一步的结果并决定下一阶段时，由 Runtime 保留该组合顺序与协同判断。相反，单模块可根据传入上下文独立决定的基础规则必须封装在模块内部，例如 `GroundProbeModule` 判断接触与可行走性、`HoverModule` 判断是否支撑回正、`SteepSlopeSlideModule` 判断是否施加下坡修正。模块之间不相互调用；Runtime 传入必要的只读上下文并接收结果。
+当前默认实现为 `NormalGroundMovementStrategy`。该类型以 `[SerializeReference]` 保存于 `UnitMover`，直接持有 `LocomotionSettings`、`GroundSettings`、`JumpModule`、`GravityModule`、`FloatingCapsuleModule` 与 `EdgeProtectionModule`。没有 ScriptableObject 配置资产，也没有 `UnitMovementProfile`。
 
-DataProvider 的解析只在创建 Runtime 时执行一次，并且不把 Unity `OnEnable` 期间暂未激活的 Provider 误判为不兼容。固定步只消费缓存的 `IUnitMovementInput`；缓存 Provider 缺失或禁用时不提交 Provider 命令，但 Runtime 仍以外部手动命令或默认空命令执行物理步。已绑定 Provider 重新启用后可直接恢复消费。
+旧 `DefaultRigidbodyMovementStrategy` 使用 Unity `MovedFrom` 类型迁移到 `NormalGroundMovementStrategy`。旧 `UnitMovementRuntime`、`UnitMovementProfile`、`IUnitMovementCommandSource` 与 Runtime 命令来源注册表已删除。
 
-## 物理能力边界
+## UnitMover 职责
 
-`GroundProbeModule` 负责接地、坡面和支撑查询，并将自己的 `GroundContact` 转换为包含接地、稳定支撑与地面几何的 `UnitMovementState`。浮动胶囊接地先以脚底 `BoxCast` 覆盖真实占地；区域找到有效命中时直接使用该命中，只有区域没有有效命中时才以受同一 `GroundCheckDistance` 限制的中心射线兜底。区域检测宽度可由 `FootBoxSupportWidthScale` 独立收缩，避免前缘高台阶被误判为脚下支撑，而不改变物理 Box 的完整宽度。它供 `HoverModule` 与 `EdgeProtectionModule` 复用，但不直接调用它们；Runtime 将状态传给后续模块。稳定支撑以中心点和四个周向点确认，要求中心命中且至少两个周向点有可行走地面；仅在边缘保护启用时才执行这五次查询，关闭时以可行走接地作为跳跃所需的稳定结果。
+`UnitMover` 只承担以下职责：
 
-`FloatingCapsuleModule` 只保存 Inspector 序列化的形状与配置数据；`HoverModule` 是浮动胶囊的运行时核心，独占有效接触、起跳豁免和支撑修正的判定。Runtime 每个固定步将本步接触和跨模块跳跃结果传入 `HoverModule.Apply(...)`，由 HoverModule 决定是否生效。`HoverModule` 根据任何有效脚底接触和 `BottomClearance + HoverHeight` 调节沿接触法线的速度：脚底过低向上修正，过高但仍在探测范围时向下回拉。陡坡同样保留这份悬浮支撑；阻尼按当前修正方向投影，避免越过目标后持续抵消错误方向的速度。
+- 解析同对象 `Rigidbody`、唯一主 `CapsuleCollider`、可选 `IDataProvider` 和可选移动参考相机。
+- 自动解析 Provider 时只接受唯一候选；同对象存在多个 Provider 且未手动指定时记录一次歧义错误，不按组件顺序选择。
+- 创建一次性的 `RigidbodyUnitBody` 与 `UnityPhysicsQuery`，并将 `Rigidbody`、`CapsuleCollider`、`Transform`、适配器、Provider 和移动参考 `Transform` 显式传入策略。
+- 维护 `Type -> UnitMovementStrategy` 缓存；切换时先执行旧策略 `OnDeactivated`，再首次 `Initialize` 目标策略或激活缓存策略，停用或销毁时统一调用 `OnDispose`。
+- 提供 `UseMovementStrategy<TStrategy>()` 与 `UseMovementStrategy(Type)`；前者供业务代码以泛型切换，后者供 Inspector 或运行时类型选择器切换。另提供 `ClearMovementStrategyState<TStrategy>()`、`SetCheckpoint()`、`RestoreCheckpoint()` 与浮动基础形状重捕获入口。
+- 将编辑模式形状同步和 Scene Gizmo 请求转交给当前策略。
 
-`GroundContact` 将“命中有效地面”与“允许作为站立地面”分开记录，并缓存坡度角。超过 `GroundSettings.SlopeLimit` 的斜面仍保留接触法线和接触点，会继续驱动浮动胶囊的支撑回正，但不会进入 Ground 模式。Runtime 只将“本步是否因接地且未起跳而使用地面法线”的组合结果传入 `GravityModule`；重力模块自行决定是否写入重力。`SteepSlopeSlideModule` 使用进入/退出滞回、接触确认时长和锁定的下坡方向稳定坡面判定。首次确认锁定陡坡时，它会清除实际速度中的沿坡上行分量，并跳过本物理步的下坡速度叠加；下一连续物理步才按“超限坡度差 × 曲线 × 下滑因数 × 固定步时长”叠加下坡速度，且受 `SteepSlopeSlideSpeedLimit` 限制。
+它不解释 `IDataProvider.Blackboard`、不消费 `IUnitMovementInput`、不组装 Jump/Hover/Gravity/Edge/Slope 模块，也不决定模块调用顺序。固定步只调用当前策略的 `Simulate(Time.fixedDeltaTime, Time.time)`。
 
-旧的 `StepSettings`、`StepAssistModule` 和前方探针自动向上助推已删除。最大可通过台阶高度只由 `FloatingCapsuleModule.BottomClearance` 决定，脚底 `BoxCollider` 提供实际的精确物理边界。
+## 策略生命周期
 
-`EdgeProtectionModule` 只在候选运动可能离开支撑面时执行额外检测：以前缘候选速度与当前实际水平速度中较大的位移趋势做三点支撑预测，失败后才扫描局部危险方向，并移除外向速度分量。它不再自动记录安全点或自动传送；业务层通过 `UnitMover.SetCheckpoint()` 显式记录当前位置，并在需要时调用 `RestoreCheckpoint()`。它保存 `EdgeProtectionDebugState` 供 Gizmo 读取，不把调试绘制混入运动逻辑。
+```text
+首次使用: 创建 -> Initialize -> 缓存 -> OnActivated
+切换缓存策略: 当前 OnDeactivated -> 目标 RefreshRuntimeDependencies -> 目标 OnActivated
+切换新策略: 当前 OnDeactivated -> 创建 -> Initialize -> 缓存 -> OnActivated
+重复选择当前策略: 返回已有实例，不重复激活
+显式重置: ClearMovementStrategyState<T> -> ClearState
+组件停用: 当前 OnDeactivated -> 全部 OnDispose -> 清空缓存
+```
+
+策略切换不会调用 `ClearState()`，因此缓存实例可以保留自身状态。策略必须实现 `ClearState()`，并只在业务层显式要求或完整释放时清理运行时数据。策略若修改了共享 Unity 组件，必须在 `OnDeactivated()` 中归还；首次创建目标策略会在旧策略归还后才执行 `Initialize()`，不得捕获旧策略留下的组件状态。
+
+## NormalGroundMovementStrategy
+
+默认策略在 `Initialize(...)` 时：
+
+1. 确保自身序列化模块完整。
+2. 创建或复用 `ColliderShapeModule`，同步浮动胶囊和脚底辅助 `BoxCollider`。
+3. 创建 `GroundProbeModule`、`HoverModule` 与 `SteepSlopeSlideModule`，初始化 Gravity 和 EdgeProtection。
+4. 从 `IDataProvider.Blackboard` 缓存 `IUnitMovementInput`，并把可选移动参考传给 `IUnitMovementReferenceFrame`。
+
+默认策略在 `OnActivated()` 立即重新同步浮动形状；在 `OnDeactivated()` 和 `OnDispose()` 调用 `ColliderShapeModule.RestoreAuthoringShape()`，将主 `CapsuleCollider` 恢复至自身 Authoring 基础快照，并只移除自身登记的脚底辅助 `BoxCollider`。
+
+固定步顺序属于策略而不是 `UnitMover`：
+
+```text
+同步有效胶囊
+-> 接地/坡面探测
+-> Provider Blackboard 转标准移动命令
+-> 陡坡上坡输入约束
+-> Jump 解析
+-> 地面或空中候选速度
+-> EdgeProtection 速度约束
+-> 跳跃、重力、陡坡下滑、Hover 速度贡献
+-> IUnitBody.Commit
+-> 保存只读状态与速度诊断
+```
+
+无 `IUnitMovementInput` 时默认策略使用中性命令继续执行物理步，允许重力、悬浮或外部策略逻辑正常工作。`UnitMover` 不会因为 Provider 黑板缺少该契约而阻断运行。
+
+## 功能模块边界
+
+- `FloatingCapsuleModule`：保存顶部对齐的浮动胶囊配置和基础形状快照，只生成纯形状数据。
+- `ColliderShapeModule`：将有效形状写入主 `CapsuleCollider`、维护内部脚底 `BoxCollider`、提供 Bounds 与探测尺寸。
+- `GroundProbeModule`：进行无分配接地、坡面和支撑查询，统一过滤层、Trigger 与自身碰撞体。
+- `HoverModule`：对任意有效地面接触执行沿法线的浮动弹簧和阻尼修正，跳跃主动阶段豁免。
+- `SteepSlopeSlideModule`：锁定不可行走坡面，约束上坡输入并按曲线、坡度差和上限叠加下滑速度。
+- `EdgeProtectionModule`：对候选速度预测支撑、移除危险外向速度并保存 Gizmo 快照；检查点只能通过 `SetCheckpoint` / `RestoreCheckpoint` 显式使用。
+- `JumpModule`、`GravityModule`：分别维护跳跃事件与重力状态，不持有或查询 Unity 组件。
+
+模块可持有稳定的单向下层依赖，例如 `HoverModule -> GroundProbeModule`；不得持有 `UnitMover` 或策略引用，不得在固定步执行 `GetComponent`、`Find`、`Camera.main` 或场景查询。
 
 ## 浮动胶囊规则
 
 对于默认 Y 轴胶囊：
 
 ```text
-基础：radius = 0.5, height = 2.0, center.y = 1.0
-clearance = 0.4：radius = 0.5, height = 1.6, center.y = 1.2
+基础: radius = 0.5, height = 2.0, center.y = 1.0
+clearance = 0.4: radius = 0.5, height = 1.6, center.y = 1.2
 ```
-
-公式为：
 
 ```text
 effectiveHeight = baseHeight - clearance
@@ -89,45 +128,19 @@ effectiveCenter = baseCenter + capsuleAxis * (clearance * 0.5)
 maximumClearance = baseHeight - baseRadius * 2
 ```
 
-这保证胶囊顶部不移动，底部向上留出无碰撞空间；动态上限保证有效高度不小于直径。`[ExecuteAlways]` 仅在编辑模式同步形状并绘制 Gizmos，运动与 Rigidbody 写入只发生在播放模式。
+顶部保持不动，只有底部上移形成无碰撞空间。`BottomClearance` 同时是精确最大台阶高度；Inspector 以基础胶囊高度动态限制其最大值。`[ExecuteAlways]` 仅在编辑模式同步形状和绘制 Gizmo，不写刚体速度或执行物理步。
 
-## 策略与命令
+## Inspector 与 Gizmo
 
-`UnitMovementStrategy` 通过 `[SerializeReference]` 保存 Inspector 初始策略，运行时由 `unitMover.Runtime.UseMovementStrategy<TStrategy>()` 选择。Runtime 缓存 `Type -> UnitMovementStrategy` 实例，切换回已使用策略时保留必要的实例数据。
+`UnitMoverEditor` 保留全宽深色折叠栏风格：
 
-每个策略必须实现 `ClearState()`；业务层可通过 `unitMover.Runtime.ClearMovementStrategyState<TStrategy>()` 显式清空，Runtime 销毁时统一清理所有缓存策略。命令源 API 继续用于 AI、网络回放等纯 C# 生产者，但最基础的实体输入由 `UnitMover` 每个固定步直接从 Provider Blackboard 读取。
+- Unity 引用、策略选择、运行时只读诊断和 Gizmo 开关由 Editor 专门绘制。
+- 当前策略的一级序列化字段自动枚举，每个字段独立显示在模块折叠栏中；新策略或新模块字段不需要新增专用 Editor 代码。
+- 浮动胶囊的 `BottomClearance` 是唯一专用字段控件，用动态合法上限绘制滑条。
 
-可行走接地时，地面策略将世界移动输入投影到支撑面的切平面并归一化，配置速度表示沿坡面的实际移动速度。Runtime 为边缘保护提取水平速度仅用于检测和约束；保护未改变候选速度时直接保留策略输出，保护介入时按约束前后的水平速度比例缩减并重新映射到坡面，避免二次投影使坡度越大移动越慢。
+`UnitMoverGizmoRenderer` 仅读取策略暴露的 `ColliderShapeModule`、`FloatingCapsuleModule`、`GroundSettings` 和边缘调试快照，不触发组件写入或 Physics 查询。
 
-`UnitMover` 可选配置 `MovementReferenceCamera`；支持 `IUnitMovementReferenceFrame` 的黑板会收到该摄像机的 Transform，用于把平面输入转换为世界方向。引用为空时，`CharacterBlackboard` 缓存并回退 `Camera.main`。刚体接管保留原 `collisionDetectionMode`，`Freeze Rigidbody Rotation` 默认开启；关闭后不再强制追加旋转约束或清零角速度。跳跃后的接地忽略窗口由 `JumpModule.GroundIgnoreAfterStartDuration` 配置。
+## 验证状态
 
-## Gizmo 规则
-
-`UnitMover.OnDrawGizmosSelected()` 只调用 `UnitMoverGizmoRenderer.DrawAll(...)`。渲染器接收形状模块、浮动胶囊模块、接地设置和边缘诊断快照，不接收完整 Runtime，也不触发 Physics 查询或组件写入。
-
-Scene 预览含义：黄色体积是底部无碰撞区，黄色线是期望支撑距离，青色实心 Box 和浅蓝轮廓 Box 分别是 `BoxCast` 的起始与终止诊断体积，不是第二个物理 `BoxCollider`；绿色射线是可行走支撑，红色射线是无支撑危险点，红色箭头是危险外法线，青色箭头是约束后速度。
-
-## 验证记录
-
-- `2026-07-29`：删除 `StepSettings` 与 `StepAssistModule`，台阶能力改由 `BottomClearance` 和自动脚底 `BoxCollider` 提供。
-- `2026-07-29`：`UnitMovementProfile` 收口为 `LocomotionSettings`、`GroundSettings`；跳跃、重力、边缘防跌落迁入对应的状态型模块；浮动胶囊 Authoring 数据迁入 `FloatingCapsuleModule`。
-- `2026-07-29`：Scene Gizmo 绘制从 `UnitMover` 抽离到 `UnitMoverGizmoRenderer`，绘制逻辑只读模块快照。
-- `2026-07-30`：UnitMover 主碰撞体收紧为 `CapsuleCollider`；删除外部 `BoxCollider` 的引用解析、运行时校验与接地兼容，保留浮动胶囊内部脚底 Box 的专用探测。
-- `2026-07-30`：Runtime 组装收口至 `UnitMovementRuntime.Create(...)`；移除 UnitMover 的命令源与策略透传 API，固定步不再扫描 DataProvider，稳定支撑改为中心加四向采样。
-- `2026-07-30`：陡坡不再在接地探测阶段被直接丢弃；保留斜面接触并区分可站立性，超过坡度限制时按超限角度施加可配置的下坡加速度。
-- `2026-07-30`：浮动胶囊的悬浮支撑扩展到不可站立斜面；陡坡修正先强制清除上坡速度，再按逆坡参数叠加下坡速度。
-- `2026-07-30`：浮动胶囊是否参与本步支撑的接触、起跳和时间判断收回 `HoverModule`；Runtime 仅保留模块调度顺序，不再持有悬浮条件分支。
-- `2026-07-30`：明确 Runtime 负责跨模块的组合顺序和协同决策，基础模块负责可由自身上下文独立完成的规则判断；禁止功能模块之间相互调用。
-- `2026-07-30`：接地、稳定支撑和地面状态快照创建收回 `GroundProbeModule`；Runtime 只消费接地模块输出，并保留策略、跳跃和边缘模块之间的协同决策。
-- `2026-07-30`：浮动胶囊的基础形状快照与顶部对齐计算迁入 `FloatingCapsuleModule`；`ColliderShapeModule` 收口为 Unity 碰撞体写入、脚底 Box 生命周期和边界查询。
-- `2026-07-30`：浮动胶囊脚底 BoxCast 未命中时增加有界中心射线兜底，持续提供斜面接触法线；射线长度仍受既有接地距离限制，不引入远距离吸附。
-- `2026-07-30`：陡坡下推从按物理步累积的加速度改为目标下坡速度，避免微小单步速度被坡面静摩擦清零；已有场景值通过 `FormerlySerializedAs` 保留。
-- `2026-07-30`：浮动胶囊接地改为脚底 `BoxCast` 区域检测优先；区域没有有效命中时，再以同一接地距离范围内的中心射线兜底。
-- `2026-07-30`：`SteepSlopeSlideModule` 使用进入/退出滞回、连续接触确认和锁定斜面稳定下滑方向；首次锁定步清除实际沿坡上行速度且不叠加下坡速度，下一连续物理步恢复常规下滑。
-- `2026-08-02`：无 DataProvider 时仍执行 Runtime；外部 `SubmitCommand`、注册命令源与无输入重力不再被组件生命周期阻断。
-- `2026-08-02`：删除自动安全点记录与异常跌落回退，替换为 `SetCheckpoint` / `RestoreCheckpoint` 显式 API；边缘保护关闭时同步跳过稳定支撑五点检测。
-- `2026-08-02`：刚体不再强改碰撞检测模式；新增默认开启的旋转冻结开关。摄像机参考由 UnitMover 可选注入黑板，跳跃接地忽略时长改为 Inspector 参数。
-- `2026-08-02`：浮动胶囊提供显式基础形状重捕获入口；直立等比胶囊的边缘预测使用真实圆形半径，其他形状保持保守 AABB 前缘。
-- `2026-08-02`：D1 区域检测后的射线兜底与 D2 初上陡坡独立阶段实施完成；两项均不新增固定步分配或组件查询。
-- `2026-08-02`：D3 可行走坡面移动改为保持策略生成的沿坡切向速度；边缘保护未介入时不再重复投影降速，介入时按约束比例缩减。
-- 静态编译通过后，仍须在 Unity 中验证台阶、坡面、窄桥、短缝、检查点恢复、移动平台和浮动手感。Unity 正常重新导入项目后会生成新脚本 `.meta` 并重建 `.csproj`。
+- `2026-08-04`：策略层级重构已实施，旧 Runtime/Profile/命令来源代码已删除，默认策略改为 `NormalGroundMovementStrategy`，Inspector 改为策略字段递归显示。
+- `2026-08-04`：播放模式下 Inspector 的“运行时移动策略”会调用 `UseMovementStrategy(Type)` 真实切换活动策略，不再仅替换初始策略的序列化配置；需在 Unity 编辑器中确认类型迁移、脚本零编译错误，以及台阶、跳跃、斜坡、边缘保护、检查点和运行时策略切换行为。
