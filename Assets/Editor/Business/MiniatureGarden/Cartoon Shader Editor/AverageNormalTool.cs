@@ -5,10 +5,11 @@ using UnityEngine;
 
 /// <summary>
 /// 平滑法线描边工具（方案 A：描边平滑，场景挂载组件引用版）。
-/// 用途：为 Cartoon.shader 的描边（_OUTLINETYPE_NORMAL 模式）提供平滑外扩方向。
-/// 原理：按"合并距离 + 法线夹角"双重判定合并硬边顶点 —— 球形邻域内法线夹角小于阈值（由
-///       角色上的 SmoothNormalBinder 配置，距离默认 2mm、角度默认 60°）才平均，保留大角度
-///       硬边、平滑小角度转折；写回 mesh.normals 后描边与光照共用同一套平滑法线。
+/// 用途：为 GTS（GeneralToonyShader）的描边提供平滑外扩法线。
+/// 原理：以 Thürmer-Wüthrich 夹角加权（顶点角 × 面法线）计算平滑法线，方向与细分密度、
+///       UV 切分无关；再按"合并距离 + 法线夹角"双重判定过滤贡献 —— 球形邻域内法线夹角
+///       小于阈值（由角色上的 SmoothNormalBinder 配置，距离默认 2mm、角度默认 60°）才合并，
+///       保留大角度硬边、平滑小角度转折；写回 mesh.normals 后描边与光照共用同一套平滑法线。
 ///       蒙皮时 Unity 会实时变换 NORMAL 通道，平均法线在任意动画姿势下方向都正确。
 /// 方案说明：不再使用 JSON 映射文件，改为在角色根节点下的 "Smooth Normal Directions"
 ///      子物体上挂载 SmoothNormalBinder 组件，三列表（平滑克隆网格 ↔ 源网格 ↔ 被替换 renderer）
@@ -278,54 +279,83 @@ public class AverageNormalTool
         public string label;
     }
 
-    // ─────────────────────────── 平均法线计算（距离 + 角度双重判定） ───────────────────────────
-    // 1. 以"顶点为圆心、mergeDistance 为半径"的球形邻域合并顶点法线。合并距离由
+    // ─────────────── 平均法线计算（夹角加权 + 距离/角度双重判定） ───────────────
+    // 1. 夹角加权（Thürmer & Wüthrich 1998）：第一遍遍历三角形，按"顶点角 × 面法线"
+    //    累积贡献 —— 方向与细分密度、UV 切分无关，取代旧版等权相加的副本数偏差。
+    // 2. 第二遍以"顶点为圆心、mergeDistance 为半径"的球形邻域收集贡献。合并距离由
     //    SmoothNormalBinder 配置（单位 mm，默认 2mm，内部 ÷1000 转米）；
     //    mergeDistance = 0 时退化为同位置顶点合并。
-    // 2. 距离满足后仍需法线夹角 < 阈值（默认 60°）才合并平均 —— 保留大角度硬边、
+    // 3. 距离满足后仍需法线夹角 < 阈值（默认 60°）才合并 —— 保留大角度硬边、
     //    平滑小角度转折；同时防止距离过大时把薄壁双面结构（头发片/裙摆等内外距离
     //    < 合并距离）的内外顶点误合并成反向法线抵消 → 产生 NaN/零向量的黑色色块。
-    // 3. 空间哈希网格（格边长 = 合并距离）：任意半径邻域至多覆盖 3×3×3=27 个格子，
+    // 4. 空间哈希网格（格边长 = 合并距离）：任意半径邻域至多覆盖 3×3×3=27 个格子，
     //    邻域搜索 O(n) 而非 O(n²)。
-    // 4. 未合并或结果接近零向量的顶点回退原始法线，兜底防御坏法线。
+    // 5. 未合并或结果接近零向量的顶点回退原始法线，兜底防御坏法线。
+
+    /// <summary>
+    /// 计算夹角加权平滑法线：第一遍按三角形向空间哈希格子累积"顶点角 × 面法线"贡献，
+    /// 第二遍逐顶点在球形邻域内按"距离 + 法线夹角"过滤求和；未合并或零向量回退原始法线。
+    /// </summary>
+    /// <param name="mesh">源网格；法线缺失或无三角形数据时返回 null。</param>
+    /// <param name="angleThreshold">法线夹角阈值（度），越大合并越多、描边越平滑。</param>
+    /// <param name="mergeDistance">合并半径（米）；0 时退化为同位置顶点合并。</param>
+    /// <returns>与 mesh.vertices 等长的平滑法线数组；数据不完整时返回 null。</returns>
     private static Vector3[] ComputeAverageNormals(Mesh mesh, float angleThreshold, float mergeDistance)
     {
         Vector3[] verts = mesh.vertices;
         Vector3[] norms = mesh.normals;
+        int[] tris = mesh.triangles;
         if (norms == null || norms.Length != verts.Length)
         {
             Debug.LogError($"[AverageNormalTool] {mesh.name} 没有法线数据");
             return null;
         }
         if (verts.Length == 0) return new Vector3[0];
+        if (tris == null || tris.Length == 0)
+        {
+            Debug.LogError($"[AverageNormalTool] {mesh.name} 没有三角形数据");
+            return null;
+        }
 
         // 法线夹角阈值（度）：越大合并越多、描边越平滑；调小则更保守保留硬边。
         float cosThreshold = Mathf.Cos(angleThreshold * Mathf.Deg2Rad);
 
-        // 格边长 = 合并距离（保证 27 邻域覆盖半径内全部顶点）；合并半径 0 时用最小格防除零。
+        // 格边长 = 合并距离（保证 27 邻域覆盖半径内全部贡献）；合并半径 0 时用最小格防除零。
         float cellSize = Mathf.Max(mergeDistance, 1e-5f);
         float sqRadius = mergeDistance * mergeDistance;
 
-        // 空间哈希：格子 → 该格子内的顶点下标
-        var grid = new Dictionary<Vector3Int, List<int>>(verts.Length);
-        for (int i = 0; i < verts.Length; i++)
+        // 第一遍：遍历三角形，把"顶点角 × 面法线"贡献写入三个顶点角所在的空间哈希格子。
+        var grid = new Dictionary<Vector3Int, List<Contribution>>(verts.Length);
+        for (int t = 0; t < tris.Length; t += 3)
         {
-            var key = GridKey(verts[i], cellSize);
-            if (!grid.TryGetValue(key, out var list))
-            {
-                list = new List<int>(4);
-                grid[key] = list;
-            }
-            list.Add(i);
+            Vector3 a = verts[tris[t]];
+            Vector3 b = verts[tris[t + 1]];
+            Vector3 c = verts[tris[t + 2]];
+
+            Vector3 cross = Vector3.Cross(b - a, c - a);
+            float crossMag = cross.magnitude;
+            if (crossMag < 1e-8f) continue; // 退化三角形（零面积/共线），无法线可贡献
+            Vector3 faceNormal = cross / crossMag;
+
+            // 顶点角 = 该顶点两条边的夹角，衡量该面在顶点周围张开的跨度。
+            float angleA = CornerAngle(b - a, c - a);
+            float angleB = CornerAngle(a - b, c - b);
+            float angleC = CornerAngle(a - c, b - c);
+
+            AddContribution(grid, a, angleA, faceNormal, cellSize);
+            AddContribution(grid, b, angleB, faceNormal, cellSize);
+            AddContribution(grid, c, angleC, faceNormal, cellSize);
         }
 
+        // 第二遍：逐顶点在球形邻域内过滤求和。顶点自身接触的三角形贡献落点距其
+        // 位置为 0，天然包含在内，无需旧版的"含自身求和"。
         var result = new Vector3[verts.Length];
         for (int i = 0; i < verts.Length; i++)
         {
             Vector3 pos = verts[i];
             Vector3 normal = norms[i];
             Vector3 sum = Vector3.zero;
-            int count = 0;
+            bool merged = false;
 
             // 遍历自身所在格子 + 周围 26 个邻格
             var center = GridKey(pos, cellSize);
@@ -336,23 +366,65 @@ public class AverageNormalTool
                 if (!grid.TryGetValue(new Vector3Int(gx, gy, gz), out var cell)) continue;
                 for (int k = 0; k < cell.Count; k++)
                 {
-                    int j = cell[k];
-                    if (i == j) continue;
-                    // 距离 ≤ 合并半径 且 法线夹角 < 阈值 才合并
-                    if ((verts[j] - pos).sqrMagnitude > sqRadius) continue;
-                    if (Vector3.Dot(normal, norms[j]) < cosThreshold) continue;
-                    sum += norms[j];
-                    count++;
+                    Contribution c = cell[k];
+                    // 距离 ≤ 合并半径 且 面法线与自身夹角 < 阈值 才合并
+                    if ((c.pos - pos).sqrMagnitude > sqRadius) continue;
+                    if (Vector3.Dot(normal, c.normal) < cosThreshold) continue;
+                    sum += c.angle * c.normal;
+                    merged = true;
                 }
             }
 
-            // 含自身求和再归一化；未合并或结果接近零向量 → 回退原始法线
-            if (count > 0 && (sum + normal).sqrMagnitude > 1e-6f)
-                result[i] = (sum + normal).normalized;
+            // 未合并或结果接近零向量 → 回退原始法线
+            if (merged && sum.sqrMagnitude > 1e-6f)
+                result[i] = sum.normalized;
             else
                 result[i] = normal;
         }
         return result;
+    }
+
+    /// <summary>
+    /// 顶点角：两条边单位化后夹角的反余弦；退化边（长度近零）返回 0，不产生贡献。
+    /// </summary>
+    /// <param name="e1">从顶点出发的第一条边向量。</param>
+    /// <param name="e2">从顶点出发的第二条边向量。</param>
+    /// <returns>夹角弧度（0 ~ PI）；任一边退化时返回 0。</returns>
+    private static float CornerAngle(Vector3 e1, Vector3 e2)
+    {
+        float mag1 = e1.magnitude;
+        float mag2 = e2.magnitude;
+        if (mag1 < 1e-8f || mag2 < 1e-8f) return 0f;
+        float cosAngle = Vector3.Dot(e1 / mag1, e2 / mag2);
+        return Mathf.Acos(Mathf.Clamp(cosAngle, -1f, 1f));
+    }
+
+    /// <summary>
+    /// 向空间哈希格子追加一条"顶点角 × 面法线"贡献；零夹角（退化顶点）无意义，直接跳过。
+    /// </summary>
+    /// <param name="grid">空间哈希：格子 → 贡献列表。</param>
+    /// <param name="pos">贡献顶点位置（第二遍距离判定用）。</param>
+    /// <param name="angle">顶点角弧度。</param>
+    /// <param name="normal">已单位化的面法线。</param>
+    /// <param name="cellSize">格边长（= 合并距离）。</param>
+    private static void AddContribution(Dictionary<Vector3Int, List<Contribution>> grid, Vector3 pos, float angle, Vector3 normal, float cellSize)
+    {
+        if (angle <= 0f) return;
+        var key = GridKey(pos, cellSize);
+        if (!grid.TryGetValue(key, out var list))
+        {
+            list = new List<Contribution>(8);
+            grid[key] = list;
+        }
+        list.Add(new Contribution { pos = pos, angle = angle, normal = normal });
+    }
+
+    // 一条夹角加权贡献：贡献顶点位置（距离判定）+ 顶点角（权重）× 面法线（方向）。
+    private struct Contribution
+    {
+        public Vector3 pos;
+        public float angle;
+        public Vector3 normal;
     }
 
     // ─────────────────────────── 尖端收边因子（法线离散度 / 曲率） ───────────────────────────

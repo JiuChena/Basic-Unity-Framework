@@ -6,6 +6,7 @@ Shader "Toony/General Toony Shader"
         _Color("主色", Color) = (1,1,1,1)
         _OcclusionMap("遮蔽贴图", 2D) = "black" {}
         _OcclusionMapScale("遮蔽强度", Range(0, 1)) = 1
+        _OcclusionThreshold("遮蔽过滤阈值(0=关闭过滤)", Range(0, 1)) = 0
 
         _NormalMap("法线贴图", 2D) = "bump" {}
         _NormalMapScale("法线强度", Range(0, 1)) = 1
@@ -16,6 +17,8 @@ Shader "Toony/General Toony Shader"
         _DiffuseSmooth("漫反射柔化", Range(0, 1)) = 0.2
         _HColor("亮面色", Color) = (1,1,1,1)
         _ShadowColor("阴影色", Color) = (0,0,0,1)
+        [Toggle(_USESHADOWBASEMIX_ON)] _UseShadowBaseMix("阴影色混合贴图颜色", Float) = 0
+        _ShadowBaseMix("阴影色混合贴图颜色强度", Range(0, 1)) = 0.5
         _IndirectlightScale("间接光强度", Range(0, 1)) = 0.4
         _AmbientScale("Ambient全局光照强度", Range(0, 2)) = 1
 
@@ -23,6 +26,15 @@ Shader "Toony/General Toony Shader"
         _AdditionalLightsScale("附加光强度", Range(0, 1)) = 1
 
         _SpecularMap("高光贴图", 2D) = "white" {}
+        [Toggle(_USEHAIRDIRECTIONHIGHLIGHT_ON)] _UseHairDirectionHighlight("头发各向异性高光(切线场试验)", Float) = 0
+        _HairDirectionHighlightThreshold("头发方向匹配阈值", Range(-1, 1)) = 0.82
+        _HairDirectionHighlightSoftness("头发方向高光柔化", Range(0.001, 0.25)) = 0.08
+        _HairDirectionHighlightIntensity("头发方向高光强度", Range(0, 5)) = 1
+        _HairDirectionHighlightAnisotropy("头发高光各向异性指数", Range(1, 64)) = 16
+        _HairDirectionHighlightTangentBlend("贴图切线混合", Range(0, 1)) = 1
+        _HairDirectionHighlightLobeOffset("高光带方向偏移", Range(-0.5, 0.5)) = 0
+        _HairDirectionHighlightAlphaWeight("Alpha响应权重", Range(0, 1)) = 0.5
+        _HairDirectionHighlightAlphaPower("Alpha响应曲线", Range(0.25, 4)) = 1
         _SpecularColor("高光颜色", Color) = (1,1,1,1)
         _SpecularScale("高光强度", Range(0, 1)) = 0.5
         _SpecularSize("高光大小", Range(0, 1)) = 0.5
@@ -33,6 +45,13 @@ Shader "Toony/General Toony Shader"
         [Toggle(_USEADDITIONALLIGHTSPECULAR_ON)] _UseAdditionalLightsSpecular("附加光高光", Float) = 1
         [Toggle(_USEENVIRONMENTREFLETION_ON)] _UseEnvironmentReflection("环境反射", Float) = 0
         _EnvReflectionStrength("环境反射强度", Range(0, 1)) = 0.5
+        [Toggle(_USEMETAL_ON)] _UseMetal("金属材质", Float) = 0
+        [Toggle(_USEEMISSION_ON)] _UseEmission("自发光", Float) = 0
+        [HDR] _EmissionColor("自发光颜色", Color) = (0,0,0,1)
+        _EmissionMap("自发光贴图", 2D) = "white" {}
+        _EmissionIntensity("自发光强度", Range(0, 5)) = 1
+
+        _Contrast("对比度", Range(0, 2)) = 1
 
         _RimColor("边缘光色", Color) = (1,1,1,1)
         _RimColorMask("边缘光遮罩", Color) = (1,1,1,1)
@@ -149,6 +168,9 @@ Shader "Toony/General Toony Shader"
                 worldPos += normalWS * (0.01 * _OutlineWidth * lerpResult * lerp(1.0, v.color.a, _TipTaper));
                 o.pos = TransformWorldToHClip(worldPos);
 #endif
+#else
+                // 描边关闭：所有顶点塌缩到剪裁空间原点，零面积三角形不产生任何片元
+                o.pos = float4(0, 0, 0, 1);
 #endif
                 
                 return o;
@@ -180,9 +202,13 @@ Shader "Toony/General Toony Shader"
             #pragma multi_compile_fragment _ _SHADOWS_SOFT
             #pragma shader_feature_local _USEADDITIONALLIGHTDIFFUSE_ON
             #pragma shader_feature_local _USESPECULAR_ON
+            #pragma shader_feature_local _USEHAIRDIRECTIONHIGHLIGHT_ON
             #pragma shader_feature_local _USEADDITIONALLIGHTSPECULAR_ON
             #pragma shader_feature_local _USEENVIRONMENTREFLETION_ON
             #pragma shader_feature_local _USERIMLIGHT_ON
+            #pragma shader_feature_local _USEMETAL_ON
+            #pragma shader_feature_local _USEEMISSION_ON
+            #pragma shader_feature_local _USESHADOWBASEMIX_ON
             
             CBUFFER_START(UnityPerMaterial)
             //主纹理
@@ -190,6 +216,7 @@ Shader "Toony/General Toony Shader"
             half4 _OcclusionMap_ST;
             float4 _Color;
             float _OcclusionMapScale;
+            float _OcclusionThreshold;
             //法线
             half4 _NormalMap_ST;
             float _NormalMapScale;
@@ -200,6 +227,7 @@ Shader "Toony/General Toony Shader"
             half _DiffuseWrap;
             float4 _HColor;
             float4 _ShadowColor;
+            float _ShadowBaseMix;
             float _IndirectlightScale;
             float _AmbientScale;
             //附加光源
@@ -207,12 +235,26 @@ Shader "Toony/General Toony Shader"
             //高光
             half4 _SpecularMap_ST;
             half4 _SpecularColor;
+            float _HairDirectionHighlightThreshold;
+            float _HairDirectionHighlightSoftness;
+            float _HairDirectionHighlightIntensity;
+            float _HairDirectionHighlightAnisotropy;
+            float _HairDirectionHighlightTangentBlend;
+            float _HairDirectionHighlightLobeOffset;
+            float _HairDirectionHighlightAlphaWeight;
+            float _HairDirectionHighlightAlphaPower;
             float _SpecularScale;
             float _SpecularSize;
             float _SpecularPosterizeSteps;
             float _SpecularFaloff;
             float _AdditionalSpecularFaloff;
             float _EnvReflectionStrength;
+            //自发光
+            half4 _EmissionColor;
+            float _EmissionIntensity;
+            half4 _EmissionMap_ST;
+            //对比度
+            float _Contrast;
             //边缘光
             half4 _RimColor;
             half4 _RimColorMask;
@@ -224,6 +266,7 @@ Shader "Toony/General Toony Shader"
             sampler2D _OcclusionMap;
             sampler2D _NormalMap;
             sampler2D _SpecularMap;
+            sampler2D _EmissionMap;
 
             struct VertexInput
             {
@@ -318,15 +361,29 @@ Shader "Toony/General Toony Shader"
                 half rampStep = saturate((bandIdx + bandBlend) / (steps - 1));
                 rampStep *= lightShadowAttenuation;
                 
+                //主纹理与遮蔽提前采样（阴影色混合需要两者）
+                half4 mainTextureSample = tex2D(_Albedo, uv);
+                half occValue = tex2D(_OcclusionMap, uv).g;
+                // 采样值减去过滤阈值得到遮蔽阴影强度（sat 截断）；阈值=0 时退化为原连续渐变
+                half occShadow = saturate(occValue - _OcclusionThreshold);
+
                 //计算暗部阴影色、根据当前亮度得出该像素应该是算出的暗部阴影色还是亮部色进行插值
                 half shadowIntensity = _ShadowColor.a;
                 half3 shadowColorMixed = lerp(_HColor.rgb, _ShadowColor.rgb, shadowIntensity);
+                // 阴影色混合贴图颜色：阴影着色tint与贴图颜色插值（阴影色权重 (1-w)，贴图色权重 w）
+                #ifdef _USESHADOWBASEMIX_ON
+                shadowColorMixed = lerp(shadowColorMixed, mainTextureSample.rgb, _ShadowBaseMix);
+                #endif
                 half3 mainDiffuse = lerp(shadowColorMixed, _HColor.rgb, rampStep) * _MainLightColor.rgb * _MainLightDiffuseScale;
+                //金属：漫反射减弱，能量转移到高光/环境反射
+                #ifdef _USEMETAL_ON
+                mainDiffuse *= 0.6;
+                #endif
                 
-                //主纹理取色、主纹理Mask遮罩取遮蔽（lerp(1, 1 - mask.g, scale)）、混合主纹理色
-                half4 mainTextureSample = tex2D(_Albedo, uv);
-                half occlusion = lerp(1, 1 - tex2D(_OcclusionMap, uv).g, _OcclusionMapScale);
-                half4 mainTexture = (_Color * mainTextureSample * half4(occlusion, occlusion, occlusion, 1));
+                //遮蔽遮罩是标量阴影遮罩：按遮蔽强度把贴图色从亮色插向阴影着色版（阴影色已含贴图颜色混合）
+                half occFactor = saturate(occShadow * _OcclusionMapScale);
+                half3 shadowedTexture = mainTextureSample.rgb * shadowColorMixed;
+                half4 mainTexture = _Color * half4(lerp(mainTextureSample.rgb, shadowedTexture, occFactor), 1);
                 
                 //AO全局光照（环境光、光照探针等）
                 half3 bakedGI = SampleSH(worldNormal);
@@ -368,17 +425,41 @@ Shader "Toony/General Toony Shader"
                 
                 //高光主光计算、高光主光色阶化处理
                 float3 worldViewDir = normalize(_WorldSpaceCameraPos.xyz - o.worldPosition);
-                half smoothness = tex2D(_SpecularMap, uv).a * _SpecularScale;
-                
+                half4 specularMapSample = tex2D(_SpecularMap, uv);
+                half smoothness = (specularMapSample.a - 0.2) * _SpecularScale;
+
+                // 头发各向异性高光：把贴图方向投影到表面切平面，得到每个发簇的高光切线。
+                #ifdef _USEHAIRDIRECTIONHIGHLIGHT_ON
+                half3 hairDirectionOS = normalize(specularMapSample.rgb * 2.0 - 1.0);
+                half3 hairDirectionWS = normalize(TransformObjectToWorldDir(hairDirectionOS));
+                half3 projectedTangent = hairDirectionWS - worldNormal * dot(hairDirectionWS, worldNormal);
+                half projectedLength = length(projectedTangent);
+                half projectionValid = step(0.0001, projectedLength);
+                projectedTangent /= max(projectedLength, 0.0001);
+                half3 fallbackTangent = normalize(o.worldTangent);
+                half tangentBlend = saturate(_HairDirectionHighlightTangentBlend) * projectionValid;
+                half3 hairTangentWS = normalize(lerp(fallbackTangent, projectedTangent, tangentBlend));
+                half3 mainHalfDir = normalize(mainLight.direction + worldViewDir);
+                half tangentDistance = abs(dot(hairTangentWS, mainHalfDir) - _HairDirectionHighlightLobeOffset);
+                half tangentMatch = saturate(1.0 - tangentDistance);
+                half anisotropicLobe = pow(tangentMatch, _HairDirectionHighlightAnisotropy);
+                half directionHighlight = smoothstep(_HairDirectionHighlightThreshold, _HairDirectionHighlightThreshold + _HairDirectionHighlightSoftness, anisotropicLobe);
+                half alphaMask = pow(saturate(specularMapSample.a * 2.0), _HairDirectionHighlightAlphaPower);
+                half alphaResponse = lerp(1.0, alphaMask, _HairDirectionHighlightAlphaWeight);
+                half3 hairDirectionHighlight = directionHighlight * alphaResponse * _HairDirectionHighlightIntensity * mainLight.color * lightShadowAttenuation * _SpecularColor.rgb;
+                #else
+                half3 hairDirectionHighlight = 0;
+                #endif
+
                 #ifdef _USESPECULAR_ON
                 half3 mainLightDir = normalize(GetMainLight().direction);
                 half3 halfDir = normalize(mainLightDir + worldViewDir);
                 half NH0 = saturate(dot(worldNormal, halfDir));
-                
+
                 half specularSize = clamp(1 - _SpecularSize * smoothness, 0.001, 0.999);
-                
+
                 NH0 = saturate(NH0 * (1.0 / (1 - specularSize)) - (specularSize / (1 - specularSize)));
-                
+
                 half specularPosterized = PosterizeFaloff(NH0, _SpecularPosterizeSteps, _SpecularFaloff);
                 #else
                 half specularPosterized = 0;
@@ -415,11 +496,20 @@ Shader "Toony/General Toony Shader"
                 
                 //高光组装
                 #ifdef _USESPECULAR_ON
-                half3 specularColor = (specularPosterized * _MainLightColor.rgb + additionalSpecular) * _SpecularColor.rgb + envReflection;
+                half3 specTint = _SpecularColor.rgb;
+                #ifdef _USEMETAL_ON
+                specTint = mainTexture.rgb; // 金属高光着色=物体色
+                #endif
+                half3 specularColor = (specularPosterized * _MainLightColor.rgb + additionalSpecular) * specTint + envReflection;
                 #else
                 half3 specularColor = envReflection;
                 #endif
-                
+                specularColor += hairDirectionHighlight;
+                //金属：额外环境反射加成
+                #ifdef _USEMETAL_ON
+                specularColor += envReflection * 0.5;
+                #endif
+
                 //边缘光
                 #ifdef _USERIMLIGHT_ON
                 half ndv = 1 - max(0, dot( normalize( worldNormal ), worldViewDir ));
@@ -428,10 +518,17 @@ Shader "Toony/General Toony Shader"
                 #else
                 half3 rimFinal = 0;
                 #endif
-                
+
                 //最终输出
                 half4 litColorFinal = half4(finalDiffuse + specularColor + rimFinal, 1);
-                
+                //自发光：贴图 × 颜色(HDR) × 强度
+                #ifdef _USEEMISSION_ON
+                litColorFinal.rgb += tex2D(_EmissionMap, uv).rgb * _EmissionColor.rgb * _EmissionIntensity;
+                #endif
+
+                //总对比度：作用于最终片元结果，以0.5灰为轴拉伸（1=不变，>1增强，<1减弱）
+                litColorFinal.rgb = lerp(half3(0.5, 0.5, 0.5), litColorFinal.rgb, _Contrast);
+
                 return litColorFinal;
             }
             

@@ -180,7 +180,7 @@ Material:
     - _Parallax: 0.005
     - _ParallaxMaskEdge: 0.285
     - _ParallaxMaskEdgeOffset: 0.1
-    - _ParallaxScale: 0.1
+    - _ParallaxScale: 0.08
     - _QueueOffset: 0
     - _ReceiveShadows: 1
     - _RimMax: 1

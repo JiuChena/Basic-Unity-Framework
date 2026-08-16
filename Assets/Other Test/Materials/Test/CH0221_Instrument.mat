@@ -12,15 +12,17 @@ Material:
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords:
-  - _OUTLINEMODE_VIEWSPACE
+  - _OUTLINEMODE_WORLDSPACE
   - _USEADDITIONALLIGHTDIFFUSE_ON
   - _USEADDITIONALLIGHTSPECULAR_ON
   - _USEOUTLINE_ON
   - _USERIMLIGHT_ON
+  - _USESHADOWBASEMIX_ON
   m_InvalidKeywords:
   - _DIFFUSEMODE_STEP
   - _OUTLINETYPE_NORMAL
   - _RIMSPLITCOLOR_USESECONDCOLOR
+  - _SPECMAPMODE_INTENSITYFILTER
   - _USEADDITIONALLIGHTSDIFFUSE_ON
   - _USELIGHTRAMP_STEP
   - _USEOUTLINENORMALMAP_ON
@@ -133,6 +135,7 @@ Material:
     - _BumpScale: 1
     - _ClearCoatMask: 0
     - _ClearCoatSmoothness: 0
+    - _Contrast: 1.05
     - _Cull: 2
     - _Cutoff: 0.5
     - _DetailAlbedoMapScale: 1
@@ -141,33 +144,45 @@ Material:
     - _DiffusePosterizeOffset: -0.27
     - _DiffusePosterizePower: 1
     - _DiffusePosterizeSteps: 3.19
-    - _DiffuseSmooth: 0.5
+    - _DiffuseSmooth: 0.15
     - _DiffuseSteps: 3
     - _DiffuseWrap: 0.3
     - _DstBlend: 0
     - _DstBlendAlpha: 0
+    - _EmissionIntensity: 1
     - _EnvReflectionStrength: 0.5
     - _EnvironmentReflections: 1
     - _GlossMapScale: 1
     - _Glossiness: 1
     - _GlossyReflections: 1
+    - _HairDirectionHighlightAlphaCutoff: 0.35
+    - _HairDirectionHighlightAlphaPower: 1
+    - _HairDirectionHighlightAlphaWeight: 0.5
+    - _HairDirectionHighlightAnisotropy: 16
+    - _HairDirectionHighlightEnvironmentRoughness: 0.5
+    - _HairDirectionHighlightIntensity: 1
+    - _HairDirectionHighlightLobeOffset: 0
+    - _HairDirectionHighlightSoftness: 0.08
+    - _HairDirectionHighlightTangentBlend: 1
+    - _HairDirectionHighlightThreshold: 0.82
     - _IndirectLightStrength: 0.6
     - _IndirectlightScale: 0.4
     - _LightRampOffset: 0
-    - _MainLightDiffuseScale: 1
+    - _MainLightDiffuseScale: 1.25
     - _MainLightIntesity: 1
     - _Metallic: 0
     - _Mode: 0
     - _NormalMapScale: 0
     - _NormalMapStrength: 1
-    - _OcclusionMapScale: 0.4
+    - _OcclusionMapScale: 1
     - _OcclusionStrength: 0.3
+    - _OcclusionThreshold: 0.5
     - _OutlineMaxScale: 10
-    - _OutlineMode: 0
+    - _OutlineMode: 1
     - _OutlinePosBlend: 0
     - _OutlineTextureStrength: 0.6
     - _OutlineType: 0
-    - _OutlineWidth: 0.15
+    - _OutlineWidth: 0.3
     - _OutlineZOffset: 0
     - _Parallax: 0.02
     - _QueueOffset: 0
@@ -180,9 +195,23 @@ Material:
     - _RimSmoothness: 0.5
     - _RimSplitColor: 2
     - _RimThickness: 1
+    - _RingIntensity: 1
+    - _RingMaskWeight: 0
+    - _RingNormalBlend: 0.3
+    - _RingOffset: 0
+    - _RingPower: 15
+    - _ShadowBaseMix: 0.75
     - _Smoothness: 0.4472136
     - _SmoothnessMultiplier: 1
     - _SmoothnessTextureChannel: 0
+    - _SpecMapHighlightIntensity: 1
+    - _SpecMapHighlightMask: 0
+    - _SpecMapHighlightSoftness: 0.25
+    - _SpecMapHighlightThreshold: 0.5
+    - _SpecMapMode: 0
+    - _SpecMapNormalBlend: 1
+    - _SpecMapNormalDebug: 0
+    - _SpecMapPhaseOffset: 0
     - _SpecularFaloff: 0.2
     - _SpecularHighlights: 1
     - _SpecularPosterizeSteps: 3
@@ -202,10 +231,17 @@ Material:
     - _UseEmission: 0
     - _UseEnvironmentReflection: 0
     - _UseEnvironmentRefletion: 0
+    - _UseHairDirectionHighlight: 0
+    - _UseHairRing: 0
     - _UseLightRamp: 0
+    - _UseMetal: 0
     - _UseOutline: 1
     - _UseOutlineNormalMap: 1
     - _UseRimLight: 1
+    - _UseShadowBaseMix: 1
+    - _UseSpecMapHighlight: 0
+    - _UseSpecMapNormal: 0
+    - _UseSpecMapSpecular: 0
     - _UseSpecular: 0
     - _WorkflowMode: 1
     - _XRayEnhancement: 0.62
@@ -217,13 +253,18 @@ Material:
     - _Color: {r: 1, g: 1, b: 1, a: 1}
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
     - _HColor: {r: 1, g: 1, b: 1, a: 1}
-    - _OutlineColor: {r: 0, g: 0, b: 0, a: 0}
+    - _OutlineColor: {r: 0.4811321, g: 0.4309007, b: 0.29276434, a: 0}
     - _OutlineWidthParams: {r: 0, g: 20, b: 0.8, a: 1.2}
     - _RimColor: {r: 1, g: 1, b: 1, a: 1}
-    - _RimColorMask: {r: 0.5031446, g: 0.5031446, b: 0.5031446, a: 1}
+    - _RimColorMask: {r: 1, g: 1, b: 1, a: 1}
     - _RimShadowColor: {r: 1, g: 1, b: 1, a: 0}
-    - _ShadowColor: {r: 0.754717, g: 0.754717, b: 0.754717, a: 1}
+    - _RingColor: {r: 1, g: 1, b: 1, a: 1}
+    - _ShadowColor: {r: 0, g: 0, b: 0, a: 1}
     - _SpecColor: {r: 0.19999996, g: 0.19999996, b: 0.19999996, a: 1}
+    - _SpecMapEnvDir1: {r: 0.4, g: 0.7, b: 0.8, a: 0}
+    - _SpecMapEnvDir2: {r: -0.4, g: 0.7, b: 0.8, a: 0}
+    - _SpecMapEnvDir3: {r: 0, g: 0.9, b: 0.5, a: 0}
+    - _SpecMapHighlightColor: {r: 1, g: 1, b: 1, a: 1}
     - _SpecularColor: {r: 0.64779866, g: 0.64779866, b: 0.64779866, a: 1}
     - _XRayColor: {r: 1, g: 0, b: 0, a: 1}
   m_BuildTextureStacks: []

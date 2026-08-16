@@ -12,6 +12,7 @@ Material:
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords:
+  - _OUTLINEMODE_VIEWSPACE
   - _USEADDITIONALLIGHTDIFFUSE_ON
   - _USEADDITIONALLIGHTSPECULAR_ON
   - _USEOUTLINE_ON
@@ -132,6 +133,7 @@ Material:
     - _BumpScale: 1
     - _ClearCoatMask: 0
     - _ClearCoatSmoothness: 0
+    - _Contrast: 1
     - _Cull: 2
     - _Cutoff: 0.5
     - _DetailAlbedoMapScale: 1
@@ -160,10 +162,14 @@ Material:
     - _NormalMapStrength: 1
     - _OcclusionMapScale: 1
     - _OcclusionStrength: 0.3
+    - _OcclusionThreshold: 0
     - _OutlineMaxScale: 20
+    - _OutlineMode: 0
+    - _OutlinePosBlend: 0
     - _OutlineTextureStrength: 0.6
     - _OutlineType: 0
     - _OutlineWidth: 0.5
+    - _OutlineZOffset: 1
     - _Parallax: 0.02
     - _QueueOffset: 0
     - _RampDiffuseTextureLoaded: 0
@@ -175,6 +181,7 @@ Material:
     - _RimSmoothness: 0.5
     - _RimSplitColor: 2
     - _RimThickness: 1
+    - _ShadowBaseMix: 0.5
     - _Smoothness: 0
     - _SmoothnessMultiplier: 1
     - _SmoothnessTextureChannel: 0
@@ -190,6 +197,7 @@ Material:
     - _Strength: 0
     - _Surface: 0
     - _Thicnkess: 0.003
+    - _TipTaper: 0
     - _UVSec: 0
     - _UseAdditionalLightsDiffuse: 1
     - _UseAdditionalLightsSpecular: 1
@@ -197,9 +205,11 @@ Material:
     - _UseEnvironmentReflection: 0
     - _UseEnvironmentRefletion: 0
     - _UseLightRamp: 2
+    - _UseMetal: 0
     - _UseOutline: 1
     - _UseOutlineNormalMap: 1
     - _UseRimLight: 1
+    - _UseShadowBaseMix: 0
     - _UseSpecular: 1
     - _WorkflowMode: 1
     - _XRayEnhancement: 0.62
@@ -212,6 +222,7 @@ Material:
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
     - _HColor: {r: 1, g: 1, b: 1, a: 1}
     - _OutlineColor: {r: 0, g: 0, b: 0, a: 0}
+    - _OutlineWidthParams: {r: 0, g: 20, b: 0.8, a: 1.2}
     - _RimColor: {r: 1, g: 1, b: 1, a: 1}
     - _RimColorMask: {r: 1, g: 1, b: 1, a: 1}
     - _RimShadowColor: {r: 1, g: 1, b: 1, a: 0}

@@ -50,6 +50,7 @@ public class GeneralToonyShadeEditor : ShaderGUI
     MaterialProperty albedoColor = null;
     MaterialProperty occlusionMap = null;
     MaterialProperty occlusionMapScale = null;
+    MaterialProperty occlusionThreshold = null;
     MaterialProperty normalMap = null;
     MaterialProperty normalMapScale = null;
     MaterialProperty indirectLightScale = null;
@@ -62,6 +63,8 @@ public class GeneralToonyShadeEditor : ShaderGUI
     MaterialProperty diffuseWrap = null;
     MaterialProperty highlightColor = null;
     MaterialProperty shadowColor = null;
+    MaterialProperty useShadowBaseMix = null;
+    MaterialProperty shadowBaseMix = null;
 
     //附加光漫反射开关及其参数
     MaterialProperty useAdditionalLightsDiffuse = null;
@@ -69,6 +72,15 @@ public class GeneralToonyShadeEditor : ShaderGUI
 
     //高光区
     MaterialProperty specularMap = null;
+    MaterialProperty useHairDirectionHighlight = null;
+    MaterialProperty hairDirectionHighlightThreshold = null;
+    MaterialProperty hairDirectionHighlightSoftness = null;
+    MaterialProperty hairDirectionHighlightIntensity = null;
+    MaterialProperty hairDirectionHighlightAnisotropy = null;
+    MaterialProperty hairDirectionHighlightTangentBlend = null;
+    MaterialProperty hairDirectionHighlightLobeOffset = null;
+    MaterialProperty hairDirectionHighlightAlphaWeight = null;
+    MaterialProperty hairDirectionHighlightAlphaPower = null;
     MaterialProperty specularColor = null;
     MaterialProperty specularScale = null;
     MaterialProperty specularSize = null;
@@ -79,6 +91,17 @@ public class GeneralToonyShadeEditor : ShaderGUI
     MaterialProperty useAdditionalLightsSpecular = null;
     MaterialProperty useEnvironmentReflection = null;
     MaterialProperty envReflectionStrength = null;
+
+    //金属/自发光区
+    MaterialProperty useMetal = null;
+    MaterialProperty useEmission = null;
+    MaterialProperty emissionColor = null;
+    MaterialProperty emissionMap = null;
+    MaterialProperty emissionIntensity = null;
+
+    //对比度区
+    MaterialProperty contrast = null;
+
 
     //边缘光区
     MaterialProperty rimColor = null;
@@ -118,6 +141,7 @@ public class GeneralToonyShadeEditor : ShaderGUI
         albedoColor = FindProperty("_Color", props);
         occlusionMap = FindProperty("_OcclusionMap", props);
         occlusionMapScale = FindProperty("_OcclusionMapScale", props);
+        occlusionThreshold = FindProperty("_OcclusionThreshold", props);
         normalMap = FindProperty("_NormalMap", props);
         normalMapScale = FindProperty("_NormalMapScale", props);
         indirectLightScale = FindProperty("_IndirectlightScale", props);
@@ -129,11 +153,22 @@ public class GeneralToonyShadeEditor : ShaderGUI
         diffuseWrap = FindProperty("_DiffuseWrap", props);
         highlightColor = FindProperty("_HColor", props);
         shadowColor = FindProperty("_ShadowColor", props);
+        useShadowBaseMix = FindProperty("_UseShadowBaseMix", props);
+        shadowBaseMix = FindProperty("_ShadowBaseMix", props);
 
         useAdditionalLightsDiffuse = FindProperty("_UseAdditionalLightsDiffuse", props);
         additionalLightsScale = FindProperty("_AdditionalLightsScale", props);
 
         specularMap = FindProperty("_SpecularMap", props);
+        useHairDirectionHighlight = FindProperty("_UseHairDirectionHighlight", props);
+        hairDirectionHighlightThreshold = FindProperty("_HairDirectionHighlightThreshold", props);
+        hairDirectionHighlightSoftness = FindProperty("_HairDirectionHighlightSoftness", props);
+        hairDirectionHighlightIntensity = FindProperty("_HairDirectionHighlightIntensity", props);
+        hairDirectionHighlightAnisotropy = FindProperty("_HairDirectionHighlightAnisotropy", props);
+        hairDirectionHighlightTangentBlend = FindProperty("_HairDirectionHighlightTangentBlend", props);
+        hairDirectionHighlightLobeOffset = FindProperty("_HairDirectionHighlightLobeOffset", props);
+        hairDirectionHighlightAlphaWeight = FindProperty("_HairDirectionHighlightAlphaWeight", props);
+        hairDirectionHighlightAlphaPower = FindProperty("_HairDirectionHighlightAlphaPower", props);
         specularColor = FindProperty("_SpecularColor", props);
         specularScale = FindProperty("_SpecularScale", props);
         specularSize = FindProperty("_SpecularSize", props);
@@ -144,6 +179,15 @@ public class GeneralToonyShadeEditor : ShaderGUI
         useAdditionalLightsSpecular = FindProperty("_UseAdditionalLightsSpecular", props);
         useEnvironmentReflection = FindProperty("_UseEnvironmentReflection", props);
         envReflectionStrength = FindProperty("_EnvReflectionStrength", props);
+
+        useMetal = FindProperty("_UseMetal", props);
+        useEmission = FindProperty("_UseEmission", props);
+        emissionColor = FindProperty("_EmissionColor", props);
+        emissionMap = FindProperty("_EmissionMap", props);
+        emissionIntensity = FindProperty("_EmissionIntensity", props);
+
+        contrast = FindProperty("_Contrast", props);
+
 
         rimColor = FindProperty("_RimColor", props);
         rimColorMask = FindProperty("_RimColorMask", props);
@@ -177,7 +221,7 @@ public class GeneralToonyShadeEditor : ShaderGUI
     }
 
     /// <summary>
-    /// 按顺序绘制各分组：主纹理、卡通漫反射、高光、边缘光、描边、高级设置。
+    /// 按顺序绘制各分组：主纹理、卡通漫反射、高光、边缘光、描边、对比度、高级设置。
     /// </summary>
     private void ShaderPropertiesGUI()
     {
@@ -186,6 +230,7 @@ public class GeneralToonyShadeEditor : ShaderGUI
         SpecularEditor();
         RimEditor();
         OutlineEditor();
+        ContrastEditor();
         Advanced();
     }
 
@@ -227,7 +272,7 @@ public class GeneralToonyShadeEditor : ShaderGUI
     private void DrawToggleBoxScope(MaterialProperty header, List<MaterialProperty> props, string name = null)
     {
         EditorGUILayout.BeginVertical(BoxScopeStyle);
-        EditorGUILayout.Space(2);
+        EditorGUILayout.Space(7);
 
         DrawToggleHeader(header, name);
 
@@ -276,7 +321,7 @@ public class GeneralToonyShadeEditor : ShaderGUI
         m_MaterialEditor.ShaderProperty(prop, string.Empty);
 
         EditorGUILayout.EndHorizontal();
-        EditorGUILayout.Space();
+        EditorGUILayout.Space(2);
     }
 
     #endregion
@@ -299,6 +344,7 @@ public class GeneralToonyShadeEditor : ShaderGUI
         m_MaterialEditor.TexturePropertySingleLine(new GUIContent("Albedo"), albedoMap, albedoColor);
         m_MaterialEditor.TexturePropertySingleLine(new GUIContent("Normal Map"), normalMap, normalMapScale);
         m_MaterialEditor.TexturePropertySingleLine(new GUIContent("Occlusion Map"), occlusionMap, occlusionMapScale);
+        DrawProperty(occlusionThreshold);
         DrawProperty(indirectLightScale);
         DrawProperty(ambientScale);
 
@@ -319,19 +365,48 @@ public class GeneralToonyShadeEditor : ShaderGUI
         EditorGUILayout.BeginVertical(BoxScopeStyle);
         EditorGUILayout.Space(2);
 
-        DrawBoxSpace("Toon Shading",
+        // Toon Shading 板块：漫反射参数 + 附加光漫反射开关合并展示
+        EditorGUILayout.BeginVertical(BoxScopeStyle);
+        EditorGUILayout.Space(2);
+
+        GUILayout.Label("Toon Shading", ToonLabelStyle);
+
+        EditorGUILayout.BeginVertical(BoxScopeStyle);
+        EditorGUILayout.Space(2);
+
+        DrawProperty(diffuseSteps);
+        DrawProperty(diffuseSmooth);
+        DrawProperty(diffuseWrap);
+        DrawProperty(mainLightDiffuseScale);
+        DrawProperty(highlightColor);
+        DrawProperty(shadowColor);
+
+        // 阴影色混合贴图颜色：开关 + 混合度，并入 Toon Shading 板块
+        DrawToggleHeader(useShadowBaseMix, "Shadow Texture Mix");
+        if (!Mathf.Approximately(useShadowBaseMix.floatValue, 0f))
+        {
+            DrawProperty(shadowBaseMix);
+        }
+
+        // 附加光漫反射：开关 + 强度，并入 Toon Shading 板块
+        DrawToggleHeader(useAdditionalLightsDiffuse, "Additional Lights Diffuse");
+        if (!Mathf.Approximately(useAdditionalLightsDiffuse.floatValue, 0f))
+        {
+            DrawProperty(additionalLightsScale);
+        }
+
+        EditorGUILayout.Space(2);
+        EditorGUILayout.EndVertical();
+
+        EditorGUILayout.Space(2);
+        EditorGUILayout.EndVertical();
+
+        // 自发光开关
+        DrawToggleBoxScope(useEmission,
             new List<MaterialProperty>
             {
-                diffuseSteps, diffuseSmooth, diffuseWrap, mainLightDiffuseScale, highlightColor, shadowColor
-            });
-
-        EditorGUILayout.Space();
-
-        DrawToggleBoxScope(useAdditionalLightsDiffuse,
-            new List<MaterialProperty>
-            {
-                additionalLightsScale
-            }, "Additional Lights Diffuse");
+                emissionMap, emissionColor, emissionIntensity
+            }, "Emission");
 
         EditorGUILayout.Space(2);
         EditorGUILayout.EndVertical();
@@ -347,6 +422,15 @@ public class GeneralToonyShadeEditor : ShaderGUI
 
         GUILayout.Label("Specular Shading", ToonLabelStyle);
 
+        // 高光贴图放最前
+        EditorGUILayout.BeginVertical(BoxScopeStyle);
+        EditorGUILayout.Space(2);
+
+        m_MaterialEditor.TexturePropertySingleLine(new GUIContent("Specular Map"), specularMap, specularColor);
+
+        EditorGUILayout.Space(2);
+        EditorGUILayout.EndVertical();
+
         DrawToggleBoxScope(useSpecular,
             new List<MaterialProperty>
             {
@@ -361,13 +445,17 @@ public class GeneralToonyShadeEditor : ShaderGUI
                 envReflectionStrength
             }, "Environment Reflection");
 
-        EditorGUILayout.BeginVertical(BoxScopeStyle);
-        EditorGUILayout.Space(2);
+        // 金属材质开关
+        DrawToggleBoxScope(useMetal, new List<MaterialProperty>(), "Metal Material");
 
-        m_MaterialEditor.TexturePropertySingleLine(new GUIContent("Specular Map"), specularMap, specularColor);
-
-        EditorGUILayout.Space(2);
-        EditorGUILayout.EndVertical();
+        DrawToggleBoxScope(useHairDirectionHighlight,
+            new List<MaterialProperty>
+            {
+                hairDirectionHighlightThreshold, hairDirectionHighlightSoftness,
+                hairDirectionHighlightIntensity, hairDirectionHighlightAnisotropy,
+                hairDirectionHighlightTangentBlend, hairDirectionHighlightLobeOffset,
+                hairDirectionHighlightAlphaWeight, hairDirectionHighlightAlphaPower
+            }, "Anisotropic Sampling");
 
         EditorGUILayout.Space(2);
         EditorGUILayout.EndVertical();
@@ -431,6 +519,14 @@ public class GeneralToonyShadeEditor : ShaderGUI
 
         EditorGUILayout.Space(2);
         EditorGUILayout.EndVertical();
+    }
+
+    /// <summary>
+    /// 绘制对比度组：作用于最终片元输出的总对比度。
+    /// </summary>
+    private void ContrastEditor()
+    {
+        DrawBoxSpace("Contrast", new List<MaterialProperty> { contrast });
     }
 
     /// <summary>
