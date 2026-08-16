@@ -244,4 +244,5 @@ Shader "Toony/CharacterEyeMouth"
             ENDHLSL
         }
     }
+    CustomEditor "CharacterEyeMouthEditor"
 }

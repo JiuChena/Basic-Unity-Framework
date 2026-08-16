@@ -102,12 +102,19 @@ public class GeneralToonyShadeEditor : ShaderGUI
     //对比度区
     MaterialProperty contrast = null;
 
+    //模板测试区
+    MaterialProperty stencilMode = null;
+    MaterialProperty stencilRef = null;
+    MaterialProperty stencilCompare = null;
+    MaterialProperty stencilOverlayColor = null;
+
 
     //边缘光区
     MaterialProperty rimColor = null;
-    MaterialProperty rimColorMask = null;
     MaterialProperty rimMin = null;
     MaterialProperty rimMax = null;
+    MaterialProperty rimFresnelSoftness = null;
+    MaterialProperty rimTextureWeight = null;
     MaterialProperty useRimLight = null;
 
     //描边区
@@ -188,11 +195,17 @@ public class GeneralToonyShadeEditor : ShaderGUI
 
         contrast = FindProperty("_Contrast", props);
 
+        stencilMode = FindProperty("_StencilMode", props);
+        stencilRef = FindProperty("_StencilRef", props);
+        stencilCompare = FindProperty("_StencilCompare", props);
+        stencilOverlayColor = FindProperty("_StencilOverlayColor", props);
+
 
         rimColor = FindProperty("_RimColor", props);
-        rimColorMask = FindProperty("_RimColorMask", props);
         rimMin = FindProperty("_RimMin", props);
         rimMax = FindProperty("_RimMax", props);
+        rimFresnelSoftness = FindProperty("_RimFresnelSoftness", props);
+        rimTextureWeight = FindProperty("_RimTextureWeight", props);
         useRimLight = FindProperty("_UseRimLight", props);
 
         useOutline = FindProperty("_UseOutline", props);
@@ -221,7 +234,7 @@ public class GeneralToonyShadeEditor : ShaderGUI
     }
 
     /// <summary>
-    /// 按顺序绘制各分组：主纹理、卡通漫反射、高光、边缘光、描边、对比度、高级设置。
+    /// 按顺序绘制各分组：主纹理、卡通漫反射、高光、边缘光、描边、对比度、模板测试、高级设置。
     /// </summary>
     private void ShaderPropertiesGUI()
     {
@@ -231,6 +244,7 @@ public class GeneralToonyShadeEditor : ShaderGUI
         RimEditor();
         OutlineEditor();
         ContrastEditor();
+        StencilEditor();
         Advanced();
     }
 
@@ -469,7 +483,7 @@ public class GeneralToonyShadeEditor : ShaderGUI
         DrawToggleBoxScope(useRimLight,
             new List<MaterialProperty>
             {
-                rimColor, rimColorMask, rimMin, rimMax
+                rimColor, rimMin, rimMax, rimFresnelSoftness, rimTextureWeight
             }, "Rim Light");
     }
 
@@ -527,6 +541,18 @@ public class GeneralToonyShadeEditor : ShaderGUI
     private void ContrastEditor()
     {
         DrawBoxSpace("Contrast", new List<MaterialProperty> { contrast });
+    }
+
+    /// <summary>
+    /// 绘制模板测试组：写入/读取模式、模板值与比较方式。
+    /// </summary>
+    private void StencilEditor()
+    {
+        DrawBoxSpace("Stencil Test",
+            new List<MaterialProperty>
+            {
+                stencilMode, stencilRef, stencilCompare, stencilOverlayColor
+            });
     }
 
     /// <summary>

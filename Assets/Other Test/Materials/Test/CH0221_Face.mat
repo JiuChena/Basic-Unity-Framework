@@ -13,6 +13,7 @@ Material:
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords:
   - _OUTLINEMODE_WORLDSPACE
+  - _STENCILMODE_OFF
   - _USEADDITIONALLIGHTDIFFUSE_ON
   - _USEADDITIONALLIGHTSPECULAR_ON
   - _USEOUTLINE_ON
@@ -119,7 +120,7 @@ Material:
     m_Ints: []
     m_Floats:
     - _AdaptiveThicnkess: 0.01
-    - _AdaptiveWidth: 0.372
+    - _AdaptiveWidth: 0.4
     - _AdditionalLightsAmount: 1
     - _AdditionalLightsFaloff: 0.15
     - _AdditionalLightsIntesity: 1
@@ -189,11 +190,14 @@ Material:
     - _RampDiffuseTextureLoaded: 0
     - _RampSmooth: 0.2
     - _ReceiveShadows: 1
+    - _RimFresnelSoftness: 2
     - _RimMax: 1
     - _RimMin: 0.8
     - _RimPower: 12
+    - _RimSideThreshold: 1
     - _RimSmoothness: 0.5
     - _RimSplitColor: 2
+    - _RimTextureWeight: 0.8
     - _RimThickness: 1
     - _RingIntensity: 1
     - _RingMaskWeight: 0
@@ -220,6 +224,9 @@ Material:
     - _SpecularSize: 0.25
     - _SrcBlend: 1
     - _SrcBlendAlpha: 1
+    - _StencilCompare: 3
+    - _StencilMode: 0
+    - _StencilRef: 1
     - _StepOffset: 0
     - _Strength: 0
     - _Surface: 0
@@ -256,7 +263,7 @@ Material:
     - _OutlineColor: {r: 0.80392164, g: 0.65882355, b: 0.63529414, a: 0}
     - _OutlineWidthParams: {r: 0, g: 20, b: 0.8, a: 1.2}
     - _RimColor: {r: 1, g: 1, b: 1, a: 1}
-    - _RimColorMask: {r: 1, g: 1, b: 1, a: 1}
+    - _RimColorMask: {r: 1, g: 0, b: 0, a: 1}
     - _RimShadowColor: {r: 1, g: 1, b: 1, a: 0}
     - _RingColor: {r: 1, g: 1, b: 1, a: 1}
     - _ShadowColor: {r: 1, g: 1, b: 1, a: 1}
@@ -266,6 +273,7 @@ Material:
     - _SpecMapEnvDir3: {r: 0, g: 0.9, b: 0.5, a: 0}
     - _SpecMapHighlightColor: {r: 1, g: 1, b: 1, a: 1}
     - _SpecularColor: {r: 0.64779866, g: 0.64779866, b: 0.64779866, a: 1}
+    - _StencilOverlayColor: {r: 1, g: 1, b: 1, a: 0.5}
     - _XRayColor: {r: 1, g: 0, b: 0, a: 1}
   m_BuildTextureStacks: []
 --- !u!114 &7032658076557135482
