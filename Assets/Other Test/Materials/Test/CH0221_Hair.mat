@@ -229,7 +229,7 @@ Material:
     - _StencilCompare: 6
     - _StencilForwardComp: 6
     - _StencilForwardOp: 0
-    - _StencilMode: 0
+    - _StencilMode: 2
     - _StencilRef: 10
     - _StepOffset: 0
     - _Strength: 0

@@ -147,7 +147,7 @@ Shader "GTS/General Toony Shader"
             half4 frag(VertexOutput o) : SV_Target
             {
                 // 头发半透明：描边随 _Transparency 一起淡出
-                return half4(_OutlineColor.rgb, _Transparency);
+                return _OutlineColor;
             }
             
             ENDHLSL
@@ -264,7 +264,7 @@ Shader "GTS/General Toony Shader"
                 float minOut = 0.5 * Faloff - 0.005;
                 float faloff = lerp(IN, smoothstep(minOut, 0.5, IN), Faloff);
                 if(Steps < 1) return faloff;
-                else return floor(faloff / (1 / Steps)) * (1 / Steps);
+                else return floor(faloff * Steps) / Steps;
             }
 
             // 安全归一化：向量长度过小时返回零向量而非 NaN，避免光源与视线反平行时产生垃圾像素
@@ -437,7 +437,7 @@ Shader "GTS/General Toony Shader"
 
                 half specularSize = clamp(1 - _SpecularSize * smoothness, 0.001, 0.999);
 
-                NH0 = saturate(NH0 * (1.0 / (1 - specularSize)) - (specularSize / (1 - specularSize)));
+                NH0 = saturate((NH0 - specularSize) / (1 - specularSize));
 
                 half specularPosterized = PosterizeFaloff(NH0, _SpecularPosterizeSteps, _SpecularFaloff);
                 #else
