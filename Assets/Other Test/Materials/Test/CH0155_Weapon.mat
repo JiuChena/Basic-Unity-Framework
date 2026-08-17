@@ -12,8 +12,6 @@ Material:
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords:
-  - _OUTLINEMODE_WORLDSPACE
-  - _STENCILMODE_OFF
   - _USEADDITIONALLIGHTDIFFUSE_ON
   - _USEADDITIONALLIGHTSPECULAR_ON
   - _USEENVIRONMENTREFLETION_ON
@@ -24,15 +22,17 @@ Material:
   - _USESPECULAR_ON
   m_InvalidKeywords:
   - _DIFFUSEMODE_STEP
+  - _OUTLINEMODE_WORLDSPACE
   - _OUTLINETYPE_NORMAL
   - _RIMSPLITCOLOR_USESECONDCOLOR
+  - _STENCILMODE_OFF
   - _USEADDITIONALLIGHTSDIFFUSE_ON
   - _USELIGHTRAMP_STEP
   - _USEOUTLINENORMALMAP_ON
   m_LightmapFlags: 4
   m_EnableInstancingVariants: 0
   m_DoubleSidedGI: 0
-  m_CustomRenderQueue: 2000
+  m_CustomRenderQueue: 3000
   stringTagMap: {}
   disabledShaderPasses: []
   m_LockedProperties: 
@@ -134,7 +134,9 @@ Material:
     - _AlphaToMask: 0
     - _AmbientScale: 1
     - _Blend: 0
+    - _BlendDst: 0
     - _BlendModePreserveSpecular: 1
+    - _BlendSrc: 1
     - _BumpScale: 1
     - _ClearCoatMask: 0
     - _ClearCoatSmoothness: 0
@@ -201,6 +203,7 @@ Material:
     - _RimSplitColor: 2
     - _RimTextureWeight: 0.8
     - _RimThickness: 1
+    - _SeeThroughAlpha: 0.4
     - _ShadowBaseMix: 0.75
     - _Smoothness: 0.4472136
     - _SmoothnessMultiplier: 1
@@ -220,14 +223,17 @@ Material:
     - _SpecularSize: 0.4
     - _SrcBlend: 1
     - _SrcBlendAlpha: 1
-    - _StencilCompare: 3
+    - _StencilCompare: 0
+    - _StencilForwardComp: 8
+    - _StencilForwardOp: 2
     - _StencilMode: 0
-    - _StencilRef: 1
+    - _StencilRef: 0
     - _StepOffset: 0
     - _Strength: 0
     - _Surface: 0
     - _Thicnkess: 0.006
     - _TipTaper: 0
+    - _Transparency: 1
     - _UVSec: 0
     - _UseAdditionalLightsDiffuse: 1
     - _UseAdditionalLightsSpecular: 1
@@ -240,6 +246,7 @@ Material:
     - _UseOutline: 1
     - _UseOutlineNormalMap: 1
     - _UseRimLight: 1
+    - _UseSeeThrough: 0
     - _UseShadowBaseMix: 1
     - _UseSpecMapHighlight: 0
     - _UseSpecMapNormal: 0

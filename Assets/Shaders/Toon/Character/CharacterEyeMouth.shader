@@ -1,4 +1,4 @@
-Shader "Toony/CharacterEyeMouth"
+Shader "GTS/BACharacterEyeMouth"
 {
     Properties
     {
@@ -9,6 +9,11 @@ Shader "Toony/CharacterEyeMouth"
         _EyeBrightness("眼睛亮度", Range(1, 50)) = 2
         _MouthIndex("嘴部贴图索引", Float) = 1
         _Cutoff("Alpha裁剪阈值", Range(0, 1)) = 0.5
+
+        [Space(8)]
+        [Enum(UnityEngine.Rendering.BlendMode)] _BlendSrc("混合源(BlendSrc)", Float) = 5
+        [Enum(UnityEngine.Rendering.BlendMode)] _BlendDst("混合目标(BlendDst)", Float) = 10
+        _Transparency("透明度(最终Alpha)", Range(0, 1)) = 1
 
         _DiffuseSteps("嘴巴色阶数", Range(2, 50)) = 3
         _DiffuseSmooth("嘴巴色阶柔化", Range(0, 1)) = 0.2
@@ -48,7 +53,7 @@ Shader "Toony/CharacterEyeMouth"
         Pass
         {
             Tags { "LightMode"="UniversalForward" }
-            Cull Off
+            Blend [_BlendSrc] [_BlendDst]
 
             HLSLPROGRAM
             
@@ -90,7 +95,10 @@ Shader "Toony/CharacterEyeMouth"
             half4 _ParallaxEllipse;
             half _DebugEyeLight;
             half _DebugParallax;
-            
+            float _BlendSrc;
+            float _BlendDst;
+            float _Transparency;
+
             CBUFFER_END
             
             sampler2D _EyeTexture;
@@ -224,9 +232,11 @@ Shader "Toony/CharacterEyeMouth"
 
                 //色彩混合
                 half3 finalRGB = lerp(eyeLit, mouthLit, mask);
-                half4 finalColor = half4(finalRGB, finalA);
+                // 最终输出Alpha：由 _Transparency 控制混合透明度（配合 _BlendSrc/_BlendDst 半透明）
+                half4 finalColor = half4(finalRGB, _Transparency);
 
-                clip(finalColor.a - _Cutoff);
+                // Alpha裁剪：基于眼睛/嘴部遮罩alpha，与最终混合透明度独立
+                clip(finalA - _Cutoff);
 
                 // 调试：只显示眼睛区域的提亮度灰度（mask≈0 是眼睛区），嘴巴区域保持正常
                 #ifdef _DEBUG_EYELIGHT_ON

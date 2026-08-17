@@ -415,73 +415,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &932978137
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 932978138}
-  - component: {fileID: 932978139}
-  m_Layer: 0
-  m_Name: Smooth Normal Directions
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &932978138
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 932978137}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 543450652814087079}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &932978139
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 932978137}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 3242bd6c8ce67e4478811a0219418530, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  mergeAngle: 120
-  mergeDistance: 2
-  smoothedMeshes:
-  - {fileID: 4300000, guid: 9ec8058f8d57ac74dbb39b491d89ec34, type: 2}
-  - {fileID: 4300000, guid: 7714f2f354e44184bb182a1615c6f6fe, type: 2}
-  - {fileID: 4300000, guid: e13f564694353934f9d7ba6797eb146f, type: 2}
-  - {fileID: 4300000, guid: 6036330048b32e34fb42d3d11ad68ecb, type: 2}
-  - {fileID: 4300000, guid: ad6065b097ab7f74595455efc79171f6, type: 2}
-  - {fileID: 4300000, guid: 6d320ccecce20b44b930898394db8818, type: 2}
-  originalMeshes:
-  - {fileID: -8506707394336889668, guid: a0b07bfa45501de46836234f6ef6f7e8, type: 3}
-  - {fileID: 2248173332639895808, guid: a0b07bfa45501de46836234f6ef6f7e8, type: 3}
-  - {fileID: 4397605548277887872, guid: a0b07bfa45501de46836234f6ef6f7e8, type: 3}
-  - {fileID: -1748123224725396689, guid: a0b07bfa45501de46836234f6ef6f7e8, type: 3}
-  - {fileID: 8043028869646738612, guid: a0b07bfa45501de46836234f6ef6f7e8, type: 3}
-  - {fileID: 3495044849308473067, guid: a0b07bfa45501de46836234f6ef6f7e8, type: 3}
-  boundRenderers:
-  - {fileID: 6427590744600844340}
-  - {fileID: 7868179671178340693}
-  - {fileID: 1911330505058687121}
-  - {fileID: 4031571737297596466}
-  - {fileID: 1234282385829830648}
-  - {fileID: 6781477780300980661}
 --- !u!1 &1005873268
 GameObject:
   m_ObjectHideFlags: 0
@@ -1497,6 +1430,73 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &2124495164
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2124495165}
+  - component: {fileID: 2124495166}
+  m_Layer: 0
+  m_Name: Smooth Normal Directions
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &2124495165
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2124495164}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 543450652814087079}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &2124495166
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2124495164}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3242bd6c8ce67e4478811a0219418530, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  mergeAngle: 60
+  mergeDistance: 2
+  smoothedMeshes:
+  - {fileID: 4300000, guid: 9ec8058f8d57ac74dbb39b491d89ec34, type: 2}
+  - {fileID: 4300000, guid: 7714f2f354e44184bb182a1615c6f6fe, type: 2}
+  - {fileID: 4300000, guid: e13f564694353934f9d7ba6797eb146f, type: 2}
+  - {fileID: 4300000, guid: 6036330048b32e34fb42d3d11ad68ecb, type: 2}
+  - {fileID: 4300000, guid: ad6065b097ab7f74595455efc79171f6, type: 2}
+  - {fileID: 4300000, guid: 6d320ccecce20b44b930898394db8818, type: 2}
+  originalMeshes:
+  - {fileID: -8506707394336889668, guid: a0b07bfa45501de46836234f6ef6f7e8, type: 3}
+  - {fileID: 2248173332639895808, guid: a0b07bfa45501de46836234f6ef6f7e8, type: 3}
+  - {fileID: 4397605548277887872, guid: a0b07bfa45501de46836234f6ef6f7e8, type: 3}
+  - {fileID: -1748123224725396689, guid: a0b07bfa45501de46836234f6ef6f7e8, type: 3}
+  - {fileID: 8043028869646738612, guid: a0b07bfa45501de46836234f6ef6f7e8, type: 3}
+  - {fileID: 3495044849308473067, guid: a0b07bfa45501de46836234f6ef6f7e8, type: 3}
+  boundRenderers:
+  - {fileID: 6427590744600844340}
+  - {fileID: 7868179671178340693}
+  - {fileID: 1911330505058687121}
+  - {fileID: 4031571737297596466}
+  - {fileID: 1234282385829830648}
+  - {fileID: 6781477780300980661}
 --- !u!4 &34089705063321483
 Transform:
   m_ObjectHideFlags: 0
@@ -1945,7 +1945,7 @@ Transform:
   - {fileID: 8919151388857686956}
   - {fileID: 6093669322643082084}
   - {fileID: 6489227701663000159}
-  - {fileID: 932978138}
+  - {fileID: 2124495165}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 180, z: 0}
 --- !u!4 &621534208788095306

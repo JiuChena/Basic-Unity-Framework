@@ -85,6 +85,11 @@ public class CharacterEyeMouthEditor : ShaderGUI
     MaterialProperty stencilForwardComp = null;
     MaterialProperty stencilForwardOp = null;
 
+    //半透明区
+    MaterialProperty blendSrc = null;
+    MaterialProperty blendDst = null;
+    MaterialProperty transparency = null;
+
     #endregion
 
     #region EditorVariables
@@ -133,6 +138,10 @@ public class CharacterEyeMouthEditor : ShaderGUI
         stencilCompare = FindProperty("_StencilCompare", props);
         stencilForwardComp = FindProperty("_StencilForwardComp", props);
         stencilForwardOp = FindProperty("_StencilForwardOp", props);
+
+        blendSrc = FindProperty("_BlendSrc", props);
+        blendDst = FindProperty("_BlendDst", props);
+        transparency = FindProperty("_Transparency", props);
     }
 
     /// <summary>
@@ -172,7 +181,7 @@ public class CharacterEyeMouthEditor : ShaderGUI
     }
 
     /// <summary>
-    /// 按顺序绘制各分组：贴图、嘴巴漫反射、眼睛受光、视差、模板测试、调试、高级设置。
+    /// 按顺序绘制各分组：贴图、嘴巴漫反射、眼睛受光、视差、半透明、模板测试、调试、高级设置。
     /// </summary>
     private void ShaderPropertiesGUI()
     {
@@ -180,6 +189,7 @@ public class CharacterEyeMouthEditor : ShaderGUI
         MouthDiffuseEditor();
         EyeLightEditor();
         ParallaxEditor();
+        TransparencyEditor();
         StencilEditor();
         DebugEditor();
         AdvancedEditor();
@@ -341,6 +351,18 @@ public class CharacterEyeMouthEditor : ShaderGUI
             new List<MaterialProperty>
             {
                 parallaxCenter, parallaxScale, parallaxMaskEdge, parallaxMaskEdgeOffset, parallaxEllipse
+            });
+    }
+
+    /// <summary>
+    /// 绘制半透明组：混合源、混合目标与最终Alpha（配合 Blend 混合实现头发等半透明）。
+    /// </summary>
+    private void TransparencyEditor()
+    {
+        DrawBoxSpace("Transparency",
+            new List<MaterialProperty>
+            {
+                blendSrc, blendDst, transparency
             });
     }
 
