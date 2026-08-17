@@ -106,7 +106,8 @@ public class GeneralToonyShadeEditor : ShaderGUI
     MaterialProperty stencilMode = null;
     MaterialProperty stencilRef = null;
     MaterialProperty stencilCompare = null;
-    MaterialProperty stencilOverlayColor = null;
+    MaterialProperty stencilForwardComp = null;
+    MaterialProperty stencilForwardOp = null;
 
 
     //边缘光区
@@ -198,7 +199,8 @@ public class GeneralToonyShadeEditor : ShaderGUI
         stencilMode = FindProperty("_StencilMode", props);
         stencilRef = FindProperty("_StencilRef", props);
         stencilCompare = FindProperty("_StencilCompare", props);
-        stencilOverlayColor = FindProperty("_StencilOverlayColor", props);
+        stencilForwardComp = FindProperty("_StencilForwardComp", props);
+        stencilForwardOp = FindProperty("_StencilForwardOp", props);
 
 
         rimColor = FindProperty("_RimColor", props);
@@ -230,7 +232,30 @@ public class GeneralToonyShadeEditor : ShaderGUI
         FindProperties(props);
         m_MaterialEditor = materialEditor;
 
+        SyncStencilMode();
         ShaderPropertiesGUI();
+    }
+
+    /// <summary>
+    /// 按模板测试模式同步前向 pass 的模板行为：写入=Always+Replace（标记），读取=比较+Keep（门控），关闭=Always+Keep（中立）。
+    /// </summary>
+    private void SyncStencilMode()
+    {
+        float mode = stencilMode.floatValue;
+        float targetComp = 8f; // Always
+        float targetOp = 0f;   // Keep
+        if (mode >= 2f) // Read：比较通过才渲染
+        {
+            targetComp = stencilCompare.floatValue;
+        }
+        else if (mode >= 1f) // Write：写标记
+        {
+            targetOp = 2f;   // Replace
+        }
+        if (!Mathf.Approximately(stencilForwardComp.floatValue, targetComp))
+            stencilForwardComp.floatValue = targetComp;
+        if (!Mathf.Approximately(stencilForwardOp.floatValue, targetOp))
+            stencilForwardOp.floatValue = targetOp;
     }
 
     /// <summary>
@@ -548,12 +573,33 @@ public class GeneralToonyShadeEditor : ShaderGUI
     /// </summary>
     private void StencilEditor()
     {
-        DrawBoxSpace("Stencil Test",
-            new List<MaterialProperty>
-            {
-                stencilMode, stencilRef, stencilCompare, stencilOverlayColor
-            });
+        EditorGUILayout.BeginVertical(BoxScopeStyle);
+        EditorGUILayout.Space(2);
+
+        GUILayout.Label("Stencil Test", ToonLabelStyle);
+
+        EditorGUILayout.BeginVertical(BoxScopeStyle);
+        EditorGUILayout.Space(2);
+
+        // 模式下拉框
+        int mode = Mathf.RoundToInt(stencilMode.floatValue);
+        var newMode = (StencilTestMode)EditorGUILayout.EnumPopup("模板测试模式", (StencilTestMode)mode);
+        stencilMode.floatValue = (float)newMode;
+
+        DrawProperty(stencilRef);
+        DrawProperty(stencilCompare);
+
+        EditorGUILayout.Space(2);
+        EditorGUILayout.EndVertical();
+
+        EditorGUILayout.Space(2);
+        EditorGUILayout.EndVertical();
     }
+
+    /// <summary>
+    /// 模板测试模式枚举（与 shader 属性值对应：0=关闭 1=写入 2=读取）。
+    /// </summary>
+    private enum StencilTestMode { Off = 0, Write = 1, Read = 2 }
 
     /// <summary>
     /// 绘制高级设置组：渲染队列、实例化与双面全局光照。

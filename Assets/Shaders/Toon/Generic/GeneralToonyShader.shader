@@ -53,10 +53,11 @@ Shader "Toony/General Toony Shader"
 
         _Contrast("对比度", Range(0, 2)) = 1
 
-        [KeywordEnum(Off, Write, Read)] _StencilMode("模板测试模式", Float) = 0
+        [Enum(Off, Write, Read)] _StencilMode("模板测试模式", Float) = 0
         _StencilRef("模板值", Range(0, 255)) = 1
-        [Enum(UnityEngine.Rendering.CompareFunction)] _StencilCompare("模板比较", Float) = 3
-        _StencilOverlayColor("模板读取渲染颜色", Color) = (1, 1, 1, 0.5)
+        [Enum(UnityEngine.Rendering.CompareFunction)] _StencilCompare("模板比较", Float) = 6
+        [HideInInspector] _StencilForwardComp("Stencil Forward Comp", Float) = 8
+        [HideInInspector] _StencilForwardOp("Stencil Forward Op", Float) = 2
 
         _RimColor("边缘光色", Color) = (1,1,1,1)
         _RimMin("边缘光起始", Range(0, 1)) = 0.8
@@ -85,8 +86,8 @@ Shader "Toony/General Toony Shader"
         Tags { "RenderPipeline"="UniversalPipeline" "RenderType"="Opaque" "Queue"="Geometry" }
         LOD 0
         
-        //模板写入：始终把"模板值"写入缓冲区（默认1，兼容原XRay标记）
-        Stencil { Ref [_StencilRef] Comp Always Pass Replace }
+        //模板测试（前向门控）：写入模式=标记缓冲区；读取模式=比较通过才渲染（不过不画）；关闭=中立
+        Stencil { Ref [_StencilRef] Comp [_StencilForwardComp] Pass [_StencilForwardOp] }
 
         //描边通道
         Pass
@@ -541,64 +542,6 @@ Shader "Toony/General Toony Shader"
                 return litColorFinal;
             }
             
-            ENDHLSL
-        }
-
-        //模板读取透视通道：模板比较通过时渲染被遮挡区域（XRay式透视）
-        Pass
-        {
-            Name "StencilReadOverlay"
-            Tags { "LightMode" = "SRPDefaultUnlit" }
-
-            ZWrite Off
-            ZTest Greater
-            Cull Off
-            Blend SrcAlpha OneMinusSrcAlpha
-            Stencil
-            {
-                Ref [_StencilRef]
-                Comp [_StencilCompare]
-            }
-
-            HLSLPROGRAM
-            #pragma vertex StencilOverlayVert
-            #pragma fragment StencilOverlayFrag
-            #pragma shader_feature_local _STENCILMODE_OFF _STENCILMODE_WRITE _STENCILMODE_READ
-
-            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
-
-            CBUFFER_START(UnityPerMaterial)
-                float _StencilRef;
-                float _StencilCompare;
-                half4 _StencilOverlayColor;
-            CBUFFER_END
-
-            struct Attributes
-            {
-                float4 positionOS : POSITION;
-            };
-
-            struct Varyings
-            {
-                float4 positionCS : SV_POSITION;
-            };
-
-            Varyings StencilOverlayVert(Attributes input)
-            {
-                Varyings output;
-                #ifdef _STENCILMODE_READ
-                output.positionCS = TransformObjectToHClip(input.positionOS.xyz);
-                #else
-                // 非读取模式：塌缩到剪裁空间原点，零面积三角形不产生片元
-                output.positionCS = float4(0, 0, 0, 1);
-                #endif
-                return output;
-            }
-
-            half4 StencilOverlayFrag(Varyings input) : SV_TARGET
-            {
-                return _StencilOverlayColor;
-            }
             ENDHLSL
         }
 

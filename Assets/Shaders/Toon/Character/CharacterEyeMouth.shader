@@ -29,11 +29,21 @@ Shader "Toony/CharacterEyeMouth"
 
         [Toggle(_DEBUG_EYELIGHT_ON)] _DebugEyeLight("调试:显示眼睛提亮度", Float) = 0
         [Toggle(_DEBUG_PARALLAX_ON)] _DebugParallax("调试:显示视差范围", Float) = 0
+
+        [Enum(Off, Write, Read)] _StencilMode("模板测试模式", Float) = 0
+        _StencilRef("模板值", Range(0, 255)) = 1
+        [Enum(UnityEngine.Rendering.CompareFunction)] _StencilCompare("模板比较", Float) = 6
+        [HideInInspector] _StencilForwardComp("Stencil Forward Comp", Float) = 8
+        [HideInInspector] _StencilForwardOp("Stencil Forward Op", Float) = 2
     }
     SubShader
     {
-        Tags { "RenderPipeline"="UniversalPipeline" "RenderType"="TransparentCutout" "Queue"="AlphaTest" }
+        // Geometry-10：先于头发(Geometry)渲染并写入模板标记，供头发模板测试读取（眉毛透过头发组装）
+        Tags { "RenderPipeline"="UniversalPipeline" "RenderType"="TransparentCutout" "Queue"="Geometry-10" }
         LOD 100
+
+        //模板测试（前向门控）：写入模式=标记缓冲区；读取模式=比较通过才渲染（不过不画）；关闭=中立
+        Stencil { Ref [_StencilRef] Comp [_StencilForwardComp] Pass [_StencilForwardOp] }
 
         Pass
         {
