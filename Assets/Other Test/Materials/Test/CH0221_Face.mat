@@ -146,7 +146,7 @@ Material:
     - _DiffusePosterizeOffset: -0.27
     - _DiffusePosterizePower: 1
     - _DiffusePosterizeSteps: 3.19
-    - _DiffuseSmooth: 0.25
+    - _DiffuseSmooth: 0.1
     - _DiffuseSteps: 3
     - _DiffuseWrap: 0.3
     - _DstBlend: 0
