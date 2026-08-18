@@ -16,7 +16,6 @@ Material:
   - _USEADDITIONALLIGHTSPECULAR_ON
   - _USEOUTLINE_ON
   - _USERIMLIGHT_ON
-  - _USESHADOWBASEMIX_ON
   m_InvalidKeywords:
   - _DIFFUSEMODE_STEP
   - _OUTLINEMODE_WORLDSPACE
@@ -138,7 +137,7 @@ Material:
     - _BumpScale: 1
     - _ClearCoatMask: 0
     - _ClearCoatSmoothness: 0
-    - _Contrast: 1.05
+    - _Contrast: 1
     - _Cull: 2
     - _Cutoff: 0.5
     - _DetailAlbedoMapScale: 1
@@ -147,7 +146,7 @@ Material:
     - _DiffusePosterizeOffset: -0.27
     - _DiffusePosterizePower: 1
     - _DiffusePosterizeSteps: 3.19
-    - _DiffuseSmooth: 0.15
+    - _DiffuseSmooth: 0.25
     - _DiffuseSteps: 3
     - _DiffuseWrap: 0.3
     - _DstBlend: 0
@@ -162,6 +161,7 @@ Material:
     - _HairDirectionHighlightAlphaPower: 1
     - _HairDirectionHighlightAlphaWeight: 0.5
     - _HairDirectionHighlightAnisotropy: 16
+    - _HairDirectionHighlightBrightnessThreshold: 0
     - _HairDirectionHighlightEnvironmentRoughness: 0.5
     - _HairDirectionHighlightIntensity: 1
     - _HairDirectionHighlightLobeOffset: 0
@@ -171,7 +171,7 @@ Material:
     - _IndirectLightStrength: 0.6
     - _IndirectlightScale: 0.4
     - _LightRampOffset: 0
-    - _MainLightDiffuseScale: 1.25
+    - _MainLightDiffuseScale: 1
     - _MainLightIntesity: 1
     - _Metallic: 0
     - _Mode: 0
@@ -185,7 +185,7 @@ Material:
     - _OutlinePosBlend: 0
     - _OutlineTextureStrength: 0.6
     - _OutlineType: 0
-    - _OutlineWidth: 0.3
+    - _OutlineWidth: 0.2
     - _OutlineZOffset: 0
     - _Parallax: 0.02
     - _QueueOffset: 0
@@ -252,7 +252,7 @@ Material:
     - _UseOutlineNormalMap: 1
     - _UseRimLight: 1
     - _UseSeeThrough: 0
-    - _UseShadowBaseMix: 1
+    - _UseShadowBaseMix: 0
     - _UseSpecMapHighlight: 0
     - _UseSpecMapNormal: 0
     - _UseSpecMapSpecular: 0

@@ -140,7 +140,7 @@ Material:
     - _BumpScale: 1
     - _ClearCoatMask: 0
     - _ClearCoatSmoothness: 0
-    - _Contrast: 1.05
+    - _Contrast: 1
     - _Cull: 2
     - _Cutoff: 0.5
     - _DetailAlbedoMapScale: 1
@@ -164,6 +164,7 @@ Material:
     - _HairDirectionHighlightAlphaPower: 1
     - _HairDirectionHighlightAlphaWeight: 0.5
     - _HairDirectionHighlightAnisotropy: 16
+    - _HairDirectionHighlightBrightnessThreshold: 0
     - _HairDirectionHighlightEnvironmentRoughness: 0.5
     - _HairDirectionHighlightIntensity: 1
     - _HairDirectionHighlightLobeOffset: 0
@@ -173,7 +174,7 @@ Material:
     - _IndirectLightStrength: 0.6
     - _IndirectlightScale: 0.4
     - _LightRampOffset: 0
-    - _MainLightDiffuseScale: 1.25
+    - _MainLightDiffuseScale: 1.2
     - _MainLightIntesity: 1
     - _Metallic: 0
     - _Mode: 0
@@ -187,7 +188,7 @@ Material:
     - _OutlinePosBlend: 0
     - _OutlineTextureStrength: 0.6
     - _OutlineType: 0
-    - _OutlineWidth: 0.3
+    - _OutlineWidth: 0.2
     - _OutlineZOffset: 0
     - _Parallax: 0.02
     - _QueueOffset: 0
@@ -204,7 +205,7 @@ Material:
     - _RimTextureWeight: 0.8
     - _RimThickness: 1
     - _SeeThroughAlpha: 0.4
-    - _ShadowBaseMix: 0.75
+    - _ShadowBaseMix: 0.6
     - _Smoothness: 0.4472136
     - _SmoothnessMultiplier: 1
     - _SmoothnessTextureChannel: 0
@@ -225,7 +226,7 @@ Material:
     - _SrcBlendAlpha: 1
     - _StencilCompare: 0
     - _StencilForwardComp: 8
-    - _StencilForwardOp: 2
+    - _StencilForwardOp: 0
     - _StencilMode: 0
     - _StencilRef: 0
     - _StepOffset: 0
@@ -267,7 +268,7 @@ Material:
     - _RimColor: {r: 1, g: 1, b: 1, a: 1}
     - _RimColorMask: {r: 1, g: 0, b: 0, a: 1}
     - _RimShadowColor: {r: 1, g: 1, b: 1, a: 0}
-    - _ShadowColor: {r: 0, g: 0, b: 0, a: 1}
+    - _ShadowColor: {r: 0.75, g: 0.75, b: 0.75, a: 1}
     - _SpecColor: {r: 0.19999996, g: 0.19999996, b: 0.19999996, a: 1}
     - _SpecMapEnvDir1: {r: 0.4, g: 0.7, b: 0.8, a: 0}
     - _SpecMapEnvDir2: {r: -0.4, g: 0.7, b: 0.8, a: 0}

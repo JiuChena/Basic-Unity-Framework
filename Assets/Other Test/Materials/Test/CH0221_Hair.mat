@@ -26,8 +26,6 @@ Material:
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords:
   - _USEADDITIONALLIGHTDIFFUSE_ON
-  - _USEADDITIONALLIGHTSPECULAR_ON
-  - _USEENVIRONMENTREFLETION_ON
   - _USEHAIRDIRECTIONHIGHLIGHT_ON
   - _USEOUTLINE_ON
   - _USERIMLIGHT_ON
@@ -152,7 +150,7 @@ Material:
     - _BumpScale: 1
     - _ClearCoatMask: 0
     - _ClearCoatSmoothness: 0
-    - _Contrast: 1.05
+    - _Contrast: 1
     - _Cull: 2
     - _Cutoff: 0.5
     - _DetailAlbedoMapScale: 1
@@ -161,7 +159,7 @@ Material:
     - _DiffusePosterizeOffset: -0.27
     - _DiffusePosterizePower: 1
     - _DiffusePosterizeSteps: 3.19
-    - _DiffuseSmooth: 0.15
+    - _DiffuseSmooth: 0
     - _DiffuseSteps: 3
     - _DiffuseWrap: 0.25
     - _DstBlend: 0
@@ -174,16 +172,17 @@ Material:
     - _GlossyReflections: 1
     - _HairDirectionHighlightAlphaPower: 2
     - _HairDirectionHighlightAlphaWeight: 1
-    - _HairDirectionHighlightAnisotropy: 2.5
-    - _HairDirectionHighlightIntensity: 0.5
-    - _HairDirectionHighlightLobeOffset: 0.15
-    - _HairDirectionHighlightSoftness: 0.25
-    - _HairDirectionHighlightTangentBlend: 0.8
+    - _HairDirectionHighlightAnisotropy: 1.5
+    - _HairDirectionHighlightBrightnessThreshold: 0
+    - _HairDirectionHighlightIntensity: 0.15
+    - _HairDirectionHighlightLobeOffset: 0
+    - _HairDirectionHighlightSoftness: 0.2
+    - _HairDirectionHighlightTangentBlend: 0.75
     - _HairDirectionHighlightThreshold: 0.8
     - _IndirectLightStrength: 0.6
     - _IndirectlightScale: 0.4
     - _LightRampOffset: 0
-    - _MainLightDiffuseScale: 1.25
+    - _MainLightDiffuseScale: 1.2
     - _MainLightIntesity: 1
     - _Metallic: 0
     - _Mode: 0
@@ -214,7 +213,7 @@ Material:
     - _RimTextureWeight: 0.8
     - _RimThickness: 1
     - _SeeThroughAlpha: 0.4
-    - _ShadowBaseMix: 0.75
+    - _ShadowBaseMix: 0.6
     - _Smoothness: 0.4472136
     - _SmoothnessMultiplier: 1
     - _SmoothnessTextureChannel: 0
@@ -239,9 +238,9 @@ Material:
     - _Transparency: 1
     - _UVSec: 0
     - _UseAdditionalLightsDiffuse: 1
-    - _UseAdditionalLightsSpecular: 1
+    - _UseAdditionalLightsSpecular: 0
     - _UseEmission: 0
-    - _UseEnvironmentReflection: 1
+    - _UseEnvironmentReflection: 0
     - _UseEnvironmentRefletion: 0
     - _UseHairDirectionHighlight: 1
     - _UseLightRamp: 0
@@ -267,7 +266,7 @@ Material:
     - _RimColor: {r: 1, g: 1, b: 1, a: 1}
     - _RimColorMask: {r: 1, g: 0, b: 0, a: 1}
     - _RimShadowColor: {r: 1, g: 1, b: 1, a: 0}
-    - _ShadowColor: {r: 0, g: 0, b: 0, a: 1}
+    - _ShadowColor: {r: 0.75, g: 0.75, b: 0.75, a: 1}
     - _SpecColor: {r: 1, g: 1, b: 1, a: 1}
     - _SpecularColor: {r: 1, g: 1, b: 1, a: 1}
     - _StencilOverlayColor: {r: 0, g: 0, b: 0, a: 0}

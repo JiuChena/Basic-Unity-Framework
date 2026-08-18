@@ -266,13 +266,6 @@ Shader "GTS/General Toony Shader"
                 if(Steps < 1) return faloff;
                 else return floor(faloff * Steps) / Steps;
             }
-
-            // 安全归一化：向量长度过小时返回零向量而非 NaN，避免光源与视线反平行时产生垃圾像素
-            half3 SafeNormalize(half3 v)
-            {
-                half lenSq = dot(v, v);
-                return v * rsqrt(max(lenSq, 1e-8));
-            }
             
             VertexOutput vert(VertexInput v)
             {
@@ -307,10 +300,8 @@ Shader "GTS/General Toony Shader"
                 half2 uv = o.uv.xy * _OcclusionMap_ST.xy + _OcclusionMap_ST.zw;
                 
                 half3 tangentNormal = lerp(half3(0,0,1), UnpackNormalScale(tex2D(_NormalMap, uv), 1.0), _NormalMapScale);
-                half3 tangentWorld0 = float3(o.worldTangent.x, o.worldBitangent.x, o.worldNormal.x);
-                half3 tangentWorld1 = float3(o.worldTangent.y, o.worldBitangent.y, o.worldNormal.y);
-                half3 tangentWorld2 = float3(o.worldTangent.z, o.worldBitangent.z, o.worldNormal.z);
-                float3 worldNormal = SafeNormalize(float3(dot(tangentWorld0, tangentNormal), dot(tangentWorld1, tangentNormal), dot(tangentWorld2, tangentNormal)));
+                half3x3 TBN = half3x3(o.worldTangent, o.worldBitangent, o.worldNormal);
+                half3 worldNormal = SafeNormalize(TransformTangentToWorld(tangentNormal, TBN));
                 
                 //漫反射主光、色阶化处理
                 half NL = dot(worldNormal, _MainLightPosition.xyz);
@@ -473,7 +464,7 @@ Shader "GTS/General Toony Shader"
                 half3 envReflection = 0;
                 #endif
                 
-                //高光组装
+                //高光组装：常规高光由"高光"开关控制，各向异性高光由"Anisotropic Sampling"开关控制，互相独立
                 #ifdef _USESPECULAR_ON
                 half3 specTint = _SpecularColor.rgb;
                 #ifdef _USEMETAL_ON
