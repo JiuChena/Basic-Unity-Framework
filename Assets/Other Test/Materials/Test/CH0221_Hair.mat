@@ -177,7 +177,7 @@ Material:
     - _HairDirectionHighlightIntensity: 0.15
     - _HairDirectionHighlightLobeOffset: 0
     - _HairDirectionHighlightSoftness: 0.2
-    - _HairDirectionHighlightTangentBlend: 0.75
+    - _HairDirectionHighlightTangentBlend: 1
     - _HairDirectionHighlightThreshold: 0.8
     - _IndirectLightStrength: 0.6
     - _IndirectlightScale: 0.4
@@ -268,7 +268,7 @@ Material:
     - _RimShadowColor: {r: 1, g: 1, b: 1, a: 0}
     - _ShadowColor: {r: 0.75, g: 0.75, b: 0.75, a: 1}
     - _SpecColor: {r: 1, g: 1, b: 1, a: 1}
-    - _SpecularColor: {r: 1, g: 1, b: 1, a: 1}
+    - _SpecularColor: {r: 0.9960785, g: 0.8745099, b: 0.8745099, a: 1}
     - _StencilOverlayColor: {r: 0, g: 0, b: 0, a: 0}
     - _XRayColor: {r: 1, g: 0, b: 0, a: 1}
   m_BuildTextureStacks: []
