@@ -229,8 +229,8 @@ Material:
     - _SrcBlendAlpha: 1
     - _StencilCompare: 0
     - _StencilForwardComp: 8
-    - _StencilForwardOp: 2
-    - _StencilMode: 1
+    - _StencilForwardOp: 0
+    - _StencilMode: 0
     - _StencilRef: 10
     - _StepOffset: 0
     - _Strength: 0
