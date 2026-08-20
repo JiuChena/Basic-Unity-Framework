@@ -1,0 +1,78 @@
+using System.IO;
+using UnityEngine;
+
+namespace Core.Gear
+{
+    /// <summary>
+    /// 二进制数据管理器，基于 MessagePack 实现持久化数据的序列化与反序列化。
+    /// </summary>
+    public class BinaryDataManager
+    {
+        private static readonly BinaryDataManager _instance = new BinaryDataManager();
+        public static BinaryDataManager Instance => _instance;
+
+        // 数据存储根目录：Application.persistentDataPath/Data/
+        private static readonly string DataPath = Path.Combine(Application.persistentDataPath, "Data");
+
+        // MessagePack 序列化运行时
+        private readonly MessagePackRuntime _runtime = new MessagePackRuntime();
+
+        private BinaryDataManager() { }
+
+        /// <summary>
+        /// 将对象序列化为 MessagePack 二进制并写入文件。
+        /// </summary>
+        /// <param name="path">子目录路径（相对于 Data/）</param>
+        /// <param name="fileName">文件名（不含扩展名）</param>
+        /// <param name="data">要保存的数据对象</param>
+        public void Save<T>(string path, string fileName, T data)
+        {
+            string directoryPath = GetDirectoryPath(path);
+            if (!Directory.Exists(directoryPath)) Directory.CreateDirectory(directoryPath);
+
+            byte[] bytes = _runtime.Serialize(data);
+            File.WriteAllBytes(GetFilePath(path, fileName), bytes);
+        }
+
+        /// <summary>
+        /// 从文件读取并反序列化为对象。文件不存在或反序列化失败时返回 default。
+        /// </summary>
+        public T Load<T>(string path, string fileName)
+        {
+            string filePath = GetFilePath(path, fileName);
+            if (!File.Exists(filePath)) return default;
+
+            byte[] bytes = File.ReadAllBytes(filePath);
+            return _runtime.Deserialize<T>(bytes);
+        }
+
+        /// <summary>
+        /// 检查指定文件是否存在。
+        /// </summary>
+        public bool FileExists(string fileName)
+        {
+            return File.Exists(Path.Combine(DataPath, fileName + ".bin"));
+        }
+
+        /// <summary>
+        /// 检查指定路径和名称的文件是否存在。
+        /// </summary>
+        public bool FileExists(string path, string fileName)
+        {
+            return File.Exists(GetFilePath(path, fileName));
+        }
+
+        private static string GetDirectoryPath(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path)) return DataPath;
+
+            string normalizedPath = path.Replace("\\", "/").Trim('/');
+            return string.IsNullOrEmpty(normalizedPath) ? DataPath : Path.Combine(DataPath, normalizedPath);
+        }
+
+        private static string GetFilePath(string path, string fileName)
+        {
+            return Path.Combine(GetDirectoryPath(path), fileName + ".bin");
+        }
+    }
+}
