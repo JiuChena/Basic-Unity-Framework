@@ -31,6 +31,7 @@ namespace Core.Gear
                 return _animator;
             }
         }
+        // 延迟缓存的 Animator 组件引用，避免每次访问都查找组件。
         private Animator _animator;
 
         /// <summary>
@@ -106,7 +107,7 @@ namespace Core.Gear
         /// </summary>
         public virtual void OnEscapePressed()
         {
-            PanelManager.Instance.ColsePanel(this);
+            PanelManager.Instance.ClosePanel(this);
         }
     }
 }

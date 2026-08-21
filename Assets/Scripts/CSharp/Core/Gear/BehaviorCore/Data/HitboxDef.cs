@@ -4,16 +4,6 @@ using UnityEngine;
 namespace BehaviorCore
 {
     /// <summary>
-    /// Hitbox 的形状类型。
-    /// </summary>
-    public enum HitboxShape
-    {
-        Box,
-        Sphere,
-        Capsule,
-    }
-
-    /// <summary>
     /// 行为内单个伤害判定区域的配置。
     /// </summary>
     [Serializable]

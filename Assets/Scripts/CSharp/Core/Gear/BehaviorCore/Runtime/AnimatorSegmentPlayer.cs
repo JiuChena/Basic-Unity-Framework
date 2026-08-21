@@ -5,49 +5,6 @@ using UnityEngine;
 namespace BehaviorCore
 {
     /// <summary>
-    /// Behavior AnimatorController 约定。
-    /// 运行时播放器、作者工具和正式创建工具都应基于这套命名规则工作。
-    /// </summary>
-    public static class BehaviorAnimatorControllerConvention
-    {
-        public const string DefaultSharedControllerFolder = "Assets/BehaviorCore/Animator";
-        public const string DefaultSharedControllerName = "BehaviorBaseController";
-        public const int DefaultLayerCount = 2;
-        public const int DefaultSlotsPerLayer = 8;
-
-        public static string GetStateName(int layer, int slotIndex)
-        {
-            return $"L{layer}_Segment_{slotIndex}";
-        }
-
-        public static string GetPlaceholderClipName(int layer, int slotIndex)
-        {
-            return $"L{layer}_Placeholder_{slotIndex}";
-        }
-    }
-
-    /// <summary>
-    /// Animator 状态槽绑定。用于把行为片段映射到 OverrideController 的占位槽。
-    /// </summary>
-    [Serializable]
-    public class AnimatorSegmentSlotBinding
-    {
-        [Tooltip("该槽位所属的 Animator Layer")]
-        [Min(0)]
-        public int layer;
-
-        [Tooltip("该槽位在同一 Layer 中的顺序索引，通常对应行为片段索引")]
-        [Min(0)]
-        public int slotIndex;
-
-        [Tooltip("Animator Controller 中用于播放该槽位的状态名")]
-        public string stateName;
-
-        [Tooltip("AnimatorOverrideController 中要被替换的占位动画名")]
-        public string placeholderClipName;
-    }
-
-    /// <summary>
     /// 基于 AnimatorOverrideController 的动画片段播放器。
     /// </summary>
     public class AnimatorSegmentPlayer : MonoBehaviour, IBehaviorAnimationPlayer

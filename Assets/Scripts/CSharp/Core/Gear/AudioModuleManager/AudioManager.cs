@@ -1,6 +1,8 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Events;
+using Object = UnityEngine.Object;
 
 namespace Core.Gear
 {
@@ -36,6 +38,16 @@ namespace Core.Gear
         private AudioManager() { }
 
         #region Play / Stop（句柄式）
+
+        public void AudioPlay(string assetPath, AudioType type, Transform parent, Action<AudioSource> callback = null)
+        {
+            
+        }
+        
+        public void AudioPlay(AudioClip clip, AudioType type, Transform parent, Action<AudioSource> callback = null)
+        {
+            
+        }
 
         /// <summary>
         /// 播放 AudioClip 并返回句柄，可通过句柄停止或由 Tick 自动回收。

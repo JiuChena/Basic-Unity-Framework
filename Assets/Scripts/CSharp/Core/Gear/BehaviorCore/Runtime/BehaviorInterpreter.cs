@@ -6,30 +6,6 @@ using UnityEngine.Profiling;
 
 namespace BehaviorCore
 {
-    public readonly struct BehaviorPlaybackStartedEvent
-    {
-        public readonly BehaviorInterpreter Interpreter;
-        public readonly BehaviorClip Clip;
-
-        public BehaviorPlaybackStartedEvent(BehaviorInterpreter interpreter, BehaviorClip clip)
-        {
-            Interpreter = interpreter;
-            Clip = clip;
-        }
-    }
-
-    public readonly struct BehaviorPlaybackCompletedEvent
-    {
-        public readonly BehaviorInterpreter Interpreter;
-        public readonly BehaviorClip Clip;
-
-        public BehaviorPlaybackCompletedEvent(BehaviorInterpreter interpreter, BehaviorClip clip)
-        {
-            Interpreter = interpreter;
-            Clip = clip;
-        }
-    }
-
     /// <summary>
     /// 行为解释器，负责按时间轴推进行为、调度事件与命中判定。
     /// </summary>

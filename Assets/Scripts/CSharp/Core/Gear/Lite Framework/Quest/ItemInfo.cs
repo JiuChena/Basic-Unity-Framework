@@ -4,18 +4,6 @@ using UnityEngine;
 namespace Core.Gear
 {
     /// <summary>
-    /// 道具类型。
-    /// </summary>
-    public enum ItemType
-    {
-        Consumable,
-        Material,
-        Chip,
-        Quest,
-        Misc,
-    }
-
-    /// <summary>
     /// 道具基础配置（ScriptableObject），定义道具的显示名称、价格、图标等。
     /// </summary>
     [CreateAssetMenu(menuName = "Framework/CoreFramework/Items/Item Info")]
@@ -30,15 +18,5 @@ namespace Core.Gear
 
         [TextArea]
         public string description;
-    }
-
-    /// <summary>
-    /// 单个道具奖励项。
-    /// </summary>
-    [Serializable]
-    public class ItemReward
-    {
-        public ItemInfo item;
-        public int count = 1;
     }
 }
