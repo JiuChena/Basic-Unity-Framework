@@ -12,7 +12,6 @@ Material:
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords:
-  - _USEADDITIONALLIGHTDIFFUSE_ON
   - _USEOUTLINE_ON
   - _USERIMLIGHT_ON
   - _USESHADOWBASEMIX_ON
@@ -146,9 +145,9 @@ Material:
     - _DiffusePosterizeOffset: -0.27
     - _DiffusePosterizePower: 1
     - _DiffusePosterizeSteps: 3.19
-    - _DiffuseSmooth: 0.1
+    - _DiffuseSmooth: 0
     - _DiffuseSteps: 3
-    - _DiffuseWrap: 0.2
+    - _DiffuseWrap: 0
     - _DstBlend: 0
     - _DstBlendAlpha: 0
     - _EmissionIntensity: 1
@@ -177,7 +176,7 @@ Material:
     - _Mode: 0
     - _NormalMapScale: 0
     - _NormalMapStrength: 1
-    - _OcclusionMapScale: 1
+    - _OcclusionMapScale: 0.75
     - _OcclusionStrength: 0.3
     - _OcclusionThreshold: 0.5
     - _OutlineMaxScale: 10
@@ -239,7 +238,7 @@ Material:
     - _TipTaper: 0
     - _Transparency: 1
     - _UVSec: 0
-    - _UseAdditionalLightsDiffuse: 1
+    - _UseAdditionalLightsDiffuse: 0
     - _UseAdditionalLightsSpecular: 0
     - _UseEmission: 0
     - _UseEnvironmentReflection: 0
@@ -273,7 +272,7 @@ Material:
     - _RimColorMask: {r: 1, g: 0, b: 0, a: 1}
     - _RimShadowColor: {r: 1, g: 1, b: 1, a: 0}
     - _RingColor: {r: 1, g: 1, b: 1, a: 1}
-    - _ShadowColor: {r: 0.75, g: 0.75, b: 0.75, a: 1}
+    - _ShadowColor: {r: 0.7169812, g: 0.63972026, b: 0.5377359, a: 1}
     - _SpecColor: {r: 0.19999996, g: 0.19999996, b: 0.19999996, a: 1}
     - _SpecMapEnvDir1: {r: 0.4, g: 0.7, b: 0.8, a: 0}
     - _SpecMapEnvDir2: {r: -0.4, g: 0.7, b: 0.8, a: 0}

@@ -50,7 +50,6 @@ public class GeneralToonyShadeEditor : ShaderGUI
     MaterialProperty albedoColor = null;
     MaterialProperty occlusionMap = null;
     MaterialProperty occlusionMapScale = null;
-    MaterialProperty occlusionThreshold = null;
     MaterialProperty normalMap = null;
     MaterialProperty normalMapScale = null;
     MaterialProperty indirectLightScale = null;
@@ -149,7 +148,6 @@ public class GeneralToonyShadeEditor : ShaderGUI
         albedoColor = FindProperty("_Color", props);
         occlusionMap = FindProperty("_OcclusionMap", props);
         occlusionMapScale = FindProperty("_OcclusionMapScale", props);
-        occlusionThreshold = FindProperty("_OcclusionThreshold", props);
         normalMap = FindProperty("_NormalMap", props);
         normalMapScale = FindProperty("_NormalMapScale", props);
         indirectLightScale = FindProperty("_IndirectlightScale", props);
@@ -383,7 +381,6 @@ public class GeneralToonyShadeEditor : ShaderGUI
         m_MaterialEditor.TexturePropertySingleLine(new GUIContent("Albedo"), albedoMap, albedoColor);
         m_MaterialEditor.TexturePropertySingleLine(new GUIContent("Normal Map"), normalMap, normalMapScale);
         m_MaterialEditor.TexturePropertySingleLine(new GUIContent("Occlusion Map"), occlusionMap, occlusionMapScale);
-        DrawProperty(occlusionThreshold);
         DrawProperty(indirectLightScale);
         DrawProperty(ambientScale);
 

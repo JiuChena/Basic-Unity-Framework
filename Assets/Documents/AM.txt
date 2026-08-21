@@ -1,0 +1,217 @@
+AudioManager 重构交接文档
+交付给后续执行 agent。目标：按本设计实现 AudioManager 的池化播放重构。
+背景：框架项目 D:\UnityPrograms\2022.3TLS\Basic Unity Framework（Unity 2022.3，C#）。
+一、任务目标
+将现有 AudioManager（句柄式 + 组件绑定式双链路，462 行）重构为纯池化播放模式：
+- 只保留两种播放重载（资源路径加载 / 直接传 Clip）
+- 所有音频通过 Poolable<T> 池化基类 的专属池管控（空物体 + AudioSource）
+- 出池时注册音频设置变更事件，回池时注销
+- 生产音频物体时按全局设置（音量/开关）同步配置
+- 特定 AudioType 的设置变更时，事件触发所有活跃池化音频刷新音量
+二、需求明细（用户原话整理）
+1. 两种播放重载（唯一入口）
+public void AudioPlay(string assetPath, AudioType type, Transform parent, Action<AudioSource> callback = null)
+{
+    // 按资源路径加载 AudioClip 后赋值直接使用
+}
+
+public void AudioPlay(AudioClip clip, AudioType type, Transform parent, Action<AudioSource> callback = null)
+{
+    // 直接传入 AudioClip 赋值直接使用
+}
+- 两个重载都走池化：空物体带一个 AudioSource 组件播放 Clip
+- callback 可直接访问到该 AudioSource 进行后续操作
+- 都支持注明父对象（parent）
+2. 池化要求
+- 复用现有 Poolable<T> 池化基类（CRTP），做一个 AudioManager 专属池
+- 生产（出池）时：
+- 按 AudioType 注册到音频设置变更事件
+- 同步音频数据设置（音量大小、音效/音乐开关等）
+- 回池时：
+- 注销音频设置变更事件
+- 清理播放状态
+3. 事件驱动音量
+- 当特定 AudioType 的设置数据变更时（如音乐音量改了）
+- 事件触发 → 所有注册了该事件的池化音频物体一起刷新音量
+三、现有基础设施（必须复用，已核对 API）
+3.1 池化基类 Poolable<T>（Core.Gear，ObjectPool/Poolable.cs）
+public abstract class Poolable<T> : MonoBehaviour where T : Poolable<T>
+{
+    // 每个派生类型各一份静态队列，天然隔离不串池
+    public static T Get(T prefab);          // 出池：Dequeue 或 Instantiate；SetActive(true) 后调 OnGet()
+    public void Put();                       // 回池：调 OnPut()；SetActive(false)；入队
+    public void Put(float delayTime);        // 延迟回池（协程）
+    protected virtual void OnGet() { }       // 出池钩子：重置状态、绑定数据
+    protected virtual void OnPut() { }       // 回池钩子：清理状态
+}
+要点：Get 静态方法需要传入 prefab 用于首次实例化；OnGet/OnPut 是定制点。
+3.2 资源加载 AddressableManager + ResourceLease<T>（Core.Gear，ResourceSystem/）
+// 异步加载并返回租约（引用计数）
+Task<ResourceLease<T>> AcquireAssetAsync<T>(string key) where T : Object;
+Task<ResourceLease<T>> AcquireAssetAsync<T>(string key, ResourceScope scope) where T : Object;
+
+// 租约
+ResourceLease<T>.Asset     // 资源实例
+ResourceLease<T>.Dispose() // 释放引用计数
+ResourceLease<T>.IsReleased
+- 已有 ResourceScope（可绑定一组租约的生命周期）
+- 已有全局释放事件 AddressableManager.OnResourceReleased（参数为完整 resourceKey）
+- 旧 AudioManager 中已有用法参考：await AddressableManager.Instance.AcquireAssetAsync<AudioClip>(addressableKey)
+3.3 音频设置 AudioDataManager + AudioData（Core.Gear，AudioModuleManager/）
+// 单例
+public static AudioDataManager Instance;
+
+// 设置数据（含持久化）
+public AudioData Data;    // musicEnabled, musicVolume, soundEnabled, soundVolume
+
+// 设置变更事件（关键：订阅它实现音量刷新）
+public event Action<AudioData> SettingsChanged;
+
+// 设置入口（这些方法内部会触发 SettingsChanged）
+public void PushData(AudioData nextData);
+public void SetMusicEnabled(bool enabled);
+public void SetMusicVolume(float volume);
+public void SetSoundEnabled(bool enabled);
+public void SetSoundVolume(float volume);
+- AudioData 字段：musicEnabled(bool), musicVolume(float 0-1), soundEnabled(bool), soundVolume(float 0-1)
+- AudioType 枚举：Music / Sound（决定读哪组音量）
+- 现有 ApplyRuntimeSettings() 内部会调 SettingsChanged?.Invoke(Data)
+3.4 现有 AudioManager 结构（将被替换/重写）
+AudioManager（纯 C# 单例）
+  ├── idleSources 队列池（AudioSource 池）
+  ├── activeAudios 句柄表（handle → ActiveAudioInfo）
+  ├── Play(clip, type, pos/transform, ...) 返回句柄       ← 句柄式
+  ├── SetAudio(key/clip, obj, type, ...)                 ← 组件绑定式
+  ├── RemoveAudio(source, mode, ...)
+  ├── Tick() 每帧回收已完成播放
+  └── ApplyAudioSettings(music/sound enabled+volume)     ← 全局音量同步
+旧实现还有：AudioManagerHost（MonoBehaviour 驱动 Tick + 协程释放租约）、ActiveAudioInfo、StopAudioMode、RemoveAudioMode。
+四、已确定的设计方案
+4.1 新建 AudioPlayer（池化音频组件，继承 Poolable<AudioPlayer>）
+/// <summary>
+/// 池化音频播放组件：空物体 + AudioSource，出池注册设置事件，回池注销。
+/// </summary>
+public sealed class AudioPlayer : Poolable<AudioPlayer>
+{
+    // 播放用的 AudioSource 组件。
+    [SerializeField] private AudioSource _source;
+    // 当前音频类型，出池时按它注册音量设置事件。
+    private AudioType _audioType;
+    // 当前 AudioClip 资源租约，回池时释放。
+    private ResourceLease<AudioClip> _clipLease;
+
+    /// <summary>供 AudioManager 回调访问的 AudioSource。</summary>
+    public AudioSource Source => _source;
+
+    /// <summary>出池：应用设置、注册事件。</summary>
+    protected override void OnGet()
+    {
+        // 按 _audioType 应用当前全局音量/开关（读 AudioDataManager.Data）
+        // 订阅 AudioDataManager.SettingsChanged
+    }
+
+    /// <summary>回池：停止、注销事件、释放租约。</summary>
+    protected override void OnPut()
+    {
+        // 停止播放、清 clip
+        // 取消订阅 AudioDataManager.SettingsChanged
+        // 释放 _clipLease
+    }
+
+    /// <summary>按类型同步当前全局音量与开关。</summary>
+    public void ApplySettings() { }
+
+    /// <summary>播放指定 Clip（挂父对象 + 回调）。</summary>
+    public void Play(AudioClip clip, AudioType type, Transform parent, Action<AudioSource> callback) { }
+
+    /// <summary>设置变更事件处理（按 AudioType 刷新音量）。</summary>
+    private void OnAudioSettingsChanged(AudioData data) { }
+}
+4.2 重写 AudioManager（纯管理器）
+/// <summary>
+/// 音频管理器：通过池化 AudioPlayer 播放音频，按资源路径或直接 Clip 两种方式。
+/// </summary>
+public class AudioManager
+{
+    // 单例。
+    public static AudioManager Instance { get; } = new AudioManager();
+
+    // 池化播放器预制体（运行时创建的空物体）。
+    private AudioPlayer _playerPrefab;
+    // 预加载的 clip 租约：assetPath → ResourceLease，供路径播放复用。
+    private readonly Dictionary<string, ResourceLease<AudioClip>> _clipLeases = new();
+
+    private AudioManager() { }
+
+    /// <summary>按资源路径异步加载 AudioClip 并播放。</summary>
+    public async void AudioPlay(string assetPath, AudioType type, Transform parent, Action<AudioSource> callback = null) { }
+
+    /// <summary>直接使用 AudioClip 播放。</summary>
+    public void AudioPlay(AudioClip clip, AudioType type, Transform parent, Action<AudioSource> callback = null) { }
+}
+4.3 核心流程
+AudioPlay(assetPath, type, parent, callback)
+  ├── 缓存命中？→ 复用租约
+  ├── 未命中 → AcquireAssetAsync<AudioClip>(path) → 缓存
+  └── AudioPlay(clip, type, parent, callback, lease)
+
+AudioPlay(clip, type, parent, callback)
+  ├── AudioPlayer.Get(_playerPrefab)          ← 池化取
+  │     ├── OnGet():
+  │     │     ├── 应用当前音量设置（按 type）
+  │     │     └── AudioDataManager.SettingsChanged += OnAudioSettingsChanged   ← 注册事件
+  ├── 挂到 parent（localPosition=0）
+  ├── 赋值 clip + type
+  ├── source.Play()
+  └── callback?.Invoke(source)                ← 调用方可访问 AS
+
+播放完成（非循环）
+  ├── 检测 isPlaying == false
+  └── AudioPlayer.Put()                       ← 池化回
+        ├── OnPut():
+        │     ├── AudioDataManager.SettingsChanged -= OnAudioSettingsChanged   ← 注销事件
+        │     └── 释放 clipLease
+
+设置变更（用户调 SetMusicVolume 等）
+  └── AudioDataManager.ApplyRuntimeSettings()
+        ├── AudioManager.ApplyAudioSettings()  ← 旧逻辑（可留可删）
+        └── SettingsChanged?.Invoke(Data)
+              └── 所有活跃 AudioPlayer.OnAudioSettingsChanged()
+                    └── 按 _audioType 应用 Data.music/sound.volume + enabled
+五、待确认的设计点（执行 agent 需与用户确认）
+1. 非循环音频播完自动回池：要不要自动回收？（旧 AudioManager 有 Tick 自动回收。建议：非循环播完自动 Put，循环的由调用方手动 Put——需用户确认）
+2. 路径播放的租约缓存：assetPath → ResourceLease 字典缓存，避免反复加载。何时释放？（建议随 AudioManager 常驻不释放，或提供 ClearClipCache()）
+3. SettingsChanged 事件签名：现有 Action<AudioData>——AudioPlayer 直接订阅它即可，无需改 AudioDataManager。
+4. 旧 AudioManager 的清理：现有 462 行 AudioManager 是否整体替换？还是新增 AudioPlayer + 重写 AudioManager？（用户表达是"做一个 AudioManager 的专属池"，倾向重写）
+六、开发规范约束（项目强制）
+1. 编译零报错：任何改动不得导致编译错误；旧 AudioManager 被替换时，需全局搜索调用方并更新引用（grep AudioManager.Instance 找到所有调用点）
+2. 注释规范（dev-standards）：
+- 类 <summary> 一句话
+- 所有类级字段用 // 注释（字典要说明 key→value）
+- 所有方法有 <summary>，参数/返回值有说明
+- 方法内独立逻辑段用 // 注释
+- 全部使用 UTF-8 中文注释
+3. 代码风格：短控制流同行不展开花括号；多行才展开；#region 名即标签不加装饰线
+4. 框架修改需谨慎：这是 Core.Gear 基础框架模块，改动前确认用户已同意（本设计即用户要求）
+5. Unity 工作边界：只写脚本，不拼场景不摆物体
+七、涉及文件
+文件
+Assets/Scripts/CSharp/Core/Gear/AudioModuleManager/AudioPlayer.cs
+Assets/Scripts/CSharp/Core/Gear/AudioModuleManager/AudioManager.cs
+Assets/Scripts/CSharp/Core/Gear/AudioModuleManager/AudioManagerHost.cs
+Assets/Scripts/CSharp/Core/Gear/AudioModuleManager/ActiveAudioInfo.cs
+Assets/Scripts/CSharp/Core/Gear/AudioModuleManager/StopAudioMode.cs / RemoveAudioMode.cs
+Assets/Scripts/CSharp/Core/Gear/ObjectPool/Poolable.cs
+Assets/Scripts/CSharp/Core/Gear/ResourceSystem/AddressableManager.cs
+Assets/Scripts/CSharp/Core/Gear/AudioModuleManager/AudioDataManager.cs
+AudioData.cs / AudioType.cs
+八、讨论进度与结论
+项
+用户确认走 Poolable<T> 池化基类专属池
+两种重载签名
+出池注册事件 + 同步设置
+回池注销事件
+callback 访问 AudioSource
+事件驱动音量刷新
+自动回池 / 租约缓存 / 旧文件清理
+以上。执行 agent 拿到这份文档即可开始实现；第 5 节 4 个待确认点建议开工前先与用户敲定。

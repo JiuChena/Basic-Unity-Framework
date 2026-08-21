@@ -5,8 +5,7 @@ Shader "GTS/General Toony Shader"
         _Albedo("主纹理图", 2D) = "white" {}
         _Color("主色", Color) = (1,1,1,1)
         _OcclusionMap("遮蔽贴图", 2D) = "black" {}
-        _OcclusionMapScale("遮蔽强度", Range(0, 1)) = 1
-        _OcclusionThreshold("遮蔽过滤阈值(0=关闭过滤)", Range(0, 1)) = 0
+        _OcclusionMapScale("遮蔽过滤值(高于滤值为阴影)", Range(0, 1)) = 0.5
 
         _NormalMap("法线贴图", 2D) = "bump" {}
         _NormalMapScale("法线强度", Range(0, 1)) = 1
@@ -185,7 +184,6 @@ Shader "GTS/General Toony Shader"
             half4 _OcclusionMap_ST;
             float4 _Color;
             float _OcclusionMapScale;
-            float _OcclusionThreshold;
             //法线
             half4 _NormalMap_ST;
             float _NormalMapScale;
@@ -318,9 +316,14 @@ Shader "GTS/General Toony Shader"
                     #endif
                 }
                 
-                //Lambert -> HalfLambert漫反射插值
+                //遮蔽遮罩并入阴影计算：过滤值二值判定——遮蔽值高于过滤值视为阴影，低于过滤值不作为阴影
+                half occValue = tex2D(_OcclusionMap, uv).g;
+                half occShadow = step(_OcclusionMapScale, occValue); // 值 >= 过滤值 → 阴影(1)，否则(0)
+
+                //Lambert -> HalfLambert漫反射插值（遮蔽区扣减亮度进阴影档，随漫反射一起接受色阶化量化）
                 half wrapNL = lerp(max(0, NL), (NL + 1) * 0.5, _DiffuseWrap);
-                
+                wrapNL = max(0.0, wrapNL - occShadow);
+
                 //计算阴影部分大段、小段的对应值离散化出来
                 half steps = max(round(_DiffuseSteps), 2);
                 half bandPos = wrapNL * (steps - 1);
@@ -329,29 +332,26 @@ Shader "GTS/General Toony Shader"
                 half bandBlend = smoothstep(max(1.0 - _DiffuseSmooth, 0.0001), 1.0, bandFrac);
                 half rampStep = saturate((bandIdx + bandBlend) / (steps - 1));
                 rampStep *= lightShadowAttenuation;
-                
-                //主纹理与遮蔽提前采样（阴影色混合需要两者）
+
+                //主纹理采样（阴影色混合需要）
                 half4 mainTextureSample = tex2D(_Albedo, uv);
-                half occValue = tex2D(_OcclusionMap, uv).g;
-                // 采样值减去过滤阈值得到遮蔽阴影强度（sat 截断）；阈值=0 时退化为原连续渐变
-                half occShadow = saturate(occValue - _OcclusionThreshold);
 
                 //计算暗部阴影色、根据当前亮度得出该像素应该是算出的暗部阴影色还是亮部色进行插值
                 half shadowIntensity = _ShadowColor.a;
                 half3 shadowColorMixed = lerp(_HColor.rgb, _ShadowColor.rgb, shadowIntensity);
-                // 阴影色混合贴图颜色：阴影着色tint与贴图颜色插值（阴影色权重 (1-w)，贴图色权重 w）
+                // 阴影色混合贴图颜色：与光照阴影、遮蔽阴影统一（阴影色权重 (1-w)，贴图色权重 w）
                 #ifdef _USESHADOWBASEMIX_ON
                 shadowColorMixed = lerp(shadowColorMixed, mainTextureSample.rgb, _ShadowBaseMix);
                 #endif
+                //遮蔽已并入色阶化输入（wrapNL），此处直接用 rampStep 做漫反射色阶化插值
                 half3 mainDiffuse = lerp(shadowColorMixed, _HColor.rgb, rampStep) * _MainLightColor.rgb * _MainLightDiffuseScale;
                 //金属漫反射减弱，能量转移到高光/环境反射
                 #ifdef _USEMETAL_ON
                 mainDiffuse *= 0.6;
                 #endif
-                
-                //遮蔽遮罩是标量阴影遮罩：按遮蔽强度把贴图色从亮色插向阴影着色版（阴影色已含贴图颜色混合）
-                half occFactor = saturate(occShadow * _OcclusionMapScale);
-                half4 mainTexture = _Color * half4(lerp(mainTextureSample.rgb, shadowColorMixed, occFactor), 1);
+
+                //遮蔽已并入色阶化，主纹理不再单独做遮蔽插值
+                half4 mainTexture = _Color * half4(mainTextureSample.rgb, 1);
                 
                 //AO全局光照（环境光、光照探针等）
                 half3 bakedGI = SampleSH(worldNormal);

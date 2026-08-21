@@ -12,7 +12,6 @@ Material:
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords:
-  - _USEADDITIONALLIGHTDIFFUSE_ON
   - _USEADDITIONALLIGHTSPECULAR_ON
   - _USEOUTLINE_ON
   - _USERIMLIGHT_ON
@@ -207,7 +206,7 @@ Material:
     - _RingOffset: 0
     - _RingPower: 15
     - _SeeThroughAlpha: 0.4
-    - _ShadowBaseMix: 0.75
+    - _ShadowBaseMix: 0.6
     - _Smoothness: 0.4472136
     - _SmoothnessMultiplier: 1
     - _SmoothnessTextureChannel: 0
@@ -239,7 +238,7 @@ Material:
     - _TipTaper: 0
     - _Transparency: 1
     - _UVSec: 0
-    - _UseAdditionalLightsDiffuse: 1
+    - _UseAdditionalLightsDiffuse: 0
     - _UseAdditionalLightsSpecular: 1
     - _UseEmission: 0
     - _UseEnvironmentReflection: 0

@@ -26,7 +26,6 @@ Material:
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords:
   - _USEEMISSION_ON
-  - _USERIMLIGHT_ON
   m_InvalidKeywords:
   - _DIFFUSEMODE_STEP
   - _OUTLINEMODE_WORLDSPACE
@@ -261,7 +260,7 @@ Material:
     - _UseMetal: 0
     - _UseOutline: 0
     - _UseOutlineNormalMap: 1
-    - _UseRimLight: 1
+    - _UseRimLight: 0
     - _UseSeeThrough: 0
     - _UseShadowBaseMix: 0
     - _UseSpecMapHighlight: 0

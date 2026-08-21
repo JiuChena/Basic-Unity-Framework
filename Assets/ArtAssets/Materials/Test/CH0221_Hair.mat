@@ -25,10 +25,8 @@ Material:
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords:
-  - _USEADDITIONALLIGHTDIFFUSE_ON
   - _USEHAIRDIRECTIONHIGHLIGHT_ON
   - _USEOUTLINE_ON
-  - _USERIMLIGHT_ON
   - _USESHADOWBASEMIX_ON
   m_InvalidKeywords:
   - _DIFFUSEMODE_STEP
@@ -161,7 +159,7 @@ Material:
     - _DiffusePosterizeSteps: 3.19
     - _DiffuseSmooth: 0
     - _DiffuseSteps: 3
-    - _DiffuseWrap: 0.25
+    - _DiffuseWrap: 0.4
     - _DstBlend: 0
     - _DstBlendAlpha: 0
     - _EmissionIntensity: 1
@@ -188,7 +186,7 @@ Material:
     - _Mode: 0
     - _NormalMapScale: 1
     - _NormalMapStrength: 1
-    - _OcclusionMapScale: 1
+    - _OcclusionMapScale: 0.5
     - _OcclusionStrength: 0.3
     - _OcclusionThreshold: 0.5
     - _OutlineMaxScale: 10
@@ -237,7 +235,7 @@ Material:
     - _TipTaper: 0
     - _Transparency: 1
     - _UVSec: 0
-    - _UseAdditionalLightsDiffuse: 1
+    - _UseAdditionalLightsDiffuse: 0
     - _UseAdditionalLightsSpecular: 0
     - _UseEmission: 0
     - _UseEnvironmentReflection: 0
@@ -247,7 +245,7 @@ Material:
     - _UseMetal: 0
     - _UseOutline: 1
     - _UseOutlineNormalMap: 1
-    - _UseRimLight: 1
+    - _UseRimLight: 0
     - _UseSeeThrough: 0
     - _UseShadowBaseMix: 1
     - _UseSpecular: 0
@@ -266,7 +264,7 @@ Material:
     - _RimColor: {r: 1, g: 1, b: 1, a: 1}
     - _RimColorMask: {r: 1, g: 0, b: 0, a: 1}
     - _RimShadowColor: {r: 1, g: 1, b: 1, a: 0}
-    - _ShadowColor: {r: 0.75, g: 0.75, b: 0.75, a: 1}
+    - _ShadowColor: {r: 0.92549026, g: 0.7490196, b: 0.69411767, a: 1}
     - _SpecColor: {r: 1, g: 1, b: 1, a: 1}
     - _SpecularColor: {r: 0.9960785, g: 0.8745099, b: 0.8745099, a: 1}
     - _StencilOverlayColor: {r: 0, g: 0, b: 0, a: 0}
