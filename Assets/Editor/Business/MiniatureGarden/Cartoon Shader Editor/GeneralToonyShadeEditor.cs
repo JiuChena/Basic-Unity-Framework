@@ -50,6 +50,7 @@ public class GeneralToonyShadeEditor : ShaderGUI
     MaterialProperty albedoColor = null;
     MaterialProperty occlusionMap = null;
     MaterialProperty occlusionMapScale = null;
+    MaterialProperty occlusionMapChannel = null;
     MaterialProperty normalMap = null;
     MaterialProperty normalMapScale = null;
     MaterialProperty indirectLightScale = null;
@@ -80,8 +81,10 @@ public class GeneralToonyShadeEditor : ShaderGUI
     MaterialProperty hairDirectionHighlightLobeOffset = null;
     MaterialProperty hairDirectionHighlightAlphaWeight = null;
     MaterialProperty hairDirectionHighlightAlphaPower = null;
+    MaterialProperty hairDirectionHighlightChannel = null;
     MaterialProperty specularColor = null;
     MaterialProperty specularScale = null;
+    MaterialProperty specularSmoothnessChannel = null;
     MaterialProperty specularSize = null;
     MaterialProperty specularPosterizeSteps = null;
     MaterialProperty specularFaloff = null;
@@ -126,6 +129,8 @@ public class GeneralToonyShadeEditor : ShaderGUI
 
     //半透明区
     MaterialProperty blendSrc = null;
+    MaterialProperty transparencyMap = null;
+    MaterialProperty transparencyChannel = null;
     MaterialProperty blendDst = null;
     MaterialProperty transparency = null;
 
@@ -148,6 +153,7 @@ public class GeneralToonyShadeEditor : ShaderGUI
         albedoColor = FindProperty("_Color", props);
         occlusionMap = FindProperty("_OcclusionMap", props);
         occlusionMapScale = FindProperty("_OcclusionMapScale", props);
+        occlusionMapChannel = FindProperty("_OcclusionMapChannel", props);
         normalMap = FindProperty("_NormalMap", props);
         normalMapScale = FindProperty("_NormalMapScale", props);
         indirectLightScale = FindProperty("_IndirectlightScale", props);
@@ -175,8 +181,10 @@ public class GeneralToonyShadeEditor : ShaderGUI
         hairDirectionHighlightLobeOffset = FindProperty("_HairDirectionHighlightLobeOffset", props);
         hairDirectionHighlightAlphaWeight = FindProperty("_HairDirectionHighlightAlphaWeight", props);
         hairDirectionHighlightAlphaPower = FindProperty("_HairDirectionHighlightAlphaPower", props);
+        hairDirectionHighlightChannel = FindProperty("_HairDirectionHighlightChannel", props);
         specularColor = FindProperty("_SpecularColor", props);
         specularScale = FindProperty("_SpecularScale", props);
+        specularSmoothnessChannel = FindProperty("_SpecularSmoothnessChannel", props);
         specularSize = FindProperty("_SpecularSize", props);
         specularPosterizeSteps = FindProperty("_SpecularPosterizeSteps", props);
         specularFaloff = FindProperty("_SpecularFaloff", props);
@@ -217,6 +225,8 @@ public class GeneralToonyShadeEditor : ShaderGUI
         blendSrc = FindProperty("_BlendSrc", props);
         blendDst = FindProperty("_BlendDst", props);
         transparency = FindProperty("_Transparency", props);
+        transparencyMap = FindProperty("_TransparencyMap", props);
+        transparencyChannel = FindProperty("_TransparencyChannel", props);
     }
 
     /// <summary>
@@ -342,6 +352,18 @@ public class GeneralToonyShadeEditor : ShaderGUI
     }
 
     /// <summary>
+    /// 绘制贴图通道选择下拉框（R/G/B/A）。
+    /// </summary>
+    /// <param name="prop">通道属性（0=R 1=G 2=B 3=A）。</param>
+    /// <param name="label">显示名。</param>
+    private void DrawChannelPopup(MaterialProperty prop, string label)
+    {
+        int channel = Mathf.RoundToInt(prop.floatValue);
+        var newChannel = (TextureChannel)EditorGUILayout.EnumPopup(label, (TextureChannel)channel);
+        prop.floatValue = (float)newChannel;
+    }
+
+    /// <summary>
     /// 绘制开关行：左侧粗体标题，右侧开关控件。
     /// </summary>
     /// <param name="prop">开关属性。</param>
@@ -381,6 +403,7 @@ public class GeneralToonyShadeEditor : ShaderGUI
         m_MaterialEditor.TexturePropertySingleLine(new GUIContent("Albedo"), albedoMap, albedoColor);
         m_MaterialEditor.TexturePropertySingleLine(new GUIContent("Normal Map"), normalMap, normalMapScale);
         m_MaterialEditor.TexturePropertySingleLine(new GUIContent("Occlusion Map"), occlusionMap, occlusionMapScale);
+        DrawChannelPopup(occlusionMapChannel, "遮蔽通道");
         DrawProperty(indirectLightScale);
         DrawProperty(ambientScale);
 
@@ -463,6 +486,7 @@ public class GeneralToonyShadeEditor : ShaderGUI
         EditorGUILayout.Space(2);
 
         m_MaterialEditor.TexturePropertySingleLine(new GUIContent("Specular Map"), specularMap, specularColor);
+        DrawChannelPopup(specularSmoothnessChannel, "光滑度通道");
 
         EditorGUILayout.Space(2);
         EditorGUILayout.EndVertical();
@@ -492,6 +516,7 @@ public class GeneralToonyShadeEditor : ShaderGUI
                 hairDirectionHighlightTangentBlend, hairDirectionHighlightLobeOffset,
                 hairDirectionHighlightAlphaWeight, hairDirectionHighlightAlphaPower
             }, "Anisotropic Sampling");
+        DrawChannelPopup(hairDirectionHighlightChannel, "各向异性响应通道");
 
         EditorGUILayout.Space(2);
         EditorGUILayout.EndVertical();
@@ -543,12 +568,29 @@ public class GeneralToonyShadeEditor : ShaderGUI
     }
 
     /// <summary>
-    /// 绘制半透明组：混合源/目标下拉框 + 最终Alpha（头发半透明）。
+    /// 绘制半透明组：混合源/目标下拉框 + 透明度贴图/通道 + 最终Alpha（头发半透明）。
     /// </summary>
     private void TransparencyEditor()
     {
-        DrawBoxSpace("Transparency",
-            new List<MaterialProperty> { blendSrc, blendDst, transparency });
+        EditorGUILayout.BeginVertical(BoxScopeStyle);
+        EditorGUILayout.Space(2);
+
+        GUILayout.Label("Transparency", ToonLabelStyle);
+
+        EditorGUILayout.BeginVertical(BoxScopeStyle);
+        EditorGUILayout.Space(2);
+
+        DrawProperty(blendSrc);
+        DrawProperty(blendDst);
+        m_MaterialEditor.TexturePropertySingleLine(new GUIContent("Transparency Map"), transparencyMap);
+        DrawChannelPopup(transparencyChannel, "透明度通道");
+        DrawProperty(transparency);
+
+        EditorGUILayout.Space(2);
+        EditorGUILayout.EndVertical();
+
+        EditorGUILayout.Space(2);
+        EditorGUILayout.EndVertical();
     }
 
     /// <summary>
@@ -591,6 +633,11 @@ public class GeneralToonyShadeEditor : ShaderGUI
     /// 模板测试模式枚举（与 shader 属性值对应：0=关闭 1=写入 2=读取）。
     /// </summary>
     private enum StencilTestMode { Off = 0, Write = 1, Read = 2 }
+
+    /// <summary>
+    /// 贴图通道枚举（与 shader 属性值对应：0=R 1=G 2=B 3=A）。
+    /// </summary>
+    private enum TextureChannel { R = 0, G = 1, B = 2, A = 3 }
 
     /// <summary>
     /// 绘制高级设置组：渲染队列、实例化与双面全局光照。

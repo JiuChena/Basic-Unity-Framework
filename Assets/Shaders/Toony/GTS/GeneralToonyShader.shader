@@ -6,6 +6,7 @@ Shader "GTS/General Toony Shader"
         _Color("主色", Color) = (1,1,1,1)
         _OcclusionMap("遮蔽贴图", 2D) = "black" {}
         _OcclusionMapScale("遮蔽过滤值(高于滤值为阴影)", Range(0, 1)) = 0.5
+        [Enum(R,0,G,1,B,2,A,3)] _OcclusionMapChannel("遮蔽通道", Float) = 1
 
         _NormalMap("法线贴图", 2D) = "bump" {}
         _NormalMapScale("法线强度", Range(0, 1)) = 1
@@ -34,8 +35,10 @@ Shader "GTS/General Toony Shader"
         _HairDirectionHighlightLobeOffset("高光带方向偏移", Range(-0.5, 0.5)) = 0
         _HairDirectionHighlightAlphaWeight("Alpha响应权重", Range(0, 1)) = 0.5
         _HairDirectionHighlightAlphaPower("Alpha响应曲线", Range(0.25, 4)) = 1
+        [Enum(R,0,G,1,B,2,A,3)] _HairDirectionHighlightChannel("各向异性响应通道", Float) = 3
         _SpecularColor("高光颜色", Color) = (1,1,1,1)
         _SpecularScale("高光强度", Range(0, 1)) = 0.5
+        [Enum(R,0,G,1,B,2,A,3)] _SpecularSmoothnessChannel("光滑度通道", Float) = 3
         _SpecularSize("高光大小", Range(0, 1)) = 0.5
         _SpecularPosterizeSteps("高光色阶数", Range(1, 15)) = 5
         _SpecularFaloff("高光衰减", Range(0, 1)) = 0
@@ -77,6 +80,8 @@ Shader "GTS/General Toony Shader"
         //半透明（头发等）：混合源/混合目标下拉框 + 最终前向Alpha
         [Enum(UnityEngine.Rendering.BlendMode)] _BlendSrc("混合源(BlendSrc)", Float) = 5
         [Enum(UnityEngine.Rendering.BlendMode)] _BlendDst("混合目标(BlendDst)", Float) = 10
+        _TransparencyMap("透明度贴图", 2D) = "white" {}
+        [Enum(R,0,G,1,B,2,A,3)] _TransparencyChannel("透明度通道", Float) = 3
         _Transparency("透明度", Range(0, 1)) = 1
     }
     SubShader
@@ -152,6 +157,7 @@ Shader "GTS/General Toony Shader"
             Name "Forward"
             Tags { "LightMode"="UniversalForward" }
             Blend [_BlendSrc] [_BlendDst]
+            Cull Off
 
             HLSLPROGRAM
             
@@ -179,6 +185,7 @@ Shader "GTS/General Toony Shader"
             half4 _OcclusionMap_ST;
             float4 _Color;
             float _OcclusionMapScale;
+            float _OcclusionMapChannel;
             //法线
             half4 _NormalMap_ST;
             float _NormalMapScale;
@@ -206,6 +213,8 @@ Shader "GTS/General Toony Shader"
             float _HairDirectionHighlightAlphaWeight;
             float _HairDirectionHighlightAlphaPower;
             float _SpecularScale;
+            float _SpecularSmoothnessChannel;
+            float _HairDirectionHighlightChannel;
             float _SpecularSize;
             float _SpecularPosterizeSteps;
             float _SpecularFaloff;
@@ -224,13 +233,16 @@ Shader "GTS/General Toony Shader"
             float _RimFresnelSoftness;
             float _RimTextureWeight;
             float _Transparency;
+            half4 _TransparencyMap_ST;
+            float _TransparencyChannel;
             CBUFFER_END
-            
+
             sampler2D _Albedo;
             sampler2D _OcclusionMap;
             sampler2D _NormalMap;
             sampler2D _SpecularMap;
             sampler2D _EmissionMap;
+            sampler2D _TransparencyMap;
 
             struct VertexInput
             {
@@ -251,6 +263,16 @@ Shader "GTS/General Toony Shader"
                 float4 uv : TEXCOORD5;
             };
             
+            // 按通道索引提取贴图单通道值（0=R 1=G 2=B 3=A）
+            half ChannelSelect(half4 tex, float channel)
+            {
+                half c = tex.r;
+                if (channel >= 3) c = tex.a;
+                else if (channel >= 2) c = tex.b;
+                else if (channel >= 1) c = tex.g;
+                return c;
+            }
+
             half PosterizeFaloff( half IN, half Steps, half Faloff )
             {
                 float minOut = 0.5 * Faloff - 0.005;
@@ -311,19 +333,20 @@ Shader "GTS/General Toony Shader"
                 }
                 
                 //遮蔽遮罩并入阴影计算：过滤值二值判定——遮蔽值高于过滤值视为阴影，低于过滤值不作为阴影
-                half occValue = tex2D(_OcclusionMap, uv).g;
+                half occValue = ChannelSelect(tex2D(_OcclusionMap, uv), _OcclusionMapChannel);
                 half occShadow = step(_OcclusionMapScale, occValue); // 值 >= 过滤值 → 阴影(1)，否则(0)
 
                 //Lambert -> HalfLambert漫反射插值（遮蔽区扣减亮度进阴影档，随漫反射一起接受色阶化量化）
                 half wrapNL = lerp(max(0, NL), (NL + 1) * 0.5, _DiffuseWrap);
                 wrapNL = max(0.0, wrapNL - occShadow);
 
-                //计算阴影部分大段、小段的对应值离散化出来
+                //先柔化再色阶化：过渡带对称覆盖档位边界，过渡上限为档间中点（不抬到全亮），
+                //档位内部保持纯色——2 阶只有暗/灰过渡/亮，暗档不会被大片抬成白色
                 half steps = max(round(_DiffuseSteps), 2);
                 half bandPos = wrapNL * (steps - 1);
                 half bandIdx = floor(bandPos);
                 half bandFrac = frac(bandPos);
-                half bandBlend = smoothstep(max(1.0 - _DiffuseSmooth, 0.0001), 1.0, bandFrac);
+                half bandBlend = smoothstep(1.0 - _DiffuseSmooth, 1.0 + _DiffuseSmooth, bandFrac);
                 half rampStep = saturate((bandIdx + bandBlend) / (steps - 1));
                 rampStep *= lightShadowAttenuation;
 
@@ -388,7 +411,7 @@ Shader "GTS/General Toony Shader"
                 //视角向量计算，高光贴图采样，贴图采样过滤、缩放
                 float3 worldViewDir = SafeNormalize(_WorldSpaceCameraPos.xyz - o.worldPosition);
                 half4 specularMapSample = tex2D(_SpecularMap, uv);
-                half smoothness = (specularMapSample.a - 0.2) * _SpecularScale;
+                half smoothness = (ChannelSelect(specularMapSample, _SpecularSmoothnessChannel) - 0.2) * _SpecularScale;
                 
                 //高光主光计算、高光主光色阶化处理
                 #ifdef _USESPECULAR_ON
@@ -450,7 +473,7 @@ Shader "GTS/General Toony Shader"
                 half tangentMatch = saturate(1.0 - tangentDistance);
                 half anisotropicLobe = pow(tangentMatch, _HairDirectionHighlightAnisotropy);
                 half directionHighlight = smoothstep(_HairDirectionHighlightThreshold, _HairDirectionHighlightThreshold + _HairDirectionHighlightSoftness, anisotropicLobe);
-                half alphaMask = pow(saturate(specularMapSample.a * 2.0), _HairDirectionHighlightAlphaPower);
+                half alphaMask = pow(saturate(ChannelSelect(specularMapSample, _HairDirectionHighlightChannel) * 2.0), _HairDirectionHighlightAlphaPower);
                 half alphaResponse = lerp(1.0, alphaMask, _HairDirectionHighlightAlphaWeight);
                 half3 hairDirectionHighlight = directionHighlight * alphaResponse * _HairDirectionHighlightIntensity * mainLight.color * lightShadowAttenuation; // 高光颜色在组装末尾统一乘一次
                 #else
@@ -480,7 +503,9 @@ Shader "GTS/General Toony Shader"
                 #endif
 
                 //最终输出
-                half4 litColorFinal = half4(finalDiffuse + specularColor + rimFinal, _Transparency);
+                //透明度：透明度贴图通道值 × 透明度参数（贴图默认white → 退化为纯参数控制）
+                half4 litColorFinal = half4(finalDiffuse + specularColor + rimFinal,
+                                            ChannelSelect(tex2D(_TransparencyMap, uv), _TransparencyChannel) * _Transparency);
                 //自发光：贴图 × 颜色(HDR) × 强度
                 #ifdef _USEEMISSION_ON
                 litColorFinal.rgb += tex2D(_EmissionMap, uv).rgb * _EmissionColor.rgb * _EmissionIntensity;
