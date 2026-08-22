@@ -12,12 +12,8 @@ Material:
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords:
-  - _USEEMISSION_ON
-  - _USEENVIRONMENTREFLETION_ON
-  - _USEHAIRDIRECTIONHIGHLIGHT_ON
   - _USEOUTLINE_ON
   - _USESHADOWBASEMIX_ON
-  - _USESPECULAR_ON
   m_InvalidKeywords:
   - _DIFFUSEMODE_STEP
   - _OUTLINEMODE_WORLDSPACE
@@ -94,6 +90,10 @@ Material:
         m_Texture: {fileID: 0}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
+    - _TransparencyMap:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
     - unity_Lightmaps:
         m_Texture: {fileID: 0}
         m_Scale: {x: 1, y: 1}
@@ -154,6 +154,7 @@ Material:
     - _OcclusionMapChannel: 1
     - _OcclusionMapScale: 1
     - _OcclusionStrength: 0.3
+    - _OcclusionTransparency: 1
     - _OutlineMaxScale: 10
     - _OutlineWidth: 0.3
     - _Parallax: 0.02
@@ -181,17 +182,18 @@ Material:
     - _StencilRef: 10
     - _Surface: 0
     - _Transparency: 1
+    - _TransparencyChannel: 3
     - _UVSec: 0
     - _UseAdditionalLightsDiffuse: 0
     - _UseAdditionalLightsSpecular: 0
-    - _UseEmission: 1
-    - _UseEnvironmentReflection: 1
-    - _UseHairDirectionHighlight: 1
+    - _UseEmission: 0
+    - _UseEnvironmentReflection: 0
+    - _UseHairDirectionHighlight: 0
     - _UseMetal: 0
     - _UseOutline: 1
     - _UseRimLight: 0
     - _UseShadowBaseMix: 1
-    - _UseSpecular: 1
+    - _UseSpecular: 0
     - _WorkflowMode: 1
     - _ZWrite: 1
     m_Colors:
