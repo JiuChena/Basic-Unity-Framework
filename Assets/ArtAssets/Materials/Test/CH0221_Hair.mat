@@ -25,9 +25,13 @@ Material:
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords:
+  - _USEEMISSION_ON
+  - _USEENVIRONMENTREFLETION_ON
   - _USEHAIRDIRECTIONHIGHLIGHT_ON
   - _USEOUTLINE_ON
+  - _USERIMLIGHT_ON
   - _USESHADOWBASEMIX_ON
+  - _USESPECULAR_ON
   m_InvalidKeywords:
   - _DIFFUSEMODE_STEP
   - _OUTLINEMODE_WORLDSPACE
@@ -40,7 +44,7 @@ Material:
   m_LightmapFlags: 4
   m_EnableInstancingVariants: 0
   m_DoubleSidedGI: 0
-  m_CustomRenderQueue: 3010
+  m_CustomRenderQueue: 2000
   stringTagMap: {}
   disabledShaderPasses: []
   m_LockedProperties: 
@@ -163,7 +167,7 @@ Material:
     - _DstBlend: 0
     - _DstBlendAlpha: 0
     - _EmissionIntensity: 1
-    - _EnvReflectionStrength: 1
+    - _EnvReflectionStrength: 0
     - _EnvironmentReflections: 1
     - _GlossMapScale: 1
     - _Glossiness: 0.3
@@ -201,26 +205,26 @@ Material:
     - _RampDiffuseTextureLoaded: 0
     - _RampSmooth: 0.2
     - _ReceiveShadows: 1
-    - _RimFresnelSoftness: 2
+    - _RimFresnelSoftness: 0.1
     - _RimMax: 1
-    - _RimMin: 0.8
+    - _RimMin: 1
     - _RimPower: 12
     - _RimSideThreshold: 1
     - _RimSmoothness: 0.5
     - _RimSplitColor: 2
-    - _RimTextureWeight: 0.8
+    - _RimTextureWeight: 0
     - _RimThickness: 1
     - _SeeThroughAlpha: 0.4
     - _ShadowBaseMix: 0.6
     - _Smoothness: 0.4472136
     - _SmoothnessMultiplier: 1
     - _SmoothnessTextureChannel: 0
-    - _SpecularFaloff: 1
+    - _SpecularFaloff: 0
     - _SpecularHighlights: 1
-    - _SpecularPosterizeSteps: 9
-    - _SpecularScale: 0.441
+    - _SpecularPosterizeSteps: 1
+    - _SpecularScale: 0
     - _SpecularShadowMask: 0
-    - _SpecularSize: 0.215
+    - _SpecularSize: 0
     - _SrcBlend: 1
     - _SrcBlendAlpha: 1
     - _StencilCompare: 6
@@ -237,18 +241,18 @@ Material:
     - _UVSec: 0
     - _UseAdditionalLightsDiffuse: 0
     - _UseAdditionalLightsSpecular: 0
-    - _UseEmission: 0
-    - _UseEnvironmentReflection: 0
+    - _UseEmission: 1
+    - _UseEnvironmentReflection: 1
     - _UseEnvironmentRefletion: 0
     - _UseHairDirectionHighlight: 1
     - _UseLightRamp: 0
     - _UseMetal: 0
     - _UseOutline: 1
     - _UseOutlineNormalMap: 1
-    - _UseRimLight: 0
+    - _UseRimLight: 1
     - _UseSeeThrough: 0
     - _UseShadowBaseMix: 1
-    - _UseSpecular: 0
+    - _UseSpecular: 1
     - _WorkflowMode: 1
     - _XRayEnhancement: 0.62
     - _XRayPower: 0

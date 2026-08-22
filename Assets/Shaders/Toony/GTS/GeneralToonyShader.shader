@@ -93,7 +93,6 @@ Shader "GTS/General Toony Shader"
             Name "Outline"
             
             Cull Front
-            Blend [_BlendSrc] [_BlendDst]
 
             HLSLPROGRAM
             
