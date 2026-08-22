@@ -127,15 +127,11 @@ Shader "GTS/General Toony Shader"
                 VertexOutput o;
                 float3 normalWS = TransformObjectToWorldNormal(v.normal);
 #ifdef _USEOUTLINE_ON
-                // 世界空间模式：纯顶点外拓 + 距离等比自适应（上下限钳制）
-                // 顶点与法线统一在世界空间外扩，避免模型旋转/缩放时方向错乱
                 float3 worldPos = TransformObjectToWorld(v.vertex.xyz);
                 float lerpResult = clamp(lerp(1.0, distance(_WorldSpaceCameraPos, worldPos), _AdaptiveWidth), 1.0, _OutlineMaxScale);
-                // 尖端收边：color.a 由工具烘焙（1=平滑区→不变，尖端趋近0→收窄）
                 worldPos += normalWS * (0.01 * _OutlineWidth * lerpResult);
                 o.pos = TransformWorldToHClip(worldPos);
 #else
-                // 描边关闭：所有顶点塌缩到剪裁空间原点，零面积三角形不产生任何片元
                 o.pos = float4(0, 0, 0, 1);
 #endif
 
@@ -266,7 +262,6 @@ Shader "GTS/General Toony Shader"
             
             VertexOutput vert(VertexInput v)
             {
-                //output初始化
                 VertexOutput o = (VertexOutput)0;
                 //世界空间TBN转换、赋值
                 float3 worldTangent = TransformObjectToWorldDir(v.tangent.xyz);
