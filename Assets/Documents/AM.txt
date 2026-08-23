@@ -215,3 +215,18 @@ callback 访问 AudioSource
 事件驱动音量刷新
 自动回池 / 租约缓存 / 旧文件清理
 以上。执行 agent 拿到这份文档即可开始实现；第 5 节 4 个待确认点建议开工前先与用户敲定。
+
+九、实施定稿（2026-08-02 与用户确认后完成）
+1. 自动回池：非循环按 clip.length + 0.5s 经 GOTimer 延迟回池；循环由调用方手动 AudioStop（AudioPlay 新增 loop 参数，默认 false）
+2. 租约缓存：AudioManager 持 assetPath → ResourceLease 缓存 + AudioPlayer → ID 活跃注册表；ReleaseAll() 强制收回全部在外实例并释放缓存；AudioPlayer 回池时 UnregisterPlayer 注销
+3. 订阅归属：AudioPlayer 自管——Play() 内注册 SettingsChanged，OnPut() 内注销（生命周期严格绑定，零泄漏）
+4. 替换完成：旧 Play/SetAudio/RemoveAudio/Tick/AudioManagerHost/ActiveAudioInfo/StopAudioMode/RemoveAudioMode 全部删除；新 AudioPlay（双重载 + loop） / AudioStop / ReleaseAll；AudioDataManager 精简（删 listeners 机制与 ApplyAudioSettings 耦合）
+5. 新增 GOTimer（Core.Gear/GameObjectTimer/）：通用存活计时组件，时间轴字典 + 每帧检查，Clear() 由外部调用
+6. 已实施：GOTimer.cs / AudioManager.cs（重写）/ AudioDataManager.cs（精简）；删除 4 个旧文件
+7. 编译验证：Assembly-CSharp dotnet build 零错误
+8. 2026-08-02 二次调整（用户定稿）：
+   - 弃用 AudioPlayer 壳组件与 AudioManagerHost：音频物体只挂 AudioSource + GOTimer 两个组件
+   - 计时不再由 Manager 每帧 Tick 遍历，改为播放时向 GOTimer 注入回池回调（Register(clip.length+0.5f, () => ReleaseSource(source))）
+   - AudioManager 自建 Queue<AudioSource> 池 + 活跃信息表（AudioSource → 类型/租约/循环）；集中订阅 SettingsChanged 一次遍历刷新音量
+   - 私有播放方法命名为 PlayInternal（避免与公有 AudioPlay 同名）；GOTimer 简化单列表 while 队列式执行
+   - 音频模块最终文件：AudioManager.cs / AudioDataManager.cs / AudioData.cs / AudioType.cs

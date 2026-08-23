@@ -1,10 +1,9 @@
 using System;
-using System.Collections.Generic;
 using Core.Gear;
 using UnityEngine;
 
 /// <summary>
-/// 全局音频设置管理器。负责音频设置的本地持久化，并向所有已注册的 AudioListener 广播音量/开关变更。
+/// 全局音频设置管理器。负责音频设置的本地持久化，并通过 SettingsChanged 事件广播音量/开关变更。
 /// </summary>
 public class AudioDataManager
 {
@@ -13,13 +12,6 @@ public class AudioDataManager
 
     private static AudioDataManager instance;
     public static AudioDataManager Instance => instance ??= new AudioDataManager();
-
-    // AudioSource → AudioType 监听者映射，用于音量设置变更时批量刷新
-    private readonly Dictionary<AudioSource, Core.Gear.AudioType> listeners =
-        new Dictionary<AudioSource, Core.Gear.AudioType>();
-
-    // 复用列表，避免每帧分配
-    private readonly List<AudioSource> invalidListeners = new List<AudioSource>(4);
 
     // 当前音频设置数据
     private AudioData data;
@@ -40,34 +32,8 @@ public class AudioDataManager
         }
     }
 
-    // 设置变更事件，UI 面板等订阅以更新滑块状态
+    // 设置变更事件，AudioManager 集中订阅以统一刷新音量/开关
     public event Action<AudioData> SettingsChanged;
-
-    #region 监听者管理
-
-    /// <summary>
-    /// 注册一个 AudioSource 为音频监听者，设置变更时自动同步音量/静音。
-    /// </summary>
-    /// <param name="source">要注册的 AudioSource</param>
-    /// <param name="type">音频类型</param>
-    public void AddAudioListener(AudioSource source, Core.Gear.AudioType type)
-    {
-        if (source == null) return;
-
-        listeners[source] = type;
-        ApplySoundSettingsToSource(source, type);
-    }
-
-    /// <summary>
-    /// 移除已注册的 AudioSource 监听者。
-    /// </summary>
-    public void RemoveAudioListener(AudioSource source)
-    {
-        if (source == null) return;
-        listeners.Remove(source);
-    }
-
-    #endregion
 
     #region 设置读写
 
@@ -161,67 +127,11 @@ public class AudioDataManager
     #region Private
 
     /// <summary>
-    /// 应用当前设置到 AudioManager 并刷新所有监听者。
+    /// 应用当前设置并广播设置变更事件，订阅方（AudioManager）据此统一刷新音量。
     /// </summary>
     private void ApplyRuntimeSettings()
     {
-        // 通知 AudioManager 更新全局设置
-        AudioManager.Instance.ApplyAudioSettings(
-            Data.musicEnabled,
-            Data.musicVolume,
-            Data.soundEnabled,
-            Data.soundVolume);
-
-        // 刷新所有已注册的监听者
-        RefreshListeners();
-
-        // 广播设置变更事件
         SettingsChanged?.Invoke(Data);
-    }
-
-    /// <summary>
-    /// 遍历所有监听者，剔除无效引用并同步音量设置。
-    /// </summary>
-    private void RefreshListeners()
-    {
-        invalidListeners.Clear();
-
-        foreach (KeyValuePair<AudioSource, Core.Gear.AudioType> pair in listeners)
-        {
-            AudioSource source = pair.Key;
-            if (source == null)
-            {
-                invalidListeners.Add(source);
-                continue;
-            }
-
-            ApplySoundSettingsToSource(source, pair.Value);
-        }
-
-        // 清理已销毁的 AudioSource
-        for (int i = 0; i < invalidListeners.Count; i++) listeners.Remove(invalidListeners[i]);
-    }
-
-    /// <summary>
-    /// 按类型对单个 AudioSource 应用静音和音量设置。
-    /// </summary>
-    private void ApplySoundSettingsToSource(AudioSource source, Core.Gear.AudioType type)
-    {
-        if (source == null) return;
-
-        switch (type)
-        {
-            case Core.Gear.AudioType.Music:
-                source.mute = !Data.musicEnabled;
-                source.volume = Data.musicVolume;
-                break;
-
-            case Core.Gear.AudioType.Sound:
-            default:
-                source.mute = !Data.soundEnabled;
-                source.volume = Data.soundVolume;
-                break;
-        }
     }
 
     #endregion

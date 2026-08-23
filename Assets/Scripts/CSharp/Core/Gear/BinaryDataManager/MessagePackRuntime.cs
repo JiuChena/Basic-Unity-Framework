@@ -16,13 +16,14 @@ namespace Core.Gear
 
         public MessagePackRuntime()
         {
-            _options = MessagePackSerializerOptions.Standard.WithResolver(
-                CompositeResolver.Create(ProjectSaveResolver.Instance, UnityResolver.InstanceWithStandardResolver));
+            _options = MessagePackSerializerOptions.Standard.WithResolver(CompositeResolver.Create(ProjectSaveResolver.Instance, UnityResolver.InstanceWithStandardResolver));
         }
 
         /// <summary>
         /// 序列化对象为 MessagePack 字节数组。
         /// </summary>
+        /// <param name="data">要序列化的数据对象。</param>
+        /// <returns>序列化后的 MessagePack 字节数组。</returns>
         public byte[] Serialize<T>(T data)
         {
             return MessagePackSerializer.Serialize(data, _options);
@@ -31,6 +32,8 @@ namespace Core.Gear
         /// <summary>
         /// 反序列化字节数组。格式不兼容或旧版 typeless 数据时返回 default。
         /// </summary>
+        /// <param name="bytes">待反序列化的 MessagePack 字节数组。</param>
+        /// <returns>反序列化出的数据对象；格式不兼容或反序列化失败时返回 default。</returns>
         public T Deserialize<T>(byte[] bytes)
         {
             try
