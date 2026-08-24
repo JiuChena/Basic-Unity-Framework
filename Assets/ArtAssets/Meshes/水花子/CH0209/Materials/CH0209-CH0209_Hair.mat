@@ -126,9 +126,9 @@ Material:
     - _Cutoff: 0.5
     - _DetailAlbedoMapScale: 1
     - _DetailNormalMapScale: 1
-    - _DiffuseSmooth: 1
+    - _DiffuseSmooth: 0.25
     - _DiffuseSteps: 3
-    - _DiffuseWrap: 1
+    - _DiffuseWrap: 0.25
     - _DstBlend: 0
     - _DstBlendAlpha: 0
     - _EmissionIntensity: 1
