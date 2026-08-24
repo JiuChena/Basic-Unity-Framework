@@ -193,7 +193,7 @@ Material:
     - _StencilMode: 0
     - _StencilRef: 0
     - _Surface: 0
-    - _Transparency: 0.8
+    - _Transparency: 0.85
     - _TransparencyChannel: 2
     - _UVSec: 0
     - _UseAdditionalLightsDiffuse: 0
