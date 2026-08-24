@@ -44,10 +44,10 @@ namespace Core.Gear
                 return;
 
             isTracking = true;
-            EventCenter.Instance.AddEventListener<GameObject>(EventNames.UnitDeath, OnUnitDeath);
-            EventCenter.Instance.AddEventListener(EventNames.BagUpdated, OnBagUpdated);
-            EventCenter.Instance.AddEventListener<string>(EventNames.AreaEntered, OnAreaEntered);
-            EventCenter.Instance.AddEventListener<string>(EventNames.InteractionPerformed, OnInteractionPerformed);
+            EventCenter.Instance.Register<GameObject>(EventNames.UnitDeath, OnUnitDeath);
+            EventCenter.Instance.Register(EventNames.BagUpdated, OnBagUpdated);
+            EventCenter.Instance.Register<string>(EventNames.AreaEntered, OnAreaEntered);
+            EventCenter.Instance.Register<string>(EventNames.InteractionPerformed, OnInteractionPerformed);
         }
 
         private void OnUnitDeath(GameObject unit)

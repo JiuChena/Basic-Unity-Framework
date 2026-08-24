@@ -20,16 +20,16 @@ namespace Core.Gear
 
         private void OnEnable()
         {
-            EventCenter.Instance.AddEventListener<string>(EventNames.QuestAccepted, OnQuestAccepted);
-            EventCenter.Instance.AddEventListener<string>(EventNames.QuestStageAdvanced, Refresh);
-            EventCenter.Instance.AddEventListener<string>(EventNames.QuestCompleted, OnQuestCompleted);
+            EventCenter.Instance.Register<string>(EventNames.QuestAccepted, OnQuestAccepted);
+            EventCenter.Instance.Register<string>(EventNames.QuestStageAdvanced, Refresh);
+            EventCenter.Instance.Register<string>(EventNames.QuestCompleted, OnQuestCompleted);
         }
 
         private void OnDisable()
         {
-            EventCenter.Instance.RemoveEventListener<string>(EventNames.QuestAccepted, OnQuestAccepted);
-            EventCenter.Instance.RemoveEventListener<string>(EventNames.QuestStageAdvanced, Refresh);
-            EventCenter.Instance.RemoveEventListener<string>(EventNames.QuestCompleted, OnQuestCompleted);
+            EventCenter.Instance.Unregister<string>(EventNames.QuestAccepted, OnQuestAccepted);
+            EventCenter.Instance.Unregister<string>(EventNames.QuestStageAdvanced, Refresh);
+            EventCenter.Instance.Unregister<string>(EventNames.QuestCompleted, OnQuestCompleted);
         }
 
         private void OnQuestAccepted(string questID)

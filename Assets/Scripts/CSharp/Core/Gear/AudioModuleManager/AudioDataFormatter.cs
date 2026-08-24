@@ -32,12 +32,12 @@ namespace Core.Gear
         /// <param name="reader">MessagePack 读取器。</param>
         /// <param name="options">反序列化选项。</param>
         /// <returns>还原出的 AudioData；读取到 Nil 时返回 null。</returns>
-        public global::AudioData Deserialize(ref MessagePackReader reader, MessagePackSerializerOptions options)
+        public AudioData Deserialize(ref MessagePackReader reader, MessagePackSerializerOptions options)
         {
             if (reader.TryReadNil()) return null;
 
             int count = reader.ReadArrayHeader();
-            global::AudioData value = new global::AudioData();
+            AudioData value = new AudioData();
 
             for (int i = 0; i < count; i++)
             {

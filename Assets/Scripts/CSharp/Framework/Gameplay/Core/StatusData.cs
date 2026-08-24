@@ -100,20 +100,6 @@ public static class UnitCombatResolver
     }
 }
 
-public readonly struct UnitDiedEvent
-{
-    public readonly StatusData Unit;
-    public readonly GameObject Source;
-    public readonly float LastDamage;
-
-    public UnitDiedEvent(StatusData unit, GameObject source, float lastDamage)
-    {
-        Unit = unit;
-        Source = source;
-        LastDamage = lastDamage;
-    }
-}
-
 [DisallowMultipleComponent]
 public class StatusData : MonoBehaviour, IBehaviorUnit, IDamageable
 {
@@ -319,7 +305,6 @@ public class StatusData : MonoBehaviour, IBehaviorUnit, IDamageable
         if (CurrentHealth <= 0f)
         {
             IsDead = true;
-            TypedEventBus.Publish(new UnitDiedEvent(this, source, finalDamage));
             EventCenter.Instance.SetEventTrigger(GameplayEventNames.UnitDeath, gameObject);
             SyncRuntimeDebugFields();
             return;

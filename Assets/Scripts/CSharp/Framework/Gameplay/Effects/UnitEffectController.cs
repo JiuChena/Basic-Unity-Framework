@@ -5,20 +5,6 @@ using UnityEngine;
 /// <summary>
 /// 单位侧效果承载器。负责登记“这个单位当前身上有哪些效果”，并作为行为层接入全局效果系统的入口。
 /// </summary>
-public readonly struct UnitEffectChangedEvent
-{
-    public readonly UnitEffectController Controller;
-    public readonly RuntimeEffectInstance EffectInstance;
-    public readonly bool Added;
-
-    public UnitEffectChangedEvent(UnitEffectController controller, RuntimeEffectInstance effectInstance, bool added)
-    {
-        Controller = controller;
-        EffectInstance = effectInstance;
-        Added = added;
-    }
-}
-
 [DisallowMultipleComponent]
 [RequireComponent(typeof(StatusData))]
 public class UnitEffectController : MonoBehaviour
@@ -128,7 +114,6 @@ public class UnitEffectController : MonoBehaviour
         _effectViewDirty = true;
         SyncRuntimeDebugFields();
         SyncEffectViewEntries();
-        Core.Gear.TypedEventBus.Publish(new UnitEffectChangedEvent(this, instance, true));
         EffectAdded?.Invoke(this, instance);
     }
 
@@ -150,7 +135,6 @@ public class UnitEffectController : MonoBehaviour
         _effectViewDirty = true;
         SyncRuntimeDebugFields();
         SyncEffectViewEntries();
-        Core.Gear.TypedEventBus.Publish(new UnitEffectChangedEvent(this, instance, false));
         EffectRemoved?.Invoke(this, instance);
     }
 

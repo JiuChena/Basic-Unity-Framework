@@ -150,8 +150,6 @@ namespace BehaviorCore
                     this);
             }
 
-            TypedEventBus.Publish(new BehaviorPlaybackStartedEvent(this, clip));
-            
             Profiler.EndSample();
         }
 
@@ -197,7 +195,6 @@ namespace BehaviorCore
                 if (logBehaviorFlow)
                     Debug.Log($"[{name}] 行为完成：{completed.name}", this);
                 Stop();
-                TypedEventBus.Publish(new BehaviorPlaybackCompletedEvent(this, completed));
                 OnCompleted?.Invoke(completed);
             }
         }

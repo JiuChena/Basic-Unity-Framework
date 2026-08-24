@@ -25,7 +25,7 @@ namespace Core.Gear
         /// </summary>
         /// <param name="eventName">事件名称，使用 <see cref="EventNames"/> 常量</param>
         /// <param name="action">回调委托</param>
-        public void AddEventListener(string eventName, UnityAction action)
+        public void Register(string eventName, UnityAction action)
         {
             if (events.ContainsKey(eventName))
             {
@@ -48,7 +48,7 @@ namespace Core.Gear
         /// <typeparam name="T">事件参数类型</typeparam>
         /// <param name="eventName">事件名称，使用 <see cref="EventNames"/> 常量</param>
         /// <param name="action">回调委托</param>
-        public void AddEventListener<T>(string eventName, UnityAction<T> action)
+        public void Register<T>(string eventName, UnityAction<T> action)
         {
             if (events.ContainsKey(eventName))
             {
@@ -72,7 +72,7 @@ namespace Core.Gear
         /// <typeparam name="K">第二个参数类型</typeparam>
         /// <param name="eventName">事件名称，使用 <see cref="EventNames"/> 常量</param>
         /// <param name="action">回调委托</param>
-        public void AddEventListener<T, K>(string eventName, UnityAction<T, K> action)
+        public void Register<T, K>(string eventName, UnityAction<T, K> action)
         {
             if (events.ContainsKey(eventName))
             {
@@ -96,7 +96,7 @@ namespace Core.Gear
         /// <summary>
         /// 移除无参事件监听。
         /// </summary>
-        public void RemoveEventListener(string eventName, UnityAction action)
+        public void Unregister(string eventName, UnityAction action)
         {
             if (events.ContainsKey(eventName) && events[eventName] is EventsContainer container)
                 container.eventsContainer -= action;
@@ -105,7 +105,7 @@ namespace Core.Gear
         /// <summary>
         /// 移除一参事件监听。
         /// </summary>
-        public void RemoveEventListener<T>(string eventName, UnityAction<T> action)
+        public void Unregister<T>(string eventName, UnityAction<T> action)
         {
             if (events.ContainsKey(eventName) && events[eventName] is EventsContainer<T> container)
                 container.eventsContainer -= action;
@@ -114,7 +114,7 @@ namespace Core.Gear
         /// <summary>
         /// 移除二参事件监听。
         /// </summary>
-        public void RemoveEventListener<T, K>(string eventName, UnityAction<T, K> action)
+        public void Unregister<T, K>(string eventName, UnityAction<T, K> action)
         {
             if (events.ContainsKey(eventName) && events[eventName] is EventsContainer<T, K> container)
                 container.eventsContainer -= action;
