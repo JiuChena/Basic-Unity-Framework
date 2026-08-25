@@ -20,9 +20,6 @@ namespace Core.Gear
         {
             // 注册各业务模块的自定义 Formatter（Formatter 类随业务数据所在模块存放，注册集中在此）
             Register(new AudioDataFormatter());
-            Register(new BagDataFormatter());
-            Register(new QuestProgressFormatter());
-            Register(new QuestSaveDataFormatter());
         }
         
         private ProjectSaveResolver() { }

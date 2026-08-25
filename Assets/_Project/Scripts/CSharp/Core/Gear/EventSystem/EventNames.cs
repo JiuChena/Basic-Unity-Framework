@@ -12,10 +12,6 @@ namespace Core.Gear
         public const string UpdateControlCH = nameof(UpdateControlCH);
         // 场景异步加载进度（0~1）。
         public const string LoadSceneProgress = nameof(LoadSceneProgress);
-        // 当前交互目标变化。
-        public const string InteractionChanged = nameof(InteractionChanged);
-        // 交互完成（携带交互 ID）。
-        public const string InteractionPerformed = nameof(InteractionPerformed);
 
         #endregion
 
