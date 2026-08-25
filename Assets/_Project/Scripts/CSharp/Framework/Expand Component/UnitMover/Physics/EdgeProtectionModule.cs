@@ -54,6 +54,20 @@ namespace Framework.ExpandComponent.UnitMover
         public bool IsEnabled => _enabled;
 
         /// <summary>
+        /// 创建不共享检查点和诊断状态的运行时配置副本。
+        /// </summary>
+        /// <returns>供单个单位运行时使用的独立边缘保护配置。</returns>
+        public EdgeProtectionModule CreateRuntimeCopy()
+        {
+            return new EdgeProtectionModule
+            {
+                _enabled = _enabled,
+                _maxFallHeight = _maxFallHeight,
+                _maxBridgeableGapWidth = _maxBridgeableGapWidth
+            };
+        }
+
+        /// <summary>
         /// 清空检查点和 Gizmo 诊断等全部运行时状态，保留 Inspector 配置。
         /// </summary>
         public void ResetRuntimeState()

@@ -34,5 +34,20 @@ namespace Framework.ExpandComponent.UnitMover
         public float AirAcceleration => _airAcceleration;
         /// <summary>获取空中控制比例。</summary>
         public float AirControl => _airControl;
+
+        /// <summary>创建不共享运行时状态的移动参数副本。</summary>
+        /// <returns>供单个移动能力运行时使用的独立配置。</returns>
+        public LocomotionSettings CreateRuntimeCopy()
+        {
+            return new LocomotionSettings
+            {
+                _groundMaxSpeed = _groundMaxSpeed,
+                _groundAcceleration = _groundAcceleration,
+                _groundDeceleration = _groundDeceleration,
+                _airMaxSpeed = _airMaxSpeed,
+                _airAcceleration = _airAcceleration,
+                _airControl = _airControl
+            };
+        }
     }
 }

@@ -49,6 +49,23 @@ namespace Framework.ExpandComponent.UnitMover
         public float GroundIgnoreAfterStartDuration => _groundIgnoreAfterStartDuration;
 
         /// <summary>
+        /// 创建不共享跳跃瞬态状态的运行时配置副本。
+        /// </summary>
+        /// <returns>供单个单位运行时使用的独立跳跃配置。</returns>
+        public JumpModule CreateRuntimeCopy()
+        {
+            return new JumpModule
+            {
+                _enabled = _enabled,
+                _initialSpeed = _initialSpeed,
+                _coyoteTime = _coyoteTime,
+                _bufferTime = _bufferTime,
+                _groundIgnoreAfterStartDuration = _groundIgnoreAfterStartDuration,
+                _cutMultiplier = _cutMultiplier
+            };
+        }
+
+        /// <summary>
         /// 清空本组件保存的全部瞬态跳跃状态，保留 Inspector 配置供下一次运行时复用。
         /// </summary>
         public void ResetRuntimeState()

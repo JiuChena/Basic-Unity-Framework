@@ -41,6 +41,22 @@ namespace Framework.ExpandComponent.UnitMover
         public FloatingCapsuleAuthoringState AuthoringState => _authoringState;
 
         /// <summary>
+        /// 创建不共享 Authoring 状态和碰撞体引用的运行时配置副本。
+        /// </summary>
+        /// <returns>供单个单位运行时使用的独立浮动胶囊配置。</returns>
+        public FloatingCapsuleModule CreateRuntimeCopy()
+        {
+            return new FloatingCapsuleModule
+            {
+                _enabled = _enabled,
+                _bottomClearance = _bottomClearance,
+                _footBoxHeight = _footBoxHeight,
+                _footBoxSupportWidthScale = _footBoxSupportWidthScale,
+                _authoringState = new FloatingCapsuleAuthoringState()
+            };
+        }
+
+        /// <summary>
         /// 确保反序列化后的模块拥有可写入基础胶囊快照的容器。
         /// </summary>
         public void EnsureAuthoringState()

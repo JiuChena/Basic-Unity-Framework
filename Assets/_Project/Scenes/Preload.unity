@@ -1001,9 +1001,7 @@ GameObject:
   - component: {fileID: 1813344965}
   - component: {fileID: 1813344964}
   - component: {fileID: 1813344963}
-  - component: {fileID: 1813344962}
-  - component: {fileID: 1813344961}
-  - component: {fileID: 1813344969}
+  - component: {fileID: 1813344970}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -1011,7 +1009,7 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 0
---- !u!114 &1813344961
+--- !u!114 &1813344970
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -1020,162 +1018,16 @@ MonoBehaviour:
   m_GameObject: {fileID: 1813344959}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 30f5955e362aa3d4f99152f7dc57a29c, type: 3}
+  m_Script: {fileID: 11500000, guid: 48f9489f68957154d99d87bd33daefeb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _rigidbody: {fileID: 1813344964}
-  _movementCollider: {fileID: 1813344965}
-  _dataProvider: {fileID: 1813344962}
-  _movementReferenceCamera: {fileID: 330585545}
-  _freezeRigidbodyRotation: 1
-  _movementStrategy:
-    rid: 2888644187217723398
-  _showScenePreview: 1
-  _showEdgeDetectionGizmos: 1
-  references:
-    version: 2
-    RefIds:
-    - rid: 2888644187217723398
-      type: {class: NormalGroundMovementStrategy, ns: Framework.ExpandComponent.UnitMover,
-        asm: Assembly-CSharp}
-      data:
-        _locomotionSettings:
-          _groundMaxSpeed: 5
-          _groundAcceleration: 45
-          _groundDeceleration: 55
-          _airMaxSpeed: 6
-          _airAcceleration: 15
-          _airControl: 0.45
-        _groundSettings:
-          _groundLayer:
-            serializedVersion: 2
-            m_Bits: 1
-          _slopeLimit: 45
-          _steepSlopeEnterAngleMargin: 1.5
-          _steepSlopeExitAngleMargin: 1.5
-          _steepSlopeContactConfirmTime: 0.06
-          _steepSlopeLostContactGraceTime: 0.08
-          _steepSlopeSlideFactor: 20
-          _steepSlopeSlideCurve:
-            serializedVersion: 2
-            m_Curve:
-            - serializedVersion: 3
-              time: 0
-              value: 0
-              inSlope: 2
-              outSlope: 2
-              tangentMode: 0
-              weightedMode: 0
-              inWeight: 0
-              outWeight: 0
-            - serializedVersion: 3
-              time: 1
-              value: 1
-              inSlope: 0.1
-              outSlope: 0.1
-              tangentMode: 0
-              weightedMode: 0
-              inWeight: 0
-              outWeight: 0
-            m_PreInfinity: 2
-            m_PostInfinity: 2
-            m_RotationOrder: 4
-          _steepSlopeSlideSpeedLimit: 20
-          _hoverHeight: 0.05
-          _probeDistance: 0.3
-          _springStrength: 90
-          _springDamping: 14
-        _jumpModule:
-          _enabled: 1
-          _initialSpeed: 8
-          _coyoteTime: 0.1
-          _bufferTime: 0.12
-          _groundIgnoreAfterStartDuration: 0.1
-          _cutMultiplier: 0.5
-        _gravityModule:
-          _multiplier: 1
-          _fallMultiplier: 1.5
-          _maxFallSpeed: 25
-        _floatingCapsuleModule:
-          _enabled: 1
-          _bottomClearance: 0.5
-          _footBoxHeight: 0.05
-          _footBoxSupportWidthScale: 0.7
-          _authoringState:
-            _captured: 1
-            _baseCenter: {x: 0, y: 0, z: 0}
-            _baseHeight: 2
-            _baseRadius: 0.5
-            _baseDirection: 1
-            _floatingShapeApplied: 1
-            _footCollider: {fileID: 1813344969}
-        _edgeProtectionModule:
-          _enabled: 1
-          _maxFallHeight: 2
-          _maxBridgeableGapWidth: 0.15
---- !u!114 &1813344962
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1813344959}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 51dcbbed735f4dccb45ba15e8750977b, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  _dataSource:
-    _lookSensitivity: 2
-    _moveAction: Move
-    _lookAction: Look
-    _jumpAction: Jump
-    _sprintAction: Sprint
-    _crouchAction: Crouch
-    _interactAction: Interact
-    _scrollAction: Scroll
-    _playerInput: {fileID: 0}
-    _moveForwardKey: 119
-    _moveBackKey: 115
-    _moveLeftKey: 97
-    _moveRightKey: 100
-    _jumpKey: 32
-    _sprintKey: 304
-    _crouchKey: 99
-    _interactKey: 102
-  _enableDataDebug: 0
-  _dataDebugInterval: 0.1
---- !u!114 &1813344963
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1813344959}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 62899f850307741f2a39c98a8b639597, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  m_Actions: {fileID: -944628639613478452, guid: 685d14b3be64f0f41bcd74e94486df6e,
-    type: 3}
-  m_NotificationBehavior: 0
-  m_UIInputModule: {fileID: 0}
-  m_DeviceLostEvent:
-    m_PersistentCalls:
-      m_Calls: []
-  m_DeviceRegainedEvent:
-    m_PersistentCalls:
-      m_Calls: []
-  m_ControlsChangedEvent:
-    m_PersistentCalls:
-      m_Calls: []
-  m_ActionEvents: []
-  m_NeverAutoSwitchControlSchemes: 0
-  m_DefaultControlScheme: 
-  m_DefaultActionMap: Player
-  m_SplitScreenIndex: -1
-  m_Camera: {fileID: 0}
+  _abilities:
+  - {fileID: 11400000, guid: 8d3c6f2a1b4e5d6c7f8091a2b3c4d5e6, type: 2}
+  - {fileID: 11400000, guid: b9e31b393fcf0404eacdca626e5e521e, type: 2}
+  - {fileID: 11400000, guid: 9e4d7c3b2a1f5061728394a5b6c7d8e9, type: 2}
+  - {fileID: 11400000, guid: af5e3d2c1b0987654321fedcba987654, type: 2}
+  - {fileID: 11400000, guid: b6c5d4e3f2a19087654321fedcba0987, type: 2}
+  _takeoverRigidbody: 1
 --- !u!54 &1813344964
 Rigidbody:
   m_ObjectHideFlags: 0
@@ -1291,27 +1143,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!65 &1813344969
-BoxCollider:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1813344959}
-  m_Material: {fileID: 0}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_LayerOverridePriority: 0
-  m_IsTrigger: 0
-  m_ProvidesContacts: 0
-  m_Enabled: 1
-  serializedVersion: 3
-  m_Size: {x: 1, y: 0.05, z: 1}
-  m_Center: {x: 0, y: -0.475, z: 0}
 --- !u!1 &1954136720
 GameObject:
   m_ObjectHideFlags: 3

@@ -60,5 +60,17 @@ namespace Framework.ExpandComponent.UnitMover
             if (resultDownwardSpeed <= _maxFallSpeed) return result;
             return result - gravityDirection * (resultDownwardSpeed - _maxFallSpeed);
         }
+
+        /// <summary>创建不共享运行时重力基准的配置副本。</summary>
+        /// <returns>供单个移动能力运行时使用的独立重力配置。</returns>
+        public GravityModule CreateRuntimeCopy()
+        {
+            return new GravityModule
+            {
+                _multiplier = _multiplier,
+                _fallMultiplier = _fallMultiplier,
+                _maxFallSpeed = _maxFallSpeed
+            };
+        }
     }
 }

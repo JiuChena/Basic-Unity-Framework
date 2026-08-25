@@ -19,6 +19,8 @@ namespace Framework.ExpandComponent.UnitMover
         private readonly RigidbodyConstraints _initialConstraints;
         // 是否由 UnitMover 冻结刚体旋转并清空角速度。
         private readonly bool _freezeRotation;
+        // 是否由当前运行时接管刚体重力、插值和运动学设置。
+        private readonly bool _takeoverPhysics;
 
         /// <summary>
         /// 记录刚体初始状态并切换到由 UnitMover 统一处理重力的模式。
@@ -26,9 +28,21 @@ namespace Framework.ExpandComponent.UnitMover
         /// <param name="rigidbody">需要接管的刚体组件。</param>
         /// <param name="freezeRotation">是否在接管期间冻结刚体旋转。</param>
         public RigidbodyUnitBody(Rigidbody rigidbody, bool freezeRotation)
+            : this(rigidbody, freezeRotation, true)
+        {
+        }
+
+        /// <summary>
+        /// 记录刚体初始状态，并按配置选择是否接管其物理设置。
+        /// </summary>
+        /// <param name="rigidbody">需要接管的刚体组件。</param>
+        /// <param name="freezeRotation">是否在接管期间冻结刚体旋转。</param>
+        /// <param name="takeoverPhysics">是否关闭 Unity 重力并接管刚体物理设置。</param>
+        public RigidbodyUnitBody(Rigidbody rigidbody, bool freezeRotation, bool takeoverPhysics)
         {
             _rigidbody = rigidbody;
             _freezeRotation = freezeRotation;
+            _takeoverPhysics = takeoverPhysics;
             _initialUseGravity = rigidbody != null && rigidbody.useGravity;
             _initialInterpolation = rigidbody != null ? rigidbody.interpolation : RigidbodyInterpolation.None;
             _initialIsKinematic = rigidbody != null && rigidbody.isKinematic;
@@ -38,14 +52,17 @@ namespace Framework.ExpandComponent.UnitMover
 
             if (_rigidbody == null) return;
 
-            // UnitMover 负责重力和速度结算，避免 Unity 重力重复作用。
-            _rigidbody.isKinematic = false;
-            _rigidbody.useGravity = false;
-            _rigidbody.interpolation = RigidbodyInterpolation.Interpolate;
-            if (_freezeRotation)
+            if (_takeoverPhysics)
             {
-                _rigidbody.constraints = _initialConstraints | RigidbodyConstraints.FreezeRotation;
-                _rigidbody.angularVelocity = Vector3.zero;
+                // UnitMover 负责重力和速度结算，避免 Unity 重力重复作用。
+                _rigidbody.isKinematic = false;
+                _rigidbody.useGravity = false;
+                _rigidbody.interpolation = RigidbodyInterpolation.Interpolate;
+                if (_freezeRotation)
+                {
+                    _rigidbody.constraints = _initialConstraints | RigidbodyConstraints.FreezeRotation;
+                    _rigidbody.angularVelocity = Vector3.zero;
+                }
             }
         }
 

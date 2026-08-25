@@ -53,6 +53,24 @@ namespace Framework.ExpandComponent.UnitMover
         public BoxCollider FootCollider => _footCollider;
 
         /// <summary>
+        /// 创建不共享运行时碰撞体引用的配置副本。
+        /// </summary>
+        /// <returns>仅包含基础形状配置的独立副本。</returns>
+        public FloatingCapsuleAuthoringState CreateRuntimeCopy()
+        {
+            return new FloatingCapsuleAuthoringState
+            {
+                _captured = false,
+                _baseCenter = _baseCenter,
+                _baseHeight = _baseHeight,
+                _baseRadius = _baseRadius,
+                _baseDirection = _baseDirection,
+                _floatingShapeApplied = false,
+                _footCollider = null
+            };
+        }
+
+        /// <summary>
         /// 将调用方刚写入的 CapsuleCollider 形状明确记录为新的浮动基础形状。
         /// </summary>
         /// <param name="capsule">已由调用方完成外部形状修改的主胶囊。</param>

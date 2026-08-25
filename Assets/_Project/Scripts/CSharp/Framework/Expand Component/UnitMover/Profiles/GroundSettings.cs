@@ -89,5 +89,29 @@ namespace Framework.ExpandComponent.UnitMover
         public float SpringStrength => _springStrength;
         /// <summary>获取悬浮弹簧阻尼。</summary>
         public float SpringDamping => _springDamping;
+
+        /// <summary>
+        /// 创建不共享动画曲线引用的地面配置副本。
+        /// </summary>
+        /// <returns>供单个单位运行时使用的独立接地配置。</returns>
+        public GroundSettings CreateRuntimeCopy()
+        {
+            return new GroundSettings
+            {
+                _groundLayer = _groundLayer,
+                _slopeLimit = _slopeLimit,
+                _steepSlopeEnterAngleMargin = _steepSlopeEnterAngleMargin,
+                _steepSlopeExitAngleMargin = _steepSlopeExitAngleMargin,
+                _steepSlopeContactConfirmTime = _steepSlopeContactConfirmTime,
+                _steepSlopeLostContactGraceTime = _steepSlopeLostContactGraceTime,
+                _steepSlopeSlideFactor = _steepSlopeSlideFactor,
+                _steepSlopeSlideCurve = _steepSlopeSlideCurve != null ? new AnimationCurve(_steepSlopeSlideCurve.keys) : null,
+                _steepSlopeSlideSpeedLimit = _steepSlopeSlideSpeedLimit,
+                _hoverHeight = _hoverHeight,
+                _probeDistance = _probeDistance,
+                _springStrength = _springStrength,
+                _springDamping = _springDamping
+            };
+        }
     }
 }
