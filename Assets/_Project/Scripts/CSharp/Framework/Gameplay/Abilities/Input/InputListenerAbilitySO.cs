@@ -66,7 +66,6 @@ namespace Framework.Gameplay.Abilities
         /// <param name="moveActionName">移动动作名称。</param>
         /// <param name="jumpActionName">跳跃动作名称。</param>
         /// <param name="sprintActionName">冲刺动作名称。</param>
-        /// <param name="movementReferenceCamera">移动参考相机。</param>
         public InputListenerAbilityRuntime(
             InputActionAsset actions,
             string defaultActionMap,
@@ -90,7 +89,6 @@ namespace Framework.Gameplay.Abilities
 
             _blackboard = new InputBlackboard();
             context.SetBlackboard(_blackboard);
-            context.RegisterService(_blackboard);
 
             _playerInput = context.Owner.GetComponent<PlayerInput>();
             if (_playerInput == null && _actions != null)
@@ -143,8 +141,8 @@ namespace Framework.Gameplay.Abilities
         {
             if (_createdPlayerInput && _playerInput != null)
                 Object.Destroy(_playerInput);
-            if (Context != null && ReferenceEquals(Context.GetService<InputBlackboard>(), _blackboard))
-                Context.RegisterService<InputBlackboard>(null);
+            if (Context != null && ReferenceEquals(Context.Blackboard, _blackboard))
+                Context.SetBlackboard(null);
             _playerInput = null;
             _blackboard = null;
             _moveAction = null;

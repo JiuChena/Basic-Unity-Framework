@@ -1,7 +1,7 @@
 ---
 tags: [home]
 created: 2026-07-25
-updated: 2026-08-16
+updated: 2026-08-26
 ---
 
 # Basic Unity Framework — 知识库
@@ -30,7 +30,8 @@ updated: 2026-08-16
 
 ## 最近变更
 
-- 2026-08-25：完成能力系统第一轮破坏式迁移；删除 UnitMover/DataProvider 调度外壳，新增输入监听、移动、浮动胶囊、跳跃和边缘保护能力 SO/Runtime
+- 2026-08-26：收紧能力系统边界；`AbilityComponent` 不再接管物理组件，`MovementAbilityRuntime` 自行组合浮动胶囊、接地、悬浮、跳跃和边缘保护模块
+- 2026-08-25：完成能力系统第一轮破坏式迁移；删除 UnitMover/DataProvider 调度外壳，新增输入监听和移动能力 Runtime
 - 2026-08-16：确认 CH0221_Hair_Spec 的 RGB 为近单位方向编码；当前恢复并使用 S 方案各向异性切线场作为高光基线，方案 3 环境反射方向试验已撤回
 - 2026-08-04：UnitMover 移除 UnitMovementRuntime/Profile/命令来源注册表；策略直持模块，默认策略改为 NormalGroundMovementStrategy，Inspector 自动绘制策略字段，待 Unity 场景验证
 - 2026-08-02：UnitMover A/B/C/D 确认项已实施，待 Unity 场景验证；DataProvider 审查归理为 P1/P3 待实施，E2/E3 不立项，U2 改为字段改名迁移规则

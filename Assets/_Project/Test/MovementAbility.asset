@@ -63,4 +63,29 @@ MonoBehaviour:
     _multiplier: 1
     _fallMultiplier: 1.5
     _maxFallSpeed: 25
+  _floatingCapsule:
+    _enabled: 1
+    _bottomClearance: 0.4
+    _footBoxHeight: 0.05
+    _footBoxSupportWidthScale: 0.7
+    _authoringState:
+      _captured: 0
+      _baseCenter: {x: 0, y: 0, z: 0}
+      _baseHeight: 0
+      _baseRadius: 0
+      _baseDirection: 0
+      _floatingShapeApplied: 0
+      _footCollider: {fileID: 0}
+  _jump:
+    _enabled: 1
+    _initialSpeed: 8
+    _coyoteTime: 0.1
+    _bufferTime: 0.12
+    _groundIgnoreAfterStartDuration: 0.1
+    _cutMultiplier: 0.5
+  _edgeProtection:
+    _enabled: 1
+    _maxFallHeight: 2
+    _maxBridgeableGapWidth: 0.15
+  _takeoverRigidbody: 1
   _movementReferenceCamera: {fileID: 330585545}

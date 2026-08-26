@@ -1023,11 +1023,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _abilities:
   - {fileID: 11400000, guid: 8d3c6f2a1b4e5d6c7f8091a2b3c4d5e6, type: 2}
-  - {fileID: 11400000, guid: b9e31b393fcf0404eacdca626e5e521e, type: 2}
   - {fileID: 11400000, guid: 9e4d7c3b2a1f5061728394a5b6c7d8e9, type: 2}
-  - {fileID: 11400000, guid: af5e3d2c1b0987654321fedcba987654, type: 2}
-  - {fileID: 11400000, guid: b6c5d4e3f2a19087654321fedcba0987, type: 2}
-  _takeoverRigidbody: 1
 --- !u!54 &1813344964
 Rigidbody:
   m_ObjectHideFlags: 0

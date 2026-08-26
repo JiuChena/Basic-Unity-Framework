@@ -1,30 +1,16 @@
 using System.Collections.Generic;
-using Framework.ExpandComponent.DataProvider;
-using Framework.ExpandComponent.UnitMover;
 using UnityEngine;
 
 namespace Framework.Gameplay.Abilities
 {
     /// <summary>统一装配能力定义并转发 Unity 生命周期。</summary>
     [DisallowMultipleComponent]
-    [RequireComponent(typeof(Rigidbody))]
-    [RequireComponent(typeof(CapsuleCollider))]
     public sealed class AbilityComponent : MonoBehaviour
     {
         // 按 Inspector 顺序装配的能力定义资产。
         [Header("能力")]
         [Tooltip("按顺序执行生命周期的能力定义资产；运行时每个单位创建独立实例")]
         [SerializeField] private List<AbilityDefinitionSO> _abilities = new List<AbilityDefinitionSO>();
-        // 是否在能力运行时冻结刚体旋转并关闭 Unity 自动重力。
-        [Header("物理")]
-        [Tooltip("是否由能力运行时接管刚体旋转和重力设置")]
-        [SerializeField] private bool _takeoverRigidbody = true;
-        // 缓存的 Rigidbody 组件。
-        private Rigidbody _rigidbody;
-        // 缓存的主 CapsuleCollider 组件。
-        private CapsuleCollider _movementCollider;
-        // 当前启用周期的刚体适配器。
-        private IUnitBody _body;
         // 当前启用周期的能力上下文。
         private AbilityContext _context;
         // 当前启用周期的能力运行时列表。
@@ -35,15 +21,10 @@ namespace Framework.Gameplay.Abilities
         /// <summary>获取当前能力上下文；未装配时返回 null。</summary>
         public AbilityContext Context => _context;
 
-        /// <summary>
-        /// 解析 Unity 依赖并创建单位独占能力运行时实例。
-        /// </summary>
+        /// <summary>创建最小单位上下文和独占能力运行时实例。</summary>
         private void Awake()
         {
-            _rigidbody = GetComponent<Rigidbody>();
-            _movementCollider = GetComponent<CapsuleCollider>();
-            _body = new RigidbodyUnitBody(_rigidbody, true, _takeoverRigidbody);
-            _context = new AbilityContext(gameObject, _rigidbody, _movementCollider, _body, new UnityPhysicsQuery(), null);
+            _context = new AbilityContext(gameObject);
 
             // 所有能力在启用前一次性创建，避免固定帧热路径分配。
             for (int index = 0; index < _abilities.Count; index++)
@@ -78,13 +59,11 @@ namespace Framework.Gameplay.Abilities
             for (int index = 0; index < _runtimes.Count; index++) _runtimes[index].Update(Time.deltaTime);
         }
 
-        /// <summary>转发固定帧能力生命周期并统一提交最终速度。</summary>
+        /// <summary>转发固定帧能力生命周期。</summary>
         private void FixedUpdate()
         {
             if (_context == null) return;
-            _context.Velocity = _body != null && _body.IsValid ? _body.Velocity : Vector3.zero;
             for (int index = 0; index < _runtimes.Count; index++) _runtimes[index].FixedUpdate(Time.fixedDeltaTime);
-            _context.CommitVelocity();
         }
 
         /// <summary>转发延迟帧能力生命周期。</summary>
@@ -100,17 +79,14 @@ namespace Framework.Gameplay.Abilities
             for (int index = 0; index < _runtimes.Count; index++) _runtimes[index].OnDisable();
         }
 
-        /// <summary>释放能力实例、组件适配器和运行时服务。</summary>
+        /// <summary>释放能力实例和最小运行时上下文。</summary>
         private void OnDestroy()
         {
             if (_disposed) return;
             _disposed = true;
             for (int index = _runtimes.Count - 1; index >= 0; index--) _runtimes[index].Dispose();
             _runtimes.Clear();
-            _context?.ClearServices();
-            _body?.RestoreInitialSettings();
             _context = null;
-            _body = null;
         }
     }
 }
