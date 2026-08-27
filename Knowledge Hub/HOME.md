@@ -1,7 +1,7 @@
 ---
 tags: [home]
 created: 2026-07-25
-updated: 2026-08-26
+updated: 2026-08-27
 ---
 
 # Basic Unity Framework — 知识库
@@ -30,6 +30,7 @@ updated: 2026-08-26
 
 ## 最近变更
 
+- 2026-08-27：修复 `MovementAbility.asset` 对场景相机的非法 PPtr 引用；移动参考相机改为运行时缓存 `Camera.main`，浮动胶囊、跳跃和边缘保护配置继续保留在移动资产内部
 - 2026-08-26：收紧能力系统边界；`AbilityComponent` 不再接管物理组件，`MovementAbilityRuntime` 自行组合浮动胶囊、接地、悬浮、跳跃和边缘保护模块
 - 2026-08-25：完成能力系统第一轮破坏式迁移；删除 UnitMover/DataProvider 调度外壳，新增输入监听和移动能力 Runtime
 - 2026-08-16：确认 CH0221_Hair_Spec 的 RGB 为近单位方向编码；当前恢复并使用 S 方案各向异性切线场作为高光基线，方案 3 环境反射方向试验已撤回

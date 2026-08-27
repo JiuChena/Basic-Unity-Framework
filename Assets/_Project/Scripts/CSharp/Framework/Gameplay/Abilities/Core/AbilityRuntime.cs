@@ -1,43 +1,41 @@
 namespace Framework.Gameplay.Abilities
 {
-    /// <summary>
-    /// 提供能力运行时生命周期的空实现基类。
-    /// </summary>
-    public abstract class AbilityRuntime : IAbilityRuntime
+    /// <summary>定义由 AbilityComponent 驱动的纯 C# 能力运行时。</summary>
+    public abstract class AbilityRuntime
     {
-        // 当前能力绑定的单位运行时上下文。
+        // 当前能力共享的单位上下文。
         protected AbilityContext Context { get; private set; }
 
-        /// <summary>绑定能力上下文并执行一次初始化。</summary>
-        /// <param name="context">当前单位独占的能力上下文。</param>
+        /// <summary>绑定能力上下文并初始化运行时依赖。</summary>
+        /// <param name="context">当前单位能力上下文。</param>
         public virtual void Initialize(AbilityContext context)
         {
             Context = context;
         }
 
-        /// <summary>能力所在组件启用时执行一次。</summary>
-        public virtual void OnEnable() { }
+        /// <summary>执行能力启用阶段。</summary>
+        public virtual void OnAbilityEnable() { }
 
-        /// <summary>能力所在组件完成启用后执行一次。</summary>
-        public virtual void Start() { }
+        /// <summary>执行能力启动阶段。</summary>
+        public virtual void StartAbility() { }
 
-        /// <summary>执行普通帧能力逻辑。</summary>
+        /// <summary>执行能力普通帧阶段。</summary>
         /// <param name="deltaTime">当前帧时长，单位：秒。</param>
-        public virtual void Update(float deltaTime) { }
+        public virtual void UpdateAbility(float deltaTime) { }
 
-        /// <summary>执行固定物理帧能力逻辑。</summary>
+        /// <summary>执行能力固定帧阶段。</summary>
         /// <param name="fixedDeltaTime">当前固定帧时长，单位：秒。</param>
-        public virtual void FixedUpdate(float fixedDeltaTime) { }
+        public virtual void FixedUpdateAbility(float fixedDeltaTime) { }
 
-        /// <summary>执行延迟帧能力逻辑。</summary>
+        /// <summary>执行能力延迟帧阶段。</summary>
         /// <param name="deltaTime">当前帧时长，单位：秒。</param>
-        public virtual void LateUpdate(float deltaTime) { }
+        public virtual void LateUpdateAbility(float deltaTime) { }
 
-        /// <summary>能力所在组件禁用时执行一次。</summary>
-        public virtual void OnDisable() { }
+        /// <summary>执行能力禁用阶段。</summary>
+        public virtual void OnAbilityDisable() { }
 
-        /// <summary>释放能力运行时持有的组件和事件引用。</summary>
-        public virtual void Dispose()
+        /// <summary>释放能力持有的运行时依赖。</summary>
+        public virtual void DisposeAbility()
         {
             Context = null;
         }

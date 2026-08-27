@@ -2,21 +2,15 @@ using UnityEngine;
 
 namespace Framework.Gameplay.Abilities
 {
-    /// <summary>
-    /// 保存能力静态配置并创建单位独占运行时实例。
-    /// </summary>
+    /// <summary>定义可由 AbilityComponent 创建的能力配置资产。</summary>
     public abstract class AbilityDefinitionSO : ScriptableObject
     {
-        // 能力在 Inspector 和诊断面板中的显示名称。
-        [Tooltip("能力在运行时诊断和 Inspector 中显示的名称")]
-        [SerializeField] private string _displayName;
+        /// <summary>创建当前配置对应的单位独占能力运行时。</summary>
+        /// <returns>未初始化的能力运行时实例。</returns>
+        public abstract AbilityRuntime CreateRuntime();
 
-        /// <summary>获取能力显示名称。</summary>
-        public string DisplayName => string.IsNullOrWhiteSpace(_displayName) ? name : _displayName;
-
-        /// <summary>根据静态配置创建不共享状态的能力运行时。</summary>
-        /// <param name="context">能力所属单位上下文。</param>
-        /// <returns>新创建的单位独占能力运行时。</returns>
-        public abstract AbilityRuntime CreateRuntime(AbilityContext context);
+        /// <summary>绘制当前能力配置在 Scene 窗口中的编辑器可视化内容。</summary>
+        /// <param name="owner">能力配置所属的单位对象；为 null 时不执行绘制。</param>
+        public virtual void GizmoDraw(GameObject owner) { }
     }
 }

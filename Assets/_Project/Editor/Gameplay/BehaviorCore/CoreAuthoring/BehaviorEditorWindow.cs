@@ -258,9 +258,7 @@ namespace BehaviorCore
                 sourceTimeline);
         }
 
-        private static void ReorderRootTracksByImportOrder(
-            TimelineAsset timelineAsset,
-            List<TrackAsset> importedRootTracks)
+        private static void ReorderRootTracksByImportOrder(TimelineAsset timelineAsset, List<TrackAsset> importedRootTracks)
         {
             if (timelineAsset == null || importedRootTracks == null || importedRootTracks.Count == 0)
                 return;
@@ -437,9 +435,7 @@ namespace BehaviorCore
             return false;
         }
 
-        private static int CompareTrackSnapshotsBySortIndex(
-            BehaviorAuthoringTrackSnapshot left,
-            BehaviorAuthoringTrackSnapshot right)
+        private static int CompareTrackSnapshotsBySortIndex(BehaviorAuthoringTrackSnapshot left, BehaviorAuthoringTrackSnapshot right)
         {
             if (ReferenceEquals(left, right))
                 return 0;
@@ -504,13 +500,7 @@ namespace BehaviorCore
             return 8;
         }
 
-        private static bool TryBuildAuthoringTrackSnapshot(
-            TrackAsset track,
-            PlayableDirector director,
-            Transform referenceRoot,
-            int sortIndex,
-            List<string> exportWarnings,
-            out BehaviorAuthoringTrackSnapshot snapshot)
+        private static bool TryBuildAuthoringTrackSnapshot(TrackAsset track, PlayableDirector director, Transform referenceRoot, int sortIndex, List<string> exportWarnings, out BehaviorAuthoringTrackSnapshot snapshot)
         {
             snapshot = null;
             if (track == null)
@@ -552,11 +542,7 @@ namespace BehaviorCore
             };
         }
 
-        private static List<BehaviorAuthoringClipSnapshot> BuildAuthoringClipSnapshotsForTrack(
-            TrackAsset track,
-            PlayableDirector director,
-            Transform referenceRoot,
-            List<string> exportWarnings)
+        private static List<BehaviorAuthoringClipSnapshot> BuildAuthoringClipSnapshotsForTrack(TrackAsset track, PlayableDirector director, Transform referenceRoot, List<string> exportWarnings)
         {
             List<BehaviorAuthoringClipSnapshot> results = new List<BehaviorAuthoringClipSnapshot>();
             if (track == null)
@@ -757,12 +743,7 @@ namespace BehaviorCore
             };
         }
 
-        private static void AppendVfxControlSnapshots(
-            List<BehaviorAuthoringClipSnapshot> results,
-            ControlTrack track,
-            PlayableDirector director,
-            Transform referenceRoot,
-            List<string> exportWarnings)
+        private static void AppendVfxControlSnapshots(List<BehaviorAuthoringClipSnapshot> results, ControlTrack track, PlayableDirector director, Transform referenceRoot, List<string> exportWarnings)
         {
             if (results == null || track == null)
                 return;
@@ -820,12 +801,7 @@ namespace BehaviorCore
             }
         }
 
-        private static void AppendVfxActivationSnapshots(
-            List<BehaviorAuthoringClipSnapshot> results,
-            ActivationTrack track,
-            PlayableDirector director,
-            Transform referenceRoot,
-            List<string> exportWarnings)
+        private static void AppendVfxActivationSnapshots( List<BehaviorAuthoringClipSnapshot> results, ActivationTrack track, PlayableDirector director, Transform referenceRoot, List<string> exportWarnings)
         {
             if (results == null || track == null)
                 return;
@@ -1164,8 +1140,7 @@ namespace BehaviorCore
             UnityEditorInternal.InternalEditorUtility.RepaintAllViews();
         }
 
-        private static void RestoreTimelineWindowContext(UnityEditor.Timeline.TimelineEditorWindow timelineWindow,
-            TimelineAsset timelineAsset, PlayableDirector preferredDirector)
+        private static void RestoreTimelineWindowContext(UnityEditor.Timeline.TimelineEditorWindow timelineWindow, TimelineAsset timelineAsset, PlayableDirector preferredDirector)
         {
             if (timelineWindow == null || timelineAsset == null)
                 return;
@@ -1194,8 +1169,7 @@ namespace BehaviorCore
             }
         }
 
-        private static PlayableDirector ResolvePreviewDirectorForOpen(TimelineAsset timelineAsset,
-            PlayableDirector preferredDirector)
+        private static PlayableDirector ResolvePreviewDirectorForOpen(TimelineAsset timelineAsset, PlayableDirector preferredDirector)
         {
             if (preferredDirector != null &&
                 (preferredDirector.playableAsset == null || preferredDirector.playableAsset == timelineAsset))
@@ -1224,8 +1198,7 @@ namespace BehaviorCore
             return null;
         }
 
-        private static PlayableDirector ResolvePreviewDirectorForRefresh(TimelineAsset timelineAsset,
-            PlayableDirector preferredDirector)
+        private static PlayableDirector ResolvePreviewDirectorForRefresh(TimelineAsset timelineAsset, PlayableDirector preferredDirector)
         {
             if (preferredDirector != null &&
                 (preferredDirector.playableAsset == null || preferredDirector.playableAsset == timelineAsset))
@@ -1332,8 +1305,7 @@ namespace BehaviorCore
             }
         }
 
-        private static void BindPreviewAudioSource(PlayableDirector director, TimelineAsset timelineAsset,
-            AudioSource audioSource)
+        private static void BindPreviewAudioSource(PlayableDirector director, TimelineAsset timelineAsset, AudioSource audioSource)
         {
             if (director == null || timelineAsset == null || audioSource == null)
                 return;
@@ -1365,8 +1337,7 @@ namespace BehaviorCore
             return null;
         }
 
-        private static void ExportNativeAnimationTrack(AnimationTrack track, List<AnimationSegmentEntry> segmentEntries,
-            List<string> exportWarnings, ref double maxEndTime)
+        private static void ExportNativeAnimationTrack(AnimationTrack track, List<AnimationSegmentEntry> segmentEntries, List<string> exportWarnings, ref double maxEndTime)
         {
             if (track == null || segmentEntries == null)
                 return;
@@ -1438,8 +1409,7 @@ namespace BehaviorCore
             }
         }
 
-        private static void ExportNativeAudioTrack(AudioTrack track, PlayableDirector director, Transform referenceRoot,
-            List<BehaviorEvent> behaviorEvents, List<string> exportWarnings, ref double maxEndTime)
+        private static void ExportNativeAudioTrack(AudioTrack track, PlayableDirector director, Transform referenceRoot, List<BehaviorEvent> behaviorEvents, List<string> exportWarnings, ref double maxEndTime)
         {
             if (track == null || behaviorEvents == null)
                 return;
@@ -1489,8 +1459,7 @@ namespace BehaviorCore
             }
         }
 
-        private static void ExportNativeVfxTrack(ControlTrack track, PlayableDirector director, Transform referenceRoot,
-            List<BehaviorEvent> behaviorEvents, List<string> exportWarnings, ref double maxEndTime)
+        private static void ExportNativeVfxTrack(ControlTrack track, PlayableDirector director, Transform referenceRoot, List<BehaviorEvent> behaviorEvents, List<string> exportWarnings, ref double maxEndTime)
         {
             if (track == null || behaviorEvents == null)
                 return;
@@ -1575,8 +1544,7 @@ namespace BehaviorCore
             }
         }
 
-        private static void ExportNativeActivationTrack(ActivationTrack track, PlayableDirector director,
-            Transform referenceRoot, List<BehaviorEvent> behaviorEvents, List<string> exportWarnings, ref double maxEndTime)
+        private static void ExportNativeActivationTrack(ActivationTrack track, PlayableDirector director, Transform referenceRoot, List<BehaviorEvent> behaviorEvents, List<string> exportWarnings, ref double maxEndTime)
         {
             if (track == null || behaviorEvents == null)
                 return;
@@ -1680,10 +1648,7 @@ namespace BehaviorCore
             return null;
         }
 
-        private static float ReadClampedFloatSerializedProperty(
-            UnityEngine.Object targetObject,
-            string propertyName,
-            float fallbackValue)
+        private static float ReadClampedFloatSerializedProperty( UnityEngine.Object targetObject, string propertyName, float fallbackValue)
         {
             return ReadSerializedPropertyValue(
                 targetObject,
@@ -1692,18 +1657,12 @@ namespace BehaviorCore
                 property => Mathf.Clamp01(property.floatValue));
         }
 
-        private static int ReadIntSerializedProperty(
-            UnityEngine.Object targetObject,
-            string propertyName,
-            int fallbackValue)
+        private static int ReadIntSerializedProperty( UnityEngine.Object targetObject, string propertyName, int fallbackValue)
         {
             return ReadSerializedPropertyValue(targetObject, propertyName, fallbackValue, property => property.intValue);
         }
 
-        private static void ConfigureControlPlayableAsset(
-            ControlPlayableAsset playableAsset,
-            GameObject prefab,
-            int postPlayback)
+        private static void ConfigureControlPlayableAsset( ControlPlayableAsset playableAsset, GameObject prefab, int postPlayback)
         {
             if (playableAsset == null)
                 return;
@@ -1734,11 +1693,7 @@ namespace BehaviorCore
             }
         }
 
-        private static TResult ReadSerializedPropertyValue<TResult>(
-            UnityEngine.Object targetObject,
-            string propertyName,
-            TResult fallbackValue,
-            Func<UnityEditor.SerializedProperty, TResult> readValue)
+        private static TResult ReadSerializedPropertyValue<TResult>( UnityEngine.Object targetObject, string propertyName, TResult fallbackValue, Func<UnityEditor.SerializedProperty, TResult> readValue)
         {
             if (targetObject == null || readValue == null)
                 return fallbackValue;
@@ -1751,10 +1706,7 @@ namespace BehaviorCore
             }
         }
 
-        private static void SetSerializedPropertyValue(
-            UnityEditor.SerializedObject serializedObject,
-            string propertyName,
-            UnityEngine.Object value)
+        private static void SetSerializedPropertyValue(UnityEditor.SerializedObject serializedObject, string propertyName, UnityEngine.Object value)
         {
             if (!TryGetSerializedProperty(serializedObject, propertyName, out UnityEditor.SerializedProperty property))
                 return;
@@ -1762,10 +1714,7 @@ namespace BehaviorCore
             property.objectReferenceValue = value;
         }
 
-        private static void SetSerializedPropertyValue(
-            UnityEditor.SerializedObject serializedObject,
-            string propertyName,
-            bool value)
+        private static void SetSerializedPropertyValue(UnityEditor.SerializedObject serializedObject, string propertyName, bool value)
         {
             if (!TryGetSerializedProperty(serializedObject, propertyName, out UnityEditor.SerializedProperty property))
                 return;
@@ -1773,10 +1722,7 @@ namespace BehaviorCore
             property.boolValue = value;
         }
 
-        private static void SetSerializedPropertyValue(
-            UnityEditor.SerializedObject serializedObject,
-            string propertyName,
-            int value)
+        private static void SetSerializedPropertyValue(UnityEditor.SerializedObject serializedObject, string propertyName, int value)
         {
             if (!TryGetSerializedProperty(serializedObject, propertyName, out UnityEditor.SerializedProperty property))
                 return;
@@ -1784,10 +1730,7 @@ namespace BehaviorCore
             property.intValue = value;
         }
 
-        private static void SetSerializedPropertyValue(
-            UnityEditor.SerializedObject serializedObject,
-            string propertyName,
-            float value)
+        private static void SetSerializedPropertyValue(UnityEditor.SerializedObject serializedObject, string propertyName, float value)
         {
             if (!TryGetSerializedProperty(serializedObject, propertyName, out UnityEditor.SerializedProperty property))
                 return;
@@ -1795,10 +1738,7 @@ namespace BehaviorCore
             property.floatValue = value;
         }
 
-        private static bool TryGetSerializedProperty(
-            UnityEditor.SerializedObject serializedObject,
-            string propertyName,
-            out UnityEditor.SerializedProperty property)
+        private static bool TryGetSerializedProperty(UnityEditor.SerializedObject serializedObject, string propertyName, out UnityEditor.SerializedProperty property)
         {
             property = null;
             if (serializedObject == null || string.IsNullOrWhiteSpace(propertyName))
@@ -1816,8 +1756,7 @@ namespace BehaviorCore
             return BehaviorReferenceBoneEditorUtility.BuildRelativeBonePath(referenceRoot, targetObject.transform);
         }
 
-        private static bool TryResolveSpawnableControlTrackPrefab(GameObject sourceObject, Transform referenceRoot,
-            out GameObject prefabAsset, out GameObject instanceRootObject)
+        private static bool TryResolveSpawnableControlTrackPrefab(GameObject sourceObject, Transform referenceRoot, out GameObject prefabAsset, out GameObject instanceRootObject)
         {
             prefabAsset = null;
             instanceRootObject = sourceObject;
@@ -1844,8 +1783,7 @@ namespace BehaviorCore
             return true;
         }
 
-        private static void BuildTransformBinding(Transform sourceTransform, Transform referenceRoot,
-            out string referenceBone, out Vector3 positionOffset, out Vector3 rotationOffset, out Vector3 scaleOffset)
+        private static void BuildTransformBinding(Transform sourceTransform, Transform referenceRoot, out string referenceBone, out Vector3 positionOffset, out Vector3 rotationOffset, out Vector3 scaleOffset)
         {
             referenceBone = string.Empty;
             positionOffset = Vector3.zero;
@@ -1895,8 +1833,7 @@ namespace BehaviorCore
             scaleOffset = sourceTransform.localScale;
         }
 
-        private static void NormalizeSpawnablePrefabTransformOffsets(GameObject prefab, Transform sourceTransform,
-            ref Vector3 positionOffset, ref Vector3 rotationOffset, ref Vector3 scaleOffset)
+        private static void NormalizeSpawnablePrefabTransformOffsets(GameObject prefab, Transform sourceTransform, ref Vector3 positionOffset, ref Vector3 rotationOffset, ref Vector3 scaleOffset)
         {
             if (prefab == null || sourceTransform == null)
                 return;
@@ -1947,12 +1884,7 @@ namespace BehaviorCore
             return created;
         }
 
-        private static T EnsureTrack<T>(
-            TimelineAsset timelineAsset,
-            string trackName,
-            IReadOnlyList<TrackAsset> timelineTracks,
-            out bool changed)
-            where T : TrackAsset, new()
+        private static T EnsureTrack<T>( TimelineAsset timelineAsset, string trackName, IReadOnlyList<TrackAsset> timelineTracks, out bool changed) where T : TrackAsset, new()
         {
             changed = false;
             if (timelineAsset == null)
@@ -2034,8 +1966,7 @@ namespace BehaviorCore
             return created;
         }
 
-        private static T GetOrCreateExactTrack<T>(TimelineAsset timelineAsset, string trackName)
-            where T : TrackAsset, new()
+        private static T GetOrCreateExactTrack<T>(TimelineAsset timelineAsset, string trackName) where T : TrackAsset, new()
         {
             if (timelineAsset == null)
                 return null;
@@ -2060,9 +1991,7 @@ namespace BehaviorCore
             DeleteClipsByPredicate(track, "Clear Timeline Track Clips", _ => true);
         }
 
-        private static string ResolveImportedClipDisplayName(
-            BehaviorAuthoringClipSnapshot clipSnapshot,
-            string fallbackDisplayName)
+        private static string ResolveImportedClipDisplayName(BehaviorAuthoringClipSnapshot clipSnapshot, string fallbackDisplayName)
         {
             return clipSnapshot != null && !string.IsNullOrWhiteSpace(clipSnapshot.displayName)
                 ? clipSnapshot.displayName
@@ -2123,11 +2052,7 @@ namespace BehaviorCore
             return Math.Max(0.01d, Math.Min(0.1d, totalDuration));
         }
 
-        private static float ResolveImportedAnimationSegmentDuration(
-            BehaviorClip behaviorClip,
-            AnimationSegment[] segments,
-            int currentIndex,
-            float currentStartTime)
+        private static float ResolveImportedAnimationSegmentDuration(BehaviorClip behaviorClip, AnimationSegment[] segments, int currentIndex, float currentStartTime)
         {
             if (segments == null || currentIndex < 0 || currentIndex >= segments.Length)
                 return 0.1f;
@@ -2178,9 +2103,7 @@ namespace BehaviorCore
             return audioSource;
         }
 
-        private GameObject ResolveAuthoringBoundObjectForImport(
-            BehaviorAuthoringClipSnapshot clipSnapshot,
-            BehaviorEvent behaviorEvent)
+        private GameObject ResolveAuthoringBoundObjectForImport(BehaviorAuthoringClipSnapshot clipSnapshot, BehaviorEvent behaviorEvent)
         {
             Transform targetTransform = null;
             if (clipSnapshot != null && !string.IsNullOrWhiteSpace(clipSnapshot.boundObjectPath))
@@ -2295,8 +2218,7 @@ namespace BehaviorCore
             return resolvedMeta;
         }
 
-        private static bool TryGetTrackClipAsset<TClipAsset>(TrackAsset track, out TClipAsset clipAsset)
-            where TClipAsset : class
+        private static bool TryGetTrackClipAsset<TClipAsset>(TrackAsset track, out TClipAsset clipAsset) where TClipAsset : class
         {
             if (track != null)
             {
@@ -2332,8 +2254,7 @@ namespace BehaviorCore
             return score;
         }
 
-        private static void RemoveEmptyDuplicateTracks<T>(TimelineAsset timelineAsset, T keepTrack, string trackName)
-            where T : TrackAsset
+        private static void RemoveEmptyDuplicateTracks<T>(TimelineAsset timelineAsset, T keepTrack, string trackName) where T : TrackAsset
         {
             if (timelineAsset == null || keepTrack == null || string.IsNullOrEmpty(trackName))
                 return;
@@ -2362,10 +2283,7 @@ namespace BehaviorCore
             return tracks;
         }
 
-        private static void DeleteTracksByPredicate(
-            TimelineAsset timelineAsset,
-            string undoName,
-            Predicate<TrackAsset> shouldDelete)
+        private static void DeleteTracksByPredicate(TimelineAsset timelineAsset, string undoName, Predicate<TrackAsset> shouldDelete)
         {
             if (timelineAsset == null || shouldDelete == null)
                 return;
