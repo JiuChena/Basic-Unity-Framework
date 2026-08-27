@@ -49,7 +49,7 @@ namespace BehaviorCore
             previewDirector.time = 0d;
             previewDirector.RebuildGraph();
             previewDirector.Evaluate();
-            RefreshTimelineEditor(sourceTimeline, true, previewDirector);
+            RefreshTimelineEditor(sourceTimeline, previewDirector);
             UnityEditor.Selection.activeObject = previewDirector.gameObject;
         }
 
@@ -98,26 +98,24 @@ namespace BehaviorCore
             autoAssignedReferenceRoot = false;
             BehaviorEditorContext.ReferenceRootObject = previewReferenceRoot;
 
-            if (sourceTimeline != null) RefreshTimelineEditor(sourceTimeline, true, null);
+            if (sourceTimeline != null) RefreshTimelineEditor(sourceTimeline, null);
         }
 
         /// <summary>
         /// 刷新 Timeline 编辑器窗口，必要时排队延迟刷新。
         /// </summary>
         /// <param name="timelineAsset">需要刷新的 Timeline 资产。</param>
-        /// <param name="contentsChanged">内容是否发生了增删。</param>
         /// <param name="preferredDirector">优先使用的 Director。</param>
-        private static void RefreshTimelineEditor(TimelineAsset timelineAsset, bool contentsChanged, PlayableDirector preferredDirector)
+        private static void RefreshTimelineEditor(TimelineAsset timelineAsset, PlayableDirector preferredDirector)
         {
             UnityEditor.Timeline.TimelineEditorWindow timelineWindow = UnityEditor.Timeline.TimelineEditor.GetOrCreateWindow();
             RestoreTimelineWindowContext(timelineWindow, timelineAsset, preferredDirector);
 
-            // 组合刷新原因。
-            UnityEditor.Timeline.RefreshReason reason = UnityEditor.Timeline.RefreshReason.WindowNeedsRedraw;
-            reason |= UnityEditor.Timeline.RefreshReason.SceneNeedsUpdate;
-            reason |= contentsChanged
-                ? UnityEditor.Timeline.RefreshReason.ContentsAddedOrRemoved
-                : UnityEditor.Timeline.RefreshReason.ContentsModified;
+            // 组合刷新原因（统一按内容增删处理，覆盖全部变更场景）。
+            UnityEditor.Timeline.RefreshReason reason =
+                UnityEditor.Timeline.RefreshReason.ContentsAddedOrRemoved |
+                UnityEditor.Timeline.RefreshReason.SceneNeedsUpdate |
+                UnityEditor.Timeline.RefreshReason.WindowNeedsRedraw;
 
             UnityEditor.Timeline.TimelineEditor.Refresh(reason);
             UnityEditor.EditorApplication.QueuePlayerLoopUpdate();
@@ -129,7 +127,6 @@ namespace BehaviorCore
             // 缓存延迟刷新参数，避免同一帧重复排队。
             pendingDelayedTimelineAsset = timelineAsset;
             pendingDelayedTimelineDirector = preferredDirector;
-            pendingDelayedTimelineReason = reason;
             if (pendingDelayedTimelineRefresh)
                 return;
 
@@ -145,7 +142,6 @@ namespace BehaviorCore
             pendingDelayedTimelineRefresh = false;
             TimelineAsset delayedTimelineAsset = pendingDelayedTimelineAsset;
             PlayableDirector delayedTimelineDirector = pendingDelayedTimelineDirector;
-            UnityEditor.Timeline.RefreshReason delayedTimelineReason = pendingDelayedTimelineReason;
             pendingDelayedTimelineAsset = null;
             pendingDelayedTimelineDirector = null;
             if (delayedTimelineAsset == null)
@@ -157,7 +153,10 @@ namespace BehaviorCore
                 delayedWindow,
                 delayedTimelineAsset,
                 delayedTimelineDirector);
-            UnityEditor.Timeline.TimelineEditor.Refresh(delayedTimelineReason);
+            UnityEditor.Timeline.TimelineEditor.Refresh(
+                UnityEditor.Timeline.RefreshReason.ContentsAddedOrRemoved |
+                UnityEditor.Timeline.RefreshReason.SceneNeedsUpdate |
+                UnityEditor.Timeline.RefreshReason.WindowNeedsRedraw);
             UnityEditor.EditorApplication.QueuePlayerLoopUpdate();
             UnityEditorInternal.InternalEditorUtility.RepaintAllViews();
         }

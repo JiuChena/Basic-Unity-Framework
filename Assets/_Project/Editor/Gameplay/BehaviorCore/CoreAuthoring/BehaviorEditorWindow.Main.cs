@@ -68,8 +68,6 @@ namespace BehaviorCore
         private static TimelineAsset pendingDelayedTimelineAsset;
         // 延迟刷新使用的 Director 缓存。
         private static PlayableDirector pendingDelayedTimelineDirector;
-        // 延迟刷新使用的刷新原因。
-        private static UnityEditor.Timeline.RefreshReason pendingDelayedTimelineReason;
 
         /// <summary>
         /// 打开行为编辑器主窗口。
@@ -293,7 +291,7 @@ namespace BehaviorCore
             // 刷新编辑器并定位到 Timeline 资产。
             Repaint();
             UnityEditor.EditorGUIUtility.PingObject(sourceTimeline);
-            RefreshTimelineEditor(sourceTimeline, changed, previewDirector);
+            RefreshTimelineEditor(sourceTimeline, previewDirector);
             Debug.Log($"已确保 Timeline 轨道存在：{sourceTimeline.name}", sourceTimeline);
         }
     }

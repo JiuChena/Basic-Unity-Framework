@@ -27,7 +27,7 @@ namespace BehaviorCore
             UnityEditor.EditorUtility.SetDirty(sourceTimeline);
             UnityEditor.AssetDatabase.SaveAssets();
 
-            RefreshTimelineEditor(sourceTimeline, true, previewDirector);
+            RefreshTimelineEditor(sourceTimeline, previewDirector);
             Debug.Log(
                 $"已按 BehaviorClip 回填 Timeline：{targetBehaviorClip.name} -> {sourceTimeline.name}",
                 sourceTimeline);
