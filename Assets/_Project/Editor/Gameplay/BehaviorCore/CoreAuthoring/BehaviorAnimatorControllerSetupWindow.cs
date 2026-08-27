@@ -27,15 +27,20 @@ namespace BehaviorCore
             window.minSize = new Vector2(520f, 520f);
         }
 
+        /// <summary>
+        /// 资源右键菜单入口：在当前选中文件夹下创建自包含的 Behavior AnimatorController。
+        /// </summary>
         [MenuItem("Assets/Create/Framework/Behavior Editor/Authoring/Animator Controller", priority = 305)]
         private static void CreateControllerFromAssetsMenu()
         {
+            // 解析目标目录并生成唯一资产路径。
             string targetFolder = ResolveSelectedFolderPath();
             string uniqueControllerPath = AssetDatabase.GenerateUniqueAssetPath(
                 $"{targetFolder}/BehaviorController.controller");
             string controllerName = Path.GetFileNameWithoutExtension(uniqueControllerPath);
             string outputFolder = Path.GetDirectoryName(uniqueControllerPath)?.Replace("\\", "/") ?? targetFolder;
 
+            // 创建或刷新 Controller 并选中。
             AnimatorController controller = BehaviorAnimatorControllerAssetUtility.CreateOrUpdateController(
                 outputFolder,
                 controllerName,
@@ -47,6 +52,9 @@ namespace BehaviorCore
             Debug.Log($"已创建 Behavior AnimatorController：{AssetDatabase.GetAssetPath(controller)}", controller);
         }
 
+        /// <summary>
+        /// 绘制窗口主界面：说明与创建表单。
+        /// </summary>
         private void OnGUI()
         {
             EditorGUILayout.LabelField("Behavior AnimatorController", EditorStyles.boldLabel);
@@ -60,6 +68,9 @@ namespace BehaviorCore
             DrawCreationSection();
         }
 
+        /// <summary>
+        /// 绘制创建参数表单：目录、名称、层数与每层槽位数。
+        /// </summary>
         private void DrawCreationSection()
         {
             EditorGUILayout.LabelField("Create Or Refresh", EditorStyles.boldLabel);
@@ -85,6 +96,10 @@ namespace BehaviorCore
             }
         }
 
+        /// <summary>
+        /// 解析当前选中资源所在文件夹；选中无效时回退到 Assets 根目录。
+        /// </summary>
+        /// <returns>目标文件夹路径。</returns>
         private static string ResolveSelectedFolderPath()
         {
             UnityEngine.Object activeObject = Selection.activeObject;
@@ -95,16 +110,29 @@ namespace BehaviorCore
             if (string.IsNullOrWhiteSpace(assetPath))
                 return "Assets";
 
+            // 选中本身是文件夹时直接使用。
             if (AssetDatabase.IsValidFolder(assetPath))
                 return assetPath;
 
+            // 选中是资产时取其所在目录。
             string folderPath = Path.GetDirectoryName(assetPath)?.Replace("\\", "/");
             return string.IsNullOrWhiteSpace(folderPath) ? "Assets" : folderPath;
         }
     }
 
+    /// <summary>
+    /// Behavior AnimatorController 的资产创建工具：生成自包含 Controller、占位动画与槽位状态。
+    /// </summary>
     internal static class BehaviorAnimatorControllerAssetUtility
     {
+        /// <summary>
+        /// 创建或刷新指定目录下的自包含 Behavior AnimatorController。
+        /// </summary>
+        /// <param name="outputFolder">输出目录。</param>
+        /// <param name="controllerName">Controller 名称。</param>
+        /// <param name="layerCount">保留层数。</param>
+        /// <param name="slotsPerLayer">每层槽位数。</param>
+        /// <returns>创建或刷新后的 AnimatorController。</returns>
         public static AnimatorController CreateOrUpdateController(
             string outputFolder,
             string controllerName,
@@ -123,11 +151,13 @@ namespace BehaviorCore
             string controllerPath = $"{outputFolder}/{controllerName}.controller";
             string placeholderFolder = EnsureFolder($"{outputFolder}/{controllerName}_Placeholders");
 
+            // 已存在则复用，否则新建。
             AnimatorController controller =
                 AssetDatabase.LoadAssetAtPath<AnimatorController>(controllerPath);
             if (controller == null)
                 controller = AnimatorController.CreateAnimatorControllerAtPath(controllerPath);
 
+            // 为每个槽位生成占位动画片段。
             AnimationClip[,] placeholders = new AnimationClip[layerCount, slotsPerLayer];
             for (int layer = 0; layer < layerCount; layer++)
             {
@@ -149,6 +179,14 @@ namespace BehaviorCore
 
             return controller;
         }
+
+        /// <summary>
+        /// 确保 Controller 拥有指定数量的 Behavior 保留层与槽位状态。
+        /// </summary>
+        /// <param name="controller">目标 AnimatorController。</param>
+        /// <param name="placeholders">槽位占位动画二维数组。</param>
+        /// <param name="layerCount">需要的层数。</param>
+        /// <param name="slotsPerLayer">每层槽位数。</param>
         private static void EnsureBehaviorLayers(
             AnimatorController controller,
             AnimationClip[,] placeholders,
@@ -159,6 +197,7 @@ namespace BehaviorCore
             if (layers.Count == 0)
                 layers.Add(CreateControllerLayer(controller, 0));
 
+            // 逐层复用已有层或新建层，并同步槽位状态。
             for (int layerIndex = 0; layerIndex < layerCount; layerIndex++)
             {
                 AnimatorControllerLayer layer;
@@ -189,6 +228,12 @@ namespace BehaviorCore
             controller.layers = layers.ToArray();
         }
 
+        /// <summary>
+        /// 创建指定索引的 AnimatorControllerLayer 及其状态机。
+        /// </summary>
+        /// <param name="controller">目标 AnimatorController。</param>
+        /// <param name="layerIndex">层索引。</param>
+        /// <returns>新建的层。</returns>
         private static AnimatorControllerLayer CreateControllerLayer(AnimatorController controller, int layerIndex)
         {
             AnimatorStateMachine stateMachine = new AnimatorStateMachine
@@ -206,12 +251,20 @@ namespace BehaviorCore
             };
         }
 
+        /// <summary>
+        /// 同步层内 Behavior 槽位状态：清理越界/重复状态，补齐缺失槽位并绑定占位动画。
+        /// </summary>
+        /// <param name="stateMachine">目标状态机。</param>
+        /// <param name="placeholders">槽位占位动画二维数组。</param>
+        /// <param name="layerIndex">层索引。</param>
+        /// <param name="slotsPerLayer">每层槽位数。</param>
         private static void SyncBehaviorStates(
             AnimatorStateMachine stateMachine,
             AnimationClip[,] placeholders,
             int layerIndex,
             int slotsPerLayer)
         {
+            // 收集符合命名规则的既有槽位状态，剔除越界与重复项。
             Dictionary<int, AnimatorState> existingStates = new Dictionary<int, AnimatorState>();
             ChildAnimatorState[] childStates = stateMachine.states;
 
@@ -233,6 +286,7 @@ namespace BehaviorCore
                 existingStates.Add(slotIndex, state);
             }
 
+            // 补齐缺失槽位并绑定占位动画，槽位 0 设为默认状态。
             for (int slotIndex = 0; slotIndex < slotsPerLayer; slotIndex++)
             {
                 if (!existingStates.TryGetValue(slotIndex, out AnimatorState state) || state == null)
@@ -249,6 +303,13 @@ namespace BehaviorCore
             }
         }
 
+        /// <summary>
+        /// 从状态名解析 Behavior 槽位索引。
+        /// </summary>
+        /// <param name="stateName">状态名。</param>
+        /// <param name="layerIndex">期望的层索引。</param>
+        /// <param name="slotIndex">输出的槽位索引。</param>
+        /// <returns>状态名符合命名规则时返回 true。</returns>
         private static bool TryParseBehaviorSlotStateName(string stateName, int layerIndex, out int slotIndex)
         {
             slotIndex = -1;
@@ -263,6 +324,13 @@ namespace BehaviorCore
             return int.TryParse(suffix, out slotIndex);
         }
 
+        /// <summary>
+        /// 创建或复用指定槽位的占位动画片段资产。
+        /// </summary>
+        /// <param name="placeholderFolder">占位动画目录。</param>
+        /// <param name="layerIndex">层索引。</param>
+        /// <param name="slotIndex">槽位索引。</param>
+        /// <returns>占位动画片段。</returns>
         private static AnimationClip CreatePlaceholderClip(string placeholderFolder, int layerIndex, int slotIndex)
         {
             string placeholderName = BehaviorAnimatorControllerConvention.GetPlaceholderClipName(layerIndex, slotIndex);
@@ -271,6 +339,7 @@ namespace BehaviorCore
             if (clip != null)
                 return clip;
 
+            // 不存在时创建空占位片段。
             clip = new AnimationClip
             {
                 name = placeholderName
@@ -279,6 +348,11 @@ namespace BehaviorCore
             return clip;
         }
 
+        /// <summary>
+        /// 确保文件夹存在，缺失时逐级创建。
+        /// </summary>
+        /// <param name="folderPath">目标文件夹路径。</param>
+        /// <returns>规范化后的文件夹路径。</returns>
         private static string EnsureFolder(string folderPath)
         {
             if (string.IsNullOrWhiteSpace(folderPath))
@@ -288,6 +362,7 @@ namespace BehaviorCore
             if (AssetDatabase.IsValidFolder(folderPath))
                 return folderPath;
 
+            // 逐级创建缺失的文件夹。
             string[] parts = folderPath.Split('/');
             string currentPath = parts[0];
             for (int i = 1; i < parts.Length; i++)
