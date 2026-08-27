@@ -215,8 +215,7 @@ namespace BehaviorCore
             previewDirector.Stop();
 
             EnsureAuthoringTracks();
-            if (syncTimelineFromTargetBehaviorOnBegin && targetBehaviorClip != null)
-                RebuildTimelineFromBehaviorClip();
+            if (syncTimelineFromTargetBehaviorOnBegin && targetBehaviorClip != null) RebuildTimelineFromBehaviorClip();
             OpenTimelineForPreview();
         }
 

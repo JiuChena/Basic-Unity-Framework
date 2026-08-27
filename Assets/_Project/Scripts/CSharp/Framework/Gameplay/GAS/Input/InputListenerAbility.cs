@@ -127,6 +127,7 @@ namespace Framework.Gameplay.Abilities.Input
 
             string actionMapName = _configuration != null ? _configuration.ActionMapName : string.Empty;
             if (!string.IsNullOrWhiteSpace(actionMapName)) playerInput.defaultActionMap = actionMapName;
+            if (!playerInput.enabled) playerInput.enabled = true;
             playerInput.ActivateInput();
             return playerInput;
         }

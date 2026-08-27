@@ -31,7 +31,6 @@ namespace Framework.Gameplay.Abilities.Movement
         {
             base.Initialize(context);
             if (context == null || context.Owner == null) return;
-            Context.TryGet(AbilityContextDataType.Movement, out _movementData);
             _rigidbody = context.Owner.GetComponent<Rigidbody>();
             // 从配置表创建单位独占跳跃状态。
             _jump = _configuration != null
@@ -39,6 +38,12 @@ namespace Framework.Gameplay.Abilities.Movement
                 : new JumpModule();
             _jumpData = new JumpContextData();
             Context.Register(AbilityContextDataType.Jump, _jumpData);
+        }
+
+        /// <summary>在所有能力完成初始化后解析移动状态依赖。</summary>
+        public override void StartAbility()
+        {
+            ResolveMovementData();
         }
 
         /// <summary>清空跳跃瞬态状态。</summary>
@@ -52,6 +57,7 @@ namespace Framework.Gameplay.Abilities.Movement
         /// <param name="fixedDeltaTime">当前固定帧时长，单位：秒。</param>
         public override void FixedUpdateAbility(float fixedDeltaTime)
         {
+            if (_movementData == null) ResolveMovementData();
             if (_movementData == null || _rigidbody == null || _jump == null || Context == null) return;
             UnitMovementCommand command = UnitMovementCommand.CreateDefault();
             if (Context.TryGet(AbilityContextDataType.Input, out InputBlackboard input))
@@ -67,6 +73,13 @@ namespace Framework.Gameplay.Abilities.Movement
             if (startJump) velocity.y = _jump.InitialSpeed;
             else if (velocity.y > 0f) velocity.y *= _jump.CutMultiplier;
             _rigidbody.velocity = velocity;
+        }
+
+        /// <summary>从能力上下文获取基础移动状态，允许能力列表顺序变化。</summary>
+        private void ResolveMovementData()
+        {
+            if (_movementData != null || Context == null) return;
+            Context.TryGet(AbilityContextDataType.Movement, out _movementData);
         }
 
         /// <summary>清空跳跃状态。</summary>
