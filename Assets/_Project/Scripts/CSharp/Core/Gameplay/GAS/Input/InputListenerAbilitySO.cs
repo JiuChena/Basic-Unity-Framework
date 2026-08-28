@@ -25,6 +25,7 @@ namespace Framework.Gameplay.Abilities.Configuration
         [SerializeField] private List<InputButtonBinding> _buttonBindings = new List<InputButtonBinding>
         {
             new InputButtonBinding(InputButton.Jump, "Jump"),
+            new  InputButtonBinding(InputButton.Sprint, "Sprint"),
         };
 
         /// <summary>获取自动创建 PlayerInput 时使用的动作资产。</summary>

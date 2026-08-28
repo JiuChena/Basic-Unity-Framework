@@ -19,7 +19,7 @@
                     "name": "Jump",
                     "type": "Button",
                     "id": "5b729d27-4d5a-4c5f-a35f-4cdad8cc1a0f",
-                    "expectedControlType": "Button",
+                    "expectedControlType": "",
                     "processors": "",
                     "interactions": "",
                     "initialStateCheck": false
@@ -28,7 +28,7 @@
                     "name": "Sprint",
                     "type": "Button",
                     "id": "e171be05-1f04-4d5c-9fa3-17e13c41d778",
-                    "expectedControlType": "Button",
+                    "expectedControlType": "",
                     "processors": "",
                     "interactions": "",
                     "initialStateCheck": false
