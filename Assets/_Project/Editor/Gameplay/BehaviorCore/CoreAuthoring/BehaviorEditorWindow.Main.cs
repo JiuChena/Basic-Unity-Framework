@@ -224,10 +224,8 @@ namespace BehaviorCore
         /// </summary>
         private void EndBehaviorAuthoring()
         {
-            if (sourceTimeline == null)
-                return;
-            if (!EnsureEditModeOperationAllowed("End Editing And Export"))
-                return;
+            if (sourceTimeline == null) return;
+            if (!EnsureEditModeOperationAllowed("End Editing And Export")) return;
 
             try
             {
@@ -257,8 +255,7 @@ namespace BehaviorCore
         /// </summary>
         private void EnsureAuthoringTracks()
         {
-            if (sourceTimeline == null)
-                return;
+            if (sourceTimeline == null) return;
 
             // 注册撤销并清理无效根轨道。
             UnityEditor.Undo.RegisterCompleteObjectUndo(sourceTimeline, "Ensure Behavior Authoring Tracks");
