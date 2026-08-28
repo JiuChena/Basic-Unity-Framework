@@ -85,8 +85,8 @@ namespace Framework.Gameplay.Abilities.Movement
         /// <param name="startJump">返回是否应立即设置初始跳跃速度。</param>
         /// <param name="cutJump">返回是否应降低当前向上速度。</param>
         public void Update(
-            in UnitMovementState state,
-            in UnitMovementCommand command,
+            in MovementState state,
+            in MovementCommand command,
             float fixedDeltaTime,
             out bool startJump,
             out bool cutJump)

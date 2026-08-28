@@ -26,11 +26,11 @@ namespace Framework.Gameplay.Abilities.Movement
         // 缓存的移动参考 Transform。
         private Transform _movementReference;
         // 当前固定帧运动状态。
-        private UnitMovementState _currentState;
+        private MovementState _currentState;
         // 当前固定帧移动命令。
-        private UnitMovementCommand _currentCommand;
+        private MovementCommand _currentCommand;
         // 当前单位独占的移动共享状态。
-        private MovementContextData _movementData;
+        private MovementSubContext _movementSub;
 
         /// <summary>创建基础移动运行时并保存配置表引用。</summary>
         /// <param name="configuration">基础移动配置表；允许为 null 并使用默认配置。</param>
@@ -41,9 +41,9 @@ namespace Framework.Gameplay.Abilities.Movement
 
         /// <summary>获取或创建基础移动组件并创建纯 C# 依赖。</summary>
         /// <param name="context">当前单位能力上下文。</param>
-        public override void Initialize(AbilityContext context)
+        public override void AbilityInit(AbilityContext context)
         {
-            base.Initialize(context);
+            base.AbilityInit(context);
             if (context == null || context.Owner == null) return;
 
             // 基础移动只获取自身需要的 Unity 组件。
@@ -70,12 +70,12 @@ namespace Framework.Gameplay.Abilities.Movement
                 new UnityPhysicsQuery(),
                 _ground);
             _gravity.Initialize(Physics.gravity);
-            _movementData = new MovementContextData();
-            Context.Register(AbilityContextDataType.Movement, _movementData);
+            _movementSub = new MovementSubContext();
+            Context.Register(AbilityContextDataType.Movement, _movementSub);
         }
 
         /// <summary>创建刚体接管适配器并缓存移动参考相机。</summary>
-        public override void StartAbility()
+        public override void AbilityStart()
         {
             if (_rigidbody == null) return;
             if (_body == null || !_body.IsValid) _body = new RigidbodyUnitBody(_rigidbody, true, true);
@@ -83,19 +83,19 @@ namespace Framework.Gameplay.Abilities.Movement
         }
 
         /// <summary>重置基础移动的瞬态状态。</summary>
-        public override void OnAbilityEnable()
+        public override void AbilityOnEnable()
         {
             _gravity?.ResetRuntimeState();
             _gravity?.Initialize(Physics.gravity);
             _currentState = default;
-            _currentCommand = UnitMovementCommand.CreateDefault();
+            _currentCommand = MovementCommand.CreateDefault();
             if (_rigidbody != null && (_body == null || !_body.IsValid))
                 _body = new RigidbodyUnitBody(_rigidbody, true, true);
         }
 
         /// <summary>读取输入并计算基础移动速度。</summary>
         /// <param name="fixedDeltaTime">当前固定帧时长，单位：秒。</param>
-        public override void FixedUpdateAbility(float fixedDeltaTime)
+        public override void AbilityFixedUpdate(float fixedDeltaTime)
         {
             if (_body == null || !_body.IsValid || _groundProbe == null || _locomotion == null) return;
 
@@ -103,7 +103,7 @@ namespace Framework.Gameplay.Abilities.Movement
             Vector3 currentVelocity = _body.Velocity;
             GroundProbeModule groundProbe = _groundProbe;
             if (Context != null
-                && Context.TryGet(AbilityContextDataType.FloatingCapsule, out FloatingCapsuleContextData floatingData)
+                && Context.TryGet(AbilityContextDataType.FloatingCapsule, out FloatingCapsuleSubContext floatingData)
                 && floatingData.GroundProbe != null)
                 groundProbe = floatingData.GroundProbe;
             GroundContact contact = groundProbe.ProbeGround();
@@ -116,13 +116,13 @@ namespace Framework.Gameplay.Abilities.Movement
                 false);
 
             // 当前帧只消费移动和冲刺输入，不处理其他能力输入。
-            _currentCommand = UnitMovementCommand.CreateDefault();
-            if (Context != null && Context.TryGet(AbilityContextDataType.Input, out InputBlackboard input))
+            _currentCommand = MovementCommand.CreateDefault();
+            if (Context != null && Context.TryGet(AbilityContextDataType.Input, out InputSubContext input))
             {
                 _currentCommand.WorldMoveDirection = input.GetWorldMoveDirection(_movementReference);
-                _currentCommand.SpeedScale = input.SprintHeld ? 1.6f : 1f;
+                _currentCommand.SpeedScale = input.IsHeld(InputButton.Sprint) ? 1.6f : 1f;
             }
-            _movementData?.Write(_currentState, _currentCommand);
+            _movementSub?.Write(_currentState, _currentCommand);
 
             Vector3 targetDirection = _currentCommand.WorldMoveDirection;
             if (grounded) targetDirection = Vector3.ProjectOnPlane(targetDirection, contact.Hit.normal).normalized;
@@ -140,7 +140,7 @@ namespace Framework.Gameplay.Abilities.Movement
         }
 
         /// <summary>停止基础移动并恢复刚体接管前的设置。</summary>
-        public override void OnAbilityDisable()
+        public override void AbilityOnDisable()
         {
             _body?.RestoreInitialSettings();
             _body = null;
@@ -148,16 +148,16 @@ namespace Framework.Gameplay.Abilities.Movement
         }
 
         /// <summary>释放基础移动运行时引用。</summary>
-        public override void DisposeAbility()
+        public override void AbilityDispose()
         {
-            OnAbilityDisable();
+            AbilityOnDisable();
             _groundProbe = null;
             _shape = null;
             _rigidbody = null;
             _movementReference = null;
-            Context?.Unregister(AbilityContextDataType.Movement, _movementData);
-            _movementData = null;
-            base.DisposeAbility();
+            Context?.Unregister(AbilityContextDataType.Movement, _movementSub);
+            _movementSub = null;
+            base.AbilityDispose();
         }
     }
 }

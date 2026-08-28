@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Framework.Gameplay.Abilities.Configuration;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -11,14 +12,14 @@ namespace Framework.Gameplay.Abilities.Input
         private readonly InputListenerAbilitySO _configuration;
         // 当前单位的输入来源组件。
         private PlayerInput _playerInput;
-        // 当前单位独占的输入黑板。
-        private InputBlackboard _blackboard;
+        // 当前单位独占的输入共享上下文。
+        private InputSubContext _inputSubContext;
         // 缓存的平面移动动作。
         private InputAction _moveAction;
-        // 缓存的跳跃动作。
-        private InputAction _jumpAction;
-        // 缓存的冲刺动作。
-        private InputAction _sprintAction;
+        // 与通用按钮标识一一对应的缓存动作。
+        private InputAction[] _buttonActions;
+        // 与缓存动作一一对应的通用按钮标识。
+        private InputButton[] _buttons;
 
         /// <summary>创建输入监听运行时并保存配置表引用。</summary>
         /// <param name="configuration">输入动作配置表；允许为 null 并使用默认动作名称。</param>
@@ -29,11 +30,11 @@ namespace Framework.Gameplay.Abilities.Input
 
         /// <summary>创建输入黑板并缓存 PlayerInput 动作引用。</summary>
         /// <param name="context">当前单位能力上下文。</param>
-        public override void Initialize(AbilityContext context)
+        public override void AbilityInit(AbilityContext context)
         {
-            base.Initialize(context);
-            _blackboard = new InputBlackboard();
-            Context?.Register(AbilityContextDataType.Input, _blackboard);
+            base.AbilityInit(context);
+            _inputSubContext = new InputSubContext();
+            Context?.Register(AbilityContextDataType.Input, _inputSubContext);
             if (context == null || context.Owner == null) return;
 
             // 获取或创建输入来源组件，并在缺失动作资产时由配置表补齐。
@@ -45,45 +46,49 @@ namespace Framework.Gameplay.Abilities.Input
 
         /// <summary>读取当前帧输入并更新输入黑板。</summary>
         /// <param name="deltaTime">当前帧时长，单位：秒；输入采集不依赖该值。</param>
-        public override void UpdateAbility(float deltaTime)
+        public override void AbilityUpdate(float deltaTime)
         {
-            if (_blackboard == null) return;
+            if (_inputSubContext == null) return;
 
             // 从缓存动作读取当前帧值，缺失动作按中性输入处理。
             Vector2 move = _moveAction != null ? _moveAction.ReadValue<Vector2>() : Vector2.zero;
-            bool jumpHeld = _jumpAction != null && _jumpAction.IsPressed();
-            bool sprintHeld = _sprintAction != null && _sprintAction.IsPressed();
+            _inputSubContext.WriteMove(move);
 
-            // 写入完整输入帧，黑板负责生成并保留跳跃按下边沿。
-            _blackboard.WriteFrame(move, jumpHeld, sprintHeld);
+            // 按绑定顺序写入按钮持续状态，输入上下文统一记录可消费边沿。
+            if (_buttonActions == null || _buttons == null) return;
+            for (int index = 0; index < _buttonActions.Length; index++)
+            {
+                InputAction buttonAction = _buttonActions[index];
+                _inputSubContext.WriteButtonState(_buttons[index], buttonAction != null && buttonAction.IsPressed());
+            }
         }
 
         /// <summary>清空输入状态，避免能力禁用后残留按键边沿。</summary>
-        public override void OnAbilityDisable()
+        public override void AbilityOnDisable()
         {
-            _blackboard?.Reset();
+            _inputSubContext?.Reset();
         }
 
         /// <summary>重新启用输入来源并清空上一轮输入状态。</summary>
-        public override void OnAbilityEnable()
+        public override void AbilityOnEnable()
         {
-            _blackboard?.Reset();
+            _inputSubContext?.Reset();
             if (_playerInput == null) return;
             _playerInput.ActivateInput();
             CacheActions(_playerInput);
         }
 
         /// <summary>释放输入动作和黑板引用。</summary>
-        public override void DisposeAbility()
+        public override void AbilityDispose()
         {
-            OnAbilityDisable();
-            Context?.Unregister(AbilityContextDataType.Input, _blackboard);
+            AbilityOnDisable();
+            Context?.Unregister(AbilityContextDataType.Input, _inputSubContext);
             _moveAction = null;
-            _jumpAction = null;
-            _sprintAction = null;
+            _buttonActions = null;
+            _buttons = null;
             _playerInput = null;
-            _blackboard = null;
-            base.DisposeAbility();
+            _inputSubContext = null;
+            base.AbilityDispose();
         }
 
         /// <summary>从 PlayerInput 的动作资产缓存输入动作。</summary>
@@ -94,14 +99,48 @@ namespace Framework.Gameplay.Abilities.Input
             // 优先从指定动作地图查找，地图为空时回退到全资产查找。
             string actionMapName = _configuration != null ? _configuration.ActionMapName : "Player";
             string moveActionName = _configuration != null ? _configuration.MoveActionName : "Move";
-            string jumpActionName = _configuration != null ? _configuration.JumpActionName : "Jump";
-            string sprintActionName = _configuration != null ? _configuration.SprintActionName : "Sprint";
             InputActionMap actionMap = string.IsNullOrWhiteSpace(actionMapName)
                 ? null
                 : playerInput.actions.FindActionMap(actionMapName, false);
             _moveAction = FindAction(playerInput.actions, actionMap, moveActionName);
-            _jumpAction = FindAction(playerInput.actions, actionMap, jumpActionName);
-            _sprintAction = FindAction(playerInput.actions, actionMap, sprintActionName);
+            CacheButtonActions(playerInput.actions, actionMap);
+        }
+
+        /// <summary>按配置顺序缓存通用按钮对应的输入动作。</summary>
+        /// <param name="actions">当前 PlayerInput 使用的完整动作资产；为空时清空缓存。</param>
+        /// <param name="actionMap">优先查找动作的地图；为空时直接查找完整资产。</param>
+        private void CacheButtonActions(InputActionAsset actions, InputActionMap actionMap)
+        {
+            IReadOnlyList<InputButtonBinding> bindings = _configuration != null ? _configuration.ButtonBindings : null;
+            if (bindings == null)
+            {
+                // 未提供配置表时保持原有 Jump 和 Sprint 默认动作名称的兼容行为。
+                _buttons = new[] { InputButton.Jump, InputButton.Sprint };
+                _buttonActions = new[]
+                {
+                    FindAction(actions, actionMap, "Jump"),
+                    FindAction(actions, actionMap, "Sprint")
+                };
+                return;
+            }
+
+            int bindingCount = bindings.Count;
+            _buttonActions = new InputAction[bindingCount];
+            _buttons = new InputButton[bindingCount];
+            ulong configuredButtons = 0UL;
+
+            // 初始化阶段验证并缓存每个配置项，运行帧不再执行动作查找或集合分配。
+            for (int index = 0; index < bindingCount; index++)
+            {
+                InputButtonBinding binding = bindings[index];
+                if (binding == null) continue;
+                if (!InputSubContext.TryGetButtonMask(binding.Button, out ulong buttonMask)) continue;
+                if ((configuredButtons & buttonMask) != 0UL) continue;
+
+                configuredButtons |= buttonMask;
+                _buttons[index] = binding.Button;
+                _buttonActions[index] = FindAction(actions, actionMap, binding.ActionName);
+            }
         }
 
         /// <summary>确保单位拥有可供本能力读取的 PlayerInput 组件。</summary>

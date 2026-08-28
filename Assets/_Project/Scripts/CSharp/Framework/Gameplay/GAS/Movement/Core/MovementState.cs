@@ -3,9 +3,8 @@ using UnityEngine;
 namespace Framework.Gameplay.Abilities.Movement
 {
     /// <summary>
-    /// 提供给命令来源、运动模式和业务桥接层读取的只读运动状态快照。
-    /// </summary>
-    public readonly struct UnitMovementState
+    /// <summary>提供给移动能力和其他能力读取的只读运动状态快照。</summary>
+    public readonly struct MovementState
     {
         /// <summary>
         /// 初始化当前物理步的运动状态快照。
@@ -19,7 +18,7 @@ namespace Framework.Gameplay.Abilities.Movement
         /// <param name="currentVelocity">刚体在本步开始时的速度。</param>
         /// <param name="mode">当前实际生效的运动模式。</param>
         /// <param name="isJumping">是否处于跳跃起跳后的豁免阶段。</param>
-        public UnitMovementState(
+        public MovementState(
             bool hasGroundContact,
             bool isGrounded,
             bool isStableGrounded,

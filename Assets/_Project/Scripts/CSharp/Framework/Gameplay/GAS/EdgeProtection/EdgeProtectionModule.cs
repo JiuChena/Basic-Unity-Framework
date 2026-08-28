@@ -112,7 +112,7 @@ namespace Framework.Gameplay.Abilities.Movement
         /// <param name="constrainedCandidate">返回经过边缘保护的候选水平速度。</param>
         /// <param name="constrainedCurrent">返回已移除外向惯性的当前水平速度。</param>
         public void ConstrainVelocity(
-            in UnitMovementState state,
+            in MovementState state,
             Vector3 candidateVelocity,
             Vector3 currentVelocity,
             float fixedDeltaTime,

@@ -11,7 +11,7 @@ namespace Framework.Gameplay.Abilities.Movement
         // 无浮动胶囊时使用的接地运行时配置。
         private GroundSettings _groundSettings;
         // 当前单位共享的移动状态数据。
-        private MovementContextData _movementData;
+        private MovementSubContext _movementSub;
         // 当前单位刚体。
         private Rigidbody _rigidbody;
         // 当前边缘保护模块。
@@ -30,14 +30,14 @@ namespace Framework.Gameplay.Abilities.Movement
 
         /// <summary>获取移动、刚体和接地模块依赖。</summary>
         /// <param name="context">当前单位能力上下文。</param>
-        public override void Initialize(AbilityContext context)
+        public override void AbilityInit(AbilityContext context)
         {
-            base.Initialize(context);
+            base.AbilityInit(context);
             if (context == null || context.Owner == null) return;
 
-            Context.TryGet(AbilityContextDataType.Movement, out _movementData);
+            Context.TryGet(AbilityContextDataType.Movement, out _movementSub);
             _rigidbody = context.Owner.GetComponent<Rigidbody>();
-            if (Context.TryGet(AbilityContextDataType.FloatingCapsule, out FloatingCapsuleContextData floatingData)
+            if (Context.TryGet(AbilityContextDataType.FloatingCapsule, out FloatingCapsuleSubContext floatingData)
                 && floatingData.ShapeModule != null
                 && floatingData.GroundProbe != null)
             {
@@ -80,12 +80,12 @@ namespace Framework.Gameplay.Abilities.Movement
 
         /// <summary>根据基础移动状态约束当前水平速度。</summary>
         /// <param name="fixedDeltaTime">当前固定帧时长，单位：秒。</param>
-        public override void FixedUpdateAbility(float fixedDeltaTime)
+        public override void AbilityFixedUpdate(float fixedDeltaTime)
         {
-            if (_movementData == null || _rigidbody == null || _edgeProtection == null || _groundProbe == null) return;
+            if (_movementSub == null || _rigidbody == null || _edgeProtection == null || _groundProbe == null) return;
             Vector3 candidate = Vector3.ProjectOnPlane(_rigidbody.velocity, Vector3.up);
             _edgeProtection.ConstrainVelocity(
-                _movementData.CurrentState,
+                _movementSub.CurrentState,
                 candidate,
                 candidate,
                 fixedDeltaTime,
@@ -95,21 +95,21 @@ namespace Framework.Gameplay.Abilities.Movement
         }
 
         /// <summary>清空边缘保护运行时检查点和诊断状态。</summary>
-        public override void OnAbilityDisable()
+        public override void AbilityOnDisable()
         {
             _edgeProtection?.ResetRuntimeState();
         }
 
         /// <summary>释放边缘保护运行时引用。</summary>
-        public override void DisposeAbility()
+        public override void AbilityDispose()
         {
-            OnAbilityDisable();
-            _movementData = null;
+            AbilityOnDisable();
+            _movementSub = null;
             _rigidbody = null;
             _edgeProtection = null;
             _fallbackShape = null;
             _groundProbe = null;
-            base.DisposeAbility();
+            base.AbilityDispose();
         }
     }
 }

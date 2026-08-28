@@ -6,7 +6,7 @@ namespace Framework.Gameplay.Abilities
     /// <summary>挂载能力配置列表并按列表顺序驱动纯 C# 能力运行时。</summary>
     [DisallowMultipleComponent]
     [DefaultExecutionOrder(-1000)]
-    public sealed class AbilityComponent : MonoBehaviour
+    public sealed class GameplayAbilitySystem : MonoBehaviour
     {
         // 当前单位的能力上下文。
         private AbilityContext _context;
@@ -24,7 +24,6 @@ namespace Framework.Gameplay.Abilities
         /// <summary>创建上下文并根据配置列表初始化能力运行时。</summary>
         private void Awake()
         {
-            if (!Application.isPlaying) return;
             InitializeAbilities();
         }
 
@@ -37,59 +36,61 @@ namespace Framework.Gameplay.Abilities
             for (int index = 0; index < _abilityDefinitions.Count; index++)
             {
                 AbilityDefinitionSO definition = _abilityDefinitions[index];
-                if (definition == null) continue;
+                if (definition == null)
+                {
+                    Debug.LogWarning($"GAS能力列表索引为[{index}]的位置为空，执行失败，请重新检查容器！");
+                    continue;
+                }
                 AbilityRuntime ability = definition.CreateRuntime();
-                if (ability == null) continue;
+                if (ability == null)
+                {
+                    Debug.LogWarning($"{definition}所创建的Ability为空，执行失败，请重新检查容器！");
+                    continue;
+                }
                 _abilities.Add(ability);
-                ability.Initialize(_context);
+                ability.AbilityInit(_context);
             }
         }
 
         /// <summary>转发能力启用阶段。</summary>
         private void OnEnable()
         {
-            if (!Application.isPlaying) return;
             if (_context == null) return;
-            for (int index = 0; index < _abilities.Count; index++) _abilities[index].OnAbilityEnable();
+            for (int index = 0; index < _abilities.Count; index++) _abilities[index].AbilityOnEnable();
         }
 
         /// <summary>转发能力启动阶段。</summary>
         private void Start()
         {
-            if (!Application.isPlaying) return;
             if (_context == null) return;
-            for (int index = 0; index < _abilities.Count; index++) _abilities[index].StartAbility();
+            for (int index = 0; index < _abilities.Count; index++) _abilities[index].AbilityStart();
         }
 
         /// <summary>转发能力普通帧阶段。</summary>
         private void Update()
         {
-            if (!Application.isPlaying) return;
             if (_context == null) return;
-            for (int index = 0; index < _abilities.Count; index++) _abilities[index].UpdateAbility(Time.deltaTime);
+            for (int index = 0; index < _abilities.Count; index++) _abilities[index].AbilityUpdate(Time.deltaTime);
         }
 
         /// <summary>转发能力固定帧阶段。</summary>
         private void FixedUpdate()
         {
-            if (!Application.isPlaying) return;
             if (_context == null) return;
-            for (int index = 0; index < _abilities.Count; index++) _abilities[index].FixedUpdateAbility(Time.fixedDeltaTime);
+            for (int index = 0; index < _abilities.Count; index++) _abilities[index].AbilityFixedUpdate(Time.fixedDeltaTime);
         }
 
         /// <summary>转发能力延迟帧阶段。</summary>
         private void LateUpdate()
         {
-            if (!Application.isPlaying) return;
             if (_context == null) return;
-            for (int index = 0; index < _abilities.Count; index++) _abilities[index].LateUpdateAbility(Time.deltaTime);
+            for (int index = 0; index < _abilities.Count; index++) _abilities[index].AbilityLateUpdate(Time.deltaTime);
         }
 
         /// <summary>转发能力禁用阶段。</summary>
         private void OnDisable()
         {
-            if (!Application.isPlaying) return;
-            for (int index = _abilities.Count - 1; index >= 0; index--) _abilities[index].OnAbilityDisable();
+            for (int index = _abilities.Count - 1; index >= 0; index--) _abilities[index].AbilityOnDisable();
         }
 
         /// <summary>遍历能力配置并绘制各配置提供的 Scene 可视化内容。</summary>
@@ -109,7 +110,7 @@ namespace Framework.Gameplay.Abilities
         {
             if (_disposed) return;
             _disposed = true;
-            for (int index = _abilities.Count - 1; index >= 0; index--) _abilities[index].DisposeAbility();
+            for (int index = _abilities.Count - 1; index >= 0; index--) _abilities[index].AbilityDispose();
             _abilities.Clear();
             _context = null;
         }

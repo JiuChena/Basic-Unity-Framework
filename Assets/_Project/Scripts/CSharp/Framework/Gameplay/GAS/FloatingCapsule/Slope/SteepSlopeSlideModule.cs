@@ -87,7 +87,7 @@ namespace Framework.Gameplay.Abilities.Movement
         /// <param name="command">待由移动策略消费的通用移动命令；没有上坡分量时保持不变。</param>
         /// <param name="contact">当前物理步真实地面接触，用于更新陡坡状态。</param>
         /// <param name="fixedDeltaTime">当前固定物理步时长，单位：秒。</param>
-        internal void ConstrainUphillInput(ref UnitMovementCommand command, in GroundContact contact, float fixedDeltaTime)
+        internal void ConstrainUphillInput(ref MovementCommand command, in GroundContact contact, float fixedDeltaTime)
         {
             if (_settings == null || fixedDeltaTime <= 0f) return;
 

@@ -276,7 +276,7 @@ namespace Framework.Gameplay.Abilities.Movement
         /// <param name="isJumping">是否处于跳跃起跳后的短暂地面豁免阶段。</param>
         /// <param name="evaluateStableSupport">是否为边缘保护执行五点稳定支撑检查。</param>
         /// <returns>包含接地、稳定支撑和地面几何信息的状态快照。</returns>
-        public UnitMovementState CreateMovementState(
+        public MovementState CreateMovementState(
             in GroundContact contact,
             MovementMode mode,
             Vector3 velocity,
@@ -289,7 +289,7 @@ namespace Framework.Gameplay.Abilities.Movement
             bool isStableGrounded = isGrounded && (!evaluateStableSupport || HasStableSupport(contact));
 
             // 地面几何数据只由接地探测模块解释，调用方不需要重复判断命中有效性。
-            return new UnitMovementState(
+            return new MovementState(
                 hasGroundContact,
                 isGrounded,
                 isStableGrounded,

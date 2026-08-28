@@ -1,7 +1,7 @@
 namespace Framework.Gameplay.Abilities.Movement
 {
     /// <summary>保存浮动胶囊能力向其他能力公开的运行时探测引用。</summary>
-    public sealed class FloatingCapsuleContextData : IAbilityContextData
+    public sealed class FloatingCapsuleSubContext : IAbilitySubContext
     {
         // 浮动胶囊当前使用的碰撞形状模块。
         public ColliderShapeModule ShapeModule { get; }
@@ -11,7 +11,7 @@ namespace Framework.Gameplay.Abilities.Movement
         /// <summary>创建浮动胶囊共享数据并绑定运行时模块。</summary>
         /// <param name="shapeModule">浮动胶囊碰撞形状模块。</param>
         /// <param name="groundProbe">浮动胶囊接地探测模块。</param>
-        public FloatingCapsuleContextData(
+        public FloatingCapsuleSubContext(
             ColliderShapeModule shapeModule,
             GroundProbeModule groundProbe)
         {

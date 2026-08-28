@@ -3,9 +3,8 @@ using UnityEngine;
 namespace Framework.Gameplay.Abilities.Movement
 {
     /// <summary>
-    /// 由命令来源提交给运动执行器的无业务移动意图。
-    /// </summary>
-    public struct UnitMovementCommand
+    /// <summary>表示一个物理步需要消费的无业务移动意图。</summary>
+    public struct MovementCommand
     {
         // 世界空间中的期望移动方向，不要求已经投影到地面。
         public Vector3 WorldMoveDirection;
@@ -20,9 +19,9 @@ namespace Framework.Gameplay.Abilities.Movement
         /// 创建不移动、不跳跃且速度倍率为一的默认命令。
         /// </summary>
         /// <returns>可安全参与本物理步合并的空命令。</returns>
-        public static UnitMovementCommand CreateDefault()
+        public static MovementCommand CreateDefault()
         {
-            return new UnitMovementCommand
+            return new MovementCommand
             {
                 SpeedScale = 1f
             };

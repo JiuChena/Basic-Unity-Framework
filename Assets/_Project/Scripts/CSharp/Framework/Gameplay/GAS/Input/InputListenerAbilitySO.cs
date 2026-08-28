@@ -1,10 +1,11 @@
+using System.Collections.Generic;
 using Framework.Gameplay.Abilities.Input;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
 namespace Framework.Gameplay.Abilities.Configuration
 {
-    /// <summary>保存输入监听能力的动作名称配置。</summary>
+    /// <summary>保存输入监听能力的动作资产和通用按钮映射配置。</summary>
     [CreateAssetMenu(fileName = "InputListenerAbility", menuName = "Framework/Gameplay/Abilities/Input Listener")]
     public sealed class InputListenerAbilitySO : AbilityDefinitionSO
     {
@@ -18,12 +19,14 @@ namespace Framework.Gameplay.Abilities.Configuration
         // 平面移动动作名称。
         [Tooltip("读取 Vector2 平面移动输入的动作名称")]
         [SerializeField] private string _moveActionName = "Move";
-        // 跳跃动作名称。
-        [Tooltip("读取跳跃按住状态的动作名称")]
-        [SerializeField] private string _jumpActionName = "Jump";
-        // 冲刺动作名称。
-        [Tooltip("读取冲刺按住状态的动作名称")]
-        [SerializeField] private string _sprintActionName = "Sprint";
+        // 通用按钮与 Input Action 的映射表。
+        [Header("按钮映射")]
+        [Tooltip("每项将一个 Input Action 的按住、按下和松开状态写入对应通用按钮；同一按钮只应配置一次")]
+        [SerializeField] private List<InputButtonBinding> _buttonBindings = new List<InputButtonBinding>
+        {
+            new InputButtonBinding(InputButton.Jump, "Jump"),
+            new InputButtonBinding(InputButton.Sprint, "Sprint")
+        };
 
         /// <summary>获取自动创建 PlayerInput 时使用的动作资产。</summary>
         public InputActionAsset Actions => _actions;
@@ -31,10 +34,8 @@ namespace Framework.Gameplay.Abilities.Configuration
         public string ActionMapName => _actionMapName;
         /// <summary>获取平面移动动作名称。</summary>
         public string MoveActionName => _moveActionName;
-        /// <summary>获取跳跃动作名称。</summary>
-        public string JumpActionName => _jumpActionName;
-        /// <summary>获取冲刺动作名称。</summary>
-        public string SprintActionName => _sprintActionName;
+        /// <summary>获取通用按钮与 Input Action 的配置映射表。</summary>
+        public IReadOnlyList<InputButtonBinding> ButtonBindings => _buttonBindings;
 
         /// <summary>创建输入监听能力运行时。</summary>
         /// <returns>使用当前动作配置的输入监听运行时。</returns>

@@ -16,5 +16,8 @@ MonoBehaviour:
     type: 3}
   _actionMapName: Player
   _moveActionName: Move
-  _jumpActionName: Jump
-  _sprintActionName: Sprint
+  _buttonBindings:
+  - _button: 1
+    _actionName: Jump
+  - _button: 2
+    _actionName: Sprint

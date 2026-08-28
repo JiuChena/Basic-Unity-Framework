@@ -10,13 +10,13 @@ namespace Framework.Gameplay.Abilities.Movement
         // 跳跃静态配置表。
         private readonly JumpAbilitySO _configuration;
         // 当前单位共享的移动状态数据。
-        private MovementContextData _movementData;
+        private MovementSubContext _movementSub;
         // 当前单位刚体。
         private Rigidbody _rigidbody;
         // 当前单位独占跳跃模块。
         private JumpModule _jump;
         // 当前单位共享的跳跃状态数据。
-        private JumpContextData _jumpData;
+        private JumpSubContext _jumpSub;
 
         /// <summary>创建跳跃运行时并保存配置表引用。</summary>
         /// <param name="configuration">跳跃配置表；允许为 null 并使用默认配置。</param>
@@ -27,46 +27,46 @@ namespace Framework.Gameplay.Abilities.Movement
 
         /// <summary>获取移动状态数据和刚体依赖。</summary>
         /// <param name="context">当前单位能力上下文。</param>
-        public override void Initialize(AbilityContext context)
+        public override void AbilityInit(AbilityContext context)
         {
-            base.Initialize(context);
+            base.AbilityInit(context);
             if (context == null || context.Owner == null) return;
             _rigidbody = context.Owner.GetComponent<Rigidbody>();
             // 从配置表创建单位独占跳跃状态。
             _jump = _configuration != null
                 ? _configuration.CreateRuntimeCopy()
                 : new JumpModule();
-            _jumpData = new JumpContextData();
-            Context.Register(AbilityContextDataType.Jump, _jumpData);
+            _jumpSub = new JumpSubContext();
+            Context.Register(AbilityContextDataType.Jump, _jumpSub);
         }
 
         /// <summary>在所有能力完成初始化后解析移动状态依赖。</summary>
-        public override void StartAbility()
+        public override void AbilityStart()
         {
             ResolveMovementData();
         }
 
         /// <summary>清空跳跃瞬态状态。</summary>
-        public override void OnAbilityEnable()
+        public override void AbilityOnEnable()
         {
             _jump?.ResetRuntimeState();
-            _jumpData?.Reset();
+            _jumpSub?.Reset();
         }
 
         /// <summary>消费输入并修改刚体的垂直跳跃速度。</summary>
         /// <param name="fixedDeltaTime">当前固定帧时长，单位：秒。</param>
-        public override void FixedUpdateAbility(float fixedDeltaTime)
+        public override void AbilityFixedUpdate(float fixedDeltaTime)
         {
-            if (_movementData == null) ResolveMovementData();
-            if (_movementData == null || _rigidbody == null || _jump == null || Context == null) return;
-            UnitMovementCommand command = UnitMovementCommand.CreateDefault();
-            if (Context.TryGet(AbilityContextDataType.Input, out InputBlackboard input))
+            if (_movementSub == null) ResolveMovementData();
+            if (_movementSub == null || _rigidbody == null || _jump == null || Context == null) return;
+            MovementCommand command = MovementCommand.CreateDefault();
+            if (Context.TryGet(AbilityContextDataType.Input, out InputSubContext input))
             {
-                command.RequestJump = input.ConsumeJumpPressed();
-                command.IsJumpHeld = input.JumpHeld;
+                command.RequestJump = input.ConsumePressed(InputButton.Jump);
+                command.IsJumpHeld = input.IsHeld(InputButton.Jump);
             }
-            _jump.Update(_movementData.CurrentState, command, fixedDeltaTime, out bool startJump, out bool cutJump);
-            _jumpData?.Write(_jump.IsJumping);
+            _jump.Update(_movementSub.CurrentState, command, fixedDeltaTime, out bool startJump, out bool cutJump);
+            _jumpSub?.Write(_jump.IsJumping);
             if (!startJump && !cutJump) return;
 
             Vector3 velocity = _rigidbody.velocity;
@@ -78,27 +78,27 @@ namespace Framework.Gameplay.Abilities.Movement
         /// <summary>从能力上下文获取基础移动状态，允许能力列表顺序变化。</summary>
         private void ResolveMovementData()
         {
-            if (_movementData != null || Context == null) return;
-            Context.TryGet(AbilityContextDataType.Movement, out _movementData);
+            if (_movementSub != null || Context == null) return;
+            Context.TryGet(AbilityContextDataType.Movement, out _movementSub);
         }
 
         /// <summary>清空跳跃状态。</summary>
-        public override void OnAbilityDisable()
+        public override void AbilityOnDisable()
         {
             _jump?.ResetRuntimeState();
-            _jumpData?.Reset();
+            _jumpSub?.Reset();
         }
 
         /// <summary>释放跳跃运行时引用。</summary>
-        public override void DisposeAbility()
+        public override void AbilityDispose()
         {
-            OnAbilityDisable();
-            Context?.Unregister(AbilityContextDataType.Jump, _jumpData);
-            _movementData = null;
+            AbilityOnDisable();
+            Context?.Unregister(AbilityContextDataType.Jump, _jumpSub);
+            _movementSub = null;
             _rigidbody = null;
             _jump = null;
-            _jumpData = null;
-            base.DisposeAbility();
+            _jumpSub = null;
+            base.AbilityDispose();
         }
     }
 }

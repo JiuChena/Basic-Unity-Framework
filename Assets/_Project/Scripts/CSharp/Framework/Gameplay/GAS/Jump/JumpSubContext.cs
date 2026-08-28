@@ -1,7 +1,7 @@
 namespace Framework.Gameplay.Abilities.Movement
 {
     /// <summary>保存跳跃能力向其他能力公开的跳跃状态。</summary>
-    public sealed class JumpContextData : IAbilityContextData
+    public sealed class JumpSubContext : IAbilitySubContext
     {
         // 当前是否处于主动跳跃状态。
         public bool IsJumping { get; private set; }
