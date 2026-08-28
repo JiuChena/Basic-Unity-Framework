@@ -5,9 +5,5 @@ namespace Framework.Gameplay.Abilities.Input
     {
         None = 0,
         Jump = 1,
-        Sprint = 2,
-        Attack = 3,
-        Dodge = 4,
-        Interact = 5
     }
 }

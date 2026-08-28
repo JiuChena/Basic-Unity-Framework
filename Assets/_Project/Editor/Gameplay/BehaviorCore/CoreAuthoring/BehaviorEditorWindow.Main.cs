@@ -72,7 +72,7 @@ namespace BehaviorCore
         /// <summary>
         /// 打开行为编辑器主窗口。
         /// </summary>
-        [UnityEditor.MenuItem("Tool/Behavior Editor/Timeline Exporter")]
+        [UnityEditor.MenuItem("Tools/Behavior Editor/Timeline Exporter")]
         private static void Open()
         {
             BehaviorEditorWindow window =

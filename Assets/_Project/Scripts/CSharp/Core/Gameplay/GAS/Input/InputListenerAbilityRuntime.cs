@@ -117,7 +117,7 @@ namespace Framework.Gameplay.Abilities.Input
             if (bindings == null)
             {
                 // 未提供配置表时保持原有 Jump 和 Sprint 默认动作名称的兼容行为。
-                _buttons = new[] { InputButton.Jump, InputButton.Sprint };
+                _buttons = new[] { InputButton.Jump };
                 _buttonActions = new[]
                 {
                     FindAction(actions, actionMap, "Jump"),

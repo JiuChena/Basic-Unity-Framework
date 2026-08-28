@@ -77,7 +77,7 @@ namespace Framework.Gameplay.Abilities
 
             // 创建并注册当前能力向其他能力公开的运行时数据。
             _runtimeData = new {abilityName}AbilityRuntimeData();
-            OwnerContext.RegisterRuntimeData(RuntimeDataType, _runtimeData);
+            OwnerContext.Register(RuntimeDataType, _runtimeData);
         }}
 
         /// <summary>清空能力启用前的运行时状态。</summary>
@@ -119,7 +119,7 @@ namespace Framework.Gameplay.Abilities
         public override void AbilityDispose()
         {{
             AbilityOnDisable();
-            OwnerContext?.UnregisterRuntimeData(RuntimeDataType, _runtimeData);
+            OwnerContext?.Unregister(RuntimeDataType, _runtimeData);
             _runtimeData = null;
             base.AbilityDispose();
         }}

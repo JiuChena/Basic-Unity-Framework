@@ -26,7 +26,7 @@ namespace Framework.Gameplay.Abilities.Editor
         private bool _focusAbilityName;
 
         /// <summary>验证目标文件夹后打开能力脚本创建窗口。</summary>
-        [MenuItem("Tool/GAS/Create New Ability Scripts")]
+        [MenuItem("Tools/GAS/Create New Ability Scripts")]
         private static void OpenWindow()
         {
             if (!TryGetSelectedTargetFolder(out string targetFolderPath)) return;

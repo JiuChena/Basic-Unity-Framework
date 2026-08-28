@@ -4,21 +4,21 @@ using UnityEngine;
 
 namespace Framework.Gameplay.Abilities
 {
-    /// <summary>执行 Move 能力的单位独占运行时逻辑。</summary>
-    public sealed class MoveAbilityRuntime : AbilityRuntime
+    /// <summary>执行 Jump 能力的单位独占运行时逻辑。</summary>
+    public sealed class JumpAbilityRuntime : AbilityRuntime
     {
         // 当前能力的静态配置。
-        private readonly MoveAbilitySO _configuration;
+        private readonly JumpAbilitySO _configuration;
         // 当前能力向其他能力公开的运行时数据。
-        private MoveAbilityRuntimeData _runtimeData;
+        private JumpAbilityRuntimeData _runtimeData;
         // 当前能力运行时数据在拥有者上下文中的注册键。
-        private const AbilityRuntimeDataType RuntimeDataType = AbilityRuntimeDataType.Move;
+        private const AbilityRuntimeDataType RuntimeDataType = AbilityRuntimeDataType.Jump;
 
         public CharacterController cc;
 
-        /// <summary>创建 Move 能力运行时并保存配置引用。</summary>
-        /// <param name="configuration">Move 能力配置资产。</param>
-        public MoveAbilityRuntime(MoveAbilitySO configuration)
+        /// <summary>创建 Jump 能力运行时并保存配置引用。</summary>
+        /// <param name="configuration">Jump 能力配置资产。</param>
+        public JumpAbilityRuntime(JumpAbilitySO configuration)
         {
             _configuration = configuration;
         }
@@ -31,7 +31,7 @@ namespace Framework.Gameplay.Abilities
             if (ownerContext == null || ownerContext.Owner == null) return;
 
             // 创建并注册当前能力向其他能力公开的运行时数据。
-            _runtimeData = new MoveAbilityRuntimeData();
+            _runtimeData = new JumpAbilityRuntimeData();
             OwnerContext.Register(RuntimeDataType, _runtimeData);
             
             cc = ownerContext.Owner.GetComponent<CharacterController>();
@@ -52,9 +52,22 @@ namespace Framework.Gameplay.Abilities
         /// <param name="deltaTime">当前帧时长，单位：秒。</param>
         public override void AbilityUpdate(float deltaTime)
         {
-            Vector3 moveDir = OwnerContext.Get<InputRuntimeData>(AbilityRuntimeDataType.Input)
-                .GetWorldMoveDirection(Camera.main.transform);
-            cc.Move(deltaTime * _configuration.MoveSpeed * moveDir);
+            if (Physics.Raycast(OwnerContext.Owner.transform.position, Vector3.down, 1.1f, 1 << LayerMask.NameToLayer("Default")))
+            {
+                _runtimeData.isGrounded = true;
+                _runtimeData.ySpeed = 0;
+            }
+            else _runtimeData.isGrounded = false;
+            
+            Debug.Log(_runtimeData.isGrounded);
+            
+            if (OwnerContext.Get<InputRuntimeData>(AbilityRuntimeDataType.Input).ConsumePressed(InputButton.Jump) && _runtimeData.isGrounded)
+            {
+                _runtimeData.ySpeed = _configuration.JumpSpeed;
+            }
+            
+            cc.Move(_runtimeData.ySpeed * deltaTime * Vector3.up);
+            if(!_runtimeData.isGrounded) _runtimeData.ySpeed -= (_runtimeData.ySpeed >= 0 ? 9.81f : 19.62f) * deltaTime;
         }
 
         /// <summary>执行能力固定帧逻辑。</summary>
