@@ -96,15 +96,26 @@ namespace Framework.Gameplay.Abilities.Input
         /// <summary>从 PlayerInput 的动作资产缓存输入动作。</summary>
         private void CacheActions(PlayerInput playerInput)
         {
-            if (playerInput == null || playerInput.actions == null) return;
+            if (playerInput == null || playerInput.actions == null)
+            {
+                _moveAction = null;
+                _buttonActions = null;
+                _buttons = null;
+                return;
+            }
 
-            // 优先从指定动作地图查找，Map为空时回退到全资产查找。
-            string actionMapName = _configuration != null ? _configuration.ActionMapName : "Player";
-            string moveActionName = _configuration != null ? _configuration.MoveActionName : "Move";
+            // 旧配置仍按动作地图名称作为直接引用缺失时的回退。
+            string actionMapName = _configuration != null
+                ? _configuration.LegacyActionMapName
+                : "Player";
             InputActionMap actionMap = string.IsNullOrWhiteSpace(actionMapName)
                 ? null
                 : playerInput.actions.FindActionMap(actionMapName, false);
-            _moveAction = FindAction(playerInput.actions, actionMap, moveActionName);
+            _moveAction = ResolveAction(
+                _configuration != null ? _configuration.MoveAction : null,
+                playerInput.actions,
+                actionMap,
+                _configuration != null ? _configuration.LegacyMoveActionName : "Move");
             CacheButtonActions(playerInput.actions, actionMap);
         }
 
@@ -116,12 +127,11 @@ namespace Framework.Gameplay.Abilities.Input
             IReadOnlyList<InputButtonBinding> bindings = _configuration != null ? _configuration.ButtonBindings : null;
             if (bindings == null)
             {
-                // 未提供配置表时保持原有 Jump 和 Sprint 默认动作名称的兼容行为。
+                // 未提供配置表时保持 Jump 默认动作名称的回退行为。
                 _buttons = new[] { InputButton.Jump };
                 _buttonActions = new[]
                 {
-                    FindAction(actions, actionMap, "Jump"),
-                    FindAction(actions, actionMap, "Sprint")
+                    FindAction(actions, actionMap, "Jump")
                 };
                 return;
             }
@@ -141,8 +151,42 @@ namespace Framework.Gameplay.Abilities.Input
 
                 configuredButtons |= buttonMask;
                 _buttons[index] = binding.Button;
-                _buttonActions[index] = FindAction(actions, actionMap, binding.ActionName);
+                _buttonActions[index] = ResolveAction(
+                    binding.Action,
+                    actions,
+                    actionMap,
+                    binding.LegacyActionName);
             }
+        }
+
+        /// <summary>从直接引用或旧版名称解析并返回当前 PlayerInput 使用的动作。</summary>
+        /// <param name="actionReference">Input Actions 资产中的直接动作引用；为空时使用旧版名称。</param>
+        /// <param name="actions">当前 PlayerInput 使用的动作资产；为空时返回 null。</param>
+        /// <param name="fallbackMap">旧版动作地图回退对象；为空时查找整个动作资产。</param>
+        /// <param name="fallbackActionName">旧版动作名称；为空时返回 null。</param>
+        /// <returns>当前 PlayerInput 对应的缓存动作；无法解析时返回 null。</returns>
+        private InputAction ResolveAction(
+            InputActionReference actionReference,
+            InputActionAsset actions,
+            InputActionMap fallbackMap,
+            string fallbackActionName)
+        {
+            if (actionReference != null && actionReference.action != null)
+            {
+                InputAction referencedAction = actionReference.action;
+                string mapName = referencedAction.actionMap != null
+                    ? referencedAction.actionMap.name
+                    : string.Empty;
+                InputActionMap referencedMap = string.IsNullOrWhiteSpace(mapName)
+                    ? null
+                    : actions.FindActionMap(mapName, false);
+                return FindAction(
+                    actions,
+                    referencedMap,
+                    referencedAction.name);
+            }
+
+            return FindAction(actions, fallbackMap, fallbackActionName);
         }
 
         /// <summary>确保单位拥有可供本能力读取的 PlayerInput 组件。</summary>
@@ -166,11 +210,40 @@ namespace Framework.Gameplay.Abilities.Input
                 playerInput.actions = _configuration.Actions;
             if (playerInput.actions == null) return null;
 
-            string actionMapName = _configuration != null ? _configuration.ActionMapName : string.Empty;
+            string actionMapName = GetConfiguredActionMapName();
             if (!string.IsNullOrWhiteSpace(actionMapName)) playerInput.defaultActionMap = actionMapName;
             if (!playerInput.enabled) playerInput.enabled = true;
             playerInput.ActivateInput();
             return playerInput;
+        }
+
+        /// <summary>获取直接动作引用所属的动作地图，缺少引用时回退到旧配置。</summary>
+        /// <returns>PlayerInput 应启用的动作地图名称；没有可用配置时返回空字符串。</returns>
+        private string GetConfiguredActionMapName()
+        {
+            if (_configuration == null) return string.Empty;
+
+            InputAction moveAction = _configuration.MoveAction != null
+                ? _configuration.MoveAction.action
+                : null;
+            if (moveAction != null && moveAction.actionMap != null)
+                return moveAction.actionMap.name;
+
+            IReadOnlyList<InputButtonBinding> bindings = _configuration.ButtonBindings;
+            if (bindings != null)
+            {
+                for (int index = 0; index < bindings.Count; index++)
+                {
+                    InputButtonBinding binding = bindings[index];
+                    InputAction buttonAction = binding != null && binding.Action != null
+                        ? binding.Action.action
+                        : null;
+                    if (buttonAction != null && buttonAction.actionMap != null)
+                        return buttonAction.actionMap.name;
+                }
+            }
+
+            return _configuration.LegacyActionMapName;
         }
 
         /// <summary>从指定动作地图或动作资产查找动作。</summary>

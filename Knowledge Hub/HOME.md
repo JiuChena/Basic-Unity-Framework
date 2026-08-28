@@ -1,7 +1,7 @@
 ---
 tags: [home]
 created: 2026-07-25
-updated: 2026-08-27
+updated: 2026-08-28
 ---
 
 # Basic Unity Framework — 知识库
@@ -10,7 +10,7 @@ updated: 2026-08-27
 
 这是一个 Unity 3D 游戏基础框架项目，提供角色移动、输入处理、行为系统、战斗系统、任务系统等通用模块。框架采用分层架构，Gear 层提供通用基础能力，Expand Component 层提供可挂载组件。
 
-主要命名空间：`Framework.Core`（基础工具）、`Framework.ExpandComponent.UnitMover`（移动）、`Framework.ExpandComponent.DataProvider`（数据驱动）、`BehaviorCore`（行为系统）。
+主要命名空间：`Framework.Core`（基础工具）、`Framework.Gameplay.Abilities`（能力系统）、`BehaviorCore`（行为系统）。移动、输入、浮动胶囊、跳跃和边缘保护等功能现在由独立能力 Runtime 及其纯 C# 模块组合，不再由 `UnitMover` 或 `DataProvider` 组件提供统一调度。
 
 ## 快速导航
 
@@ -30,6 +30,8 @@ updated: 2026-08-27
 
 ## 最近变更
 
+- 2026-08-28：输入能力配置改用 `InputActionReference` 直接选择动作；旧动作名称仅作为隐藏迁移回退，输入采集与 GAS 能力执行职责保持分离
+- 2026-08-28：新增 `Tool/GAS/Create New Ability Scripts` 能力脚本生成工具；修复模板逐字字符串引号导致的 Editor 编译错误，并自动注册、注销能力 RuntimeData
 - 2026-08-27：修复 `MovementAbility.asset` 对场景相机的非法 PPtr 引用；移动参考相机改为运行时缓存 `Camera.main`，浮动胶囊、跳跃和边缘保护配置继续保留在移动资产内部
 - 2026-08-26：收紧能力系统边界；`AbilityComponent` 不再接管物理组件，`MovementAbilityRuntime` 自行组合浮动胶囊、接地、悬浮、跳跃和边缘保护模块
 - 2026-08-25：完成能力系统第一轮破坏式迁移；删除 UnitMover/DataProvider 调度外壳，新增输入监听和移动能力 Runtime
@@ -46,6 +48,7 @@ updated: 2026-08-27
 | 目录 | 说明 |
 |------|------|
 | `Assets/Scripts/C#/Framework/Gear/` | 基础工具（EventSystem, ObjectPool, AudioManager...） |
-| `Assets/Scripts/C#/Framework/Expand Component/` | 可挂载组件（UnitMover, DataProvider） |
+| `Assets/_Project/Scripts/CSharp/Core/Gameplay/GAS/` | 能力系统核心、能力 Runtime 和运行时数据 |
+| `Assets/_Project/Editor/Gameplay/GAS/` | 能力脚本生成器和能力编辑器工具 |
 | `Assets/Editor/Framework/` | 框架编辑器工具 |
 | `Knowledge Hub/` | 本知识库 |
