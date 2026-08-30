@@ -49,19 +49,10 @@ namespace BehaviorCore
         [Header("State")]
         [Tooltip("当前行为的打断优先级")]
         public InterruptPriority priority = InterruptPriority.Normal;
-
-
-        [Space(8)]
-        [Header("Transitions")]
-        [Tooltip("当前行为允许切换到其他行为的时间窗与过渡参数配置")]
-        public BehaviorTransitionDefinition[] transitions = Array.Empty<BehaviorTransitionDefinition>();
-
         [Space(8)]
         [Header("Authoring Snapshot")]
         [Tooltip("作者期 Timeline 轨道结构快照。用于把 BehaviorClip 回填为多轨 Timeline，而不是仅靠运行时数据猜测。")]
         public BehaviorAuthoringTrackSnapshot[] authoringTracks = Array.Empty<BehaviorAuthoringTrackSnapshot>();
-
-        public bool HasTransitionDefinitions => transitions != null && transitions.Length > 0;
         public bool HasAuthoringTrackSnapshots => authoringTracks != null && authoringTracks.Length > 0;
 
         public BehaviorEvent[] GetCompiledRuntimeEvents()
@@ -82,33 +73,6 @@ namespace BehaviorCore
             runtimeCompiledEvents = Array.Empty<BehaviorEvent>();
             runtimeCompiledSegmentStartTimes = Array.Empty<float>();
         }
-
-        public bool TryGetTransitionDefinition(string targetBehaviorKey, float currentTime,
-            out BehaviorTransitionDefinition definition)
-        {
-            definition = null;
-            if (transitions == null || transitions.Length == 0 || string.IsNullOrWhiteSpace(targetBehaviorKey))
-                return false;
-
-            for (int i = 0; i < transitions.Length; i++)
-            {
-                BehaviorTransitionDefinition candidate = transitions[i];
-                if (candidate == null ||
-                    !string.Equals(candidate.targetBehaviorKey, targetBehaviorKey, StringComparison.Ordinal))
-                {
-                    continue;
-                }
-
-                if (currentTime < candidate.startTime || currentTime > candidate.endTime)
-                    continue;
-
-                definition = candidate;
-                return true;
-            }
-
-            return false;
-        }
-
         public bool ValidateData(bool logWarnings = true)
         {
             List<string> issues = new List<string>();
@@ -167,36 +131,6 @@ namespace BehaviorCore
 
             if (speedMultiplier <= 0f)
                 issues.Add("speedMultiplier 必须大于 0。");
-
-
-            if (transitions != null)
-            {
-                for (int i = 0; i < transitions.Length; i++)
-                {
-                    BehaviorTransitionDefinition transition = transitions[i];
-                    if (transition == null)
-                    {
-                        issues.Add($"BehaviorTransitionDefinition[{i}] 为空引用。");
-                        continue;
-                    }
-
-                    if (string.IsNullOrWhiteSpace(transition.targetBehaviorKey))
-                        issues.Add($"BehaviorTransitionDefinition[{i}] 的 targetBehaviorKey 为空。");
-
-                    if (transition.crossFadeDuration < 0f || transition.crossFadeDuration > 1f)
-                        issues.Add($"BehaviorTransitionDefinition[{i}] 的 crossFadeDuration 必须在 0 到 1 之间。");
-
-                    if (transition.startTime > transition.endTime)
-                        issues.Add($"BehaviorTransitionDefinition[{i}] 的 startTime 不能大于 endTime。");
-
-                    if (transition.endTime > totalDuration && totalDuration > 0f)
-                    {
-                        issues.Add(
-                            $"BehaviorTransitionDefinition[{i}] 的 endTime={transition.endTime:F2}s 超出 totalDuration={totalDuration:F2}s。");
-                    }
-                }
-            }
-
             if (events != null)
             {
                 for (int i = 0; i < events.Length; i++)

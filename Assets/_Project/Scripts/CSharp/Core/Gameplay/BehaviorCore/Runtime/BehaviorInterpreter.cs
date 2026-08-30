@@ -30,7 +30,7 @@ namespace BehaviorCore
         [SerializeField, Tooltip("开启后输出行为事件触发日志，如特效、音频、投射物等")]
         private bool logBehaviorEvents;
 
-        [SerializeField, Tooltip("开启后输出命中成功日志，包括命中目标、伤害值和剩余生命")]
+        [SerializeField, Tooltip("开启后输出 HitExecute 调用日志，包括 Hitbox 名称与检测对象数量")]
         private bool logHitResults;
 
         /// <summary>绑定的 Animator 组件</summary>
@@ -66,12 +66,11 @@ namespace BehaviorCore
         private readonly Dictionary<string, Transform> _targetObjectCache = new Dictionary<string, Transform>(StringComparer.Ordinal);
         /// <summary>已确认为无效的骨骼路径集合，避免重复 Find + 重复 Warning</summary>
         private readonly HashSet<string> _missingBonePaths = new HashSet<string>(StringComparer.Ordinal);
-        /// <summary>碰撞体实例 ID → IBehaviorUnit 缓存，避免每帧接口 GetComponent</summary>
-        private readonly Dictionary<int, IBehaviorUnit> _statusDataByColliderId = new Dictionary<int, IBehaviorUnit>(32);
-        /// <summary>hitGroupId → 已命中目标实例 ID 集合，防止同一 Hitbox 组内重复命中</summary>
-        private readonly Dictionary<int, HashSet<int>> _hitGroupTargets = new Dictionary<int, HashSet<int>>();
+
         /// <summary>当前行为通过 PlayAudio(loop=true) 启动的音频句柄列表，Stop 时统一回收</summary>
         private readonly List<int> _loopingAudioHandles = new List<int>();
+        /// <summary>当前 HitBox 执行期间复用的可写上下文，避免每帧分配。</summary>
+        private readonly HitContext _hitContext = new HitContext();
 
         /// <summary>当前行为按时间升序排列的事件数组，Tick 时只读遍历</summary>
         private BehaviorEvent[] _sortedEvents = Array.Empty<BehaviorEvent>();
@@ -113,7 +112,7 @@ namespace BehaviorCore
         public void Play(BehaviorClip clip, float firstSegmentCrossFadeOverride = -1f)
         {
             Profiler.BeginSample("BehaviorInterpreter.Play");
-            
+
             if (clip == null)
             {
                 Stop();
@@ -217,13 +216,12 @@ namespace BehaviorCore
             _nextEventIndex = 0;
             _currentSegmentIndex = 0;
             _activeHitboxes.Clear();
-            _hitGroupTargets.Clear();
             _segmentStartTimes = Array.Empty<float>();
             _sortedEvents = Array.Empty<BehaviorEvent>();
 
             if (Animator != null)
                 Animator.speed = 1f;
-            
+
             Profiler.EndSample();
         }
 
@@ -264,7 +262,7 @@ namespace BehaviorCore
         }
 
         /// <summary>
-        /// 从 BehaviorClip 构建活跃 Hitbox 列表和命中分组字典。清空上一行为的骨骼缓存与缺失路径记录，
+        /// 从 BehaviorClip 构建活跃 Hitbox 列表。清空上一行为的骨骼缓存与缺失路径记录，
         /// 每个 HitboxDef 预先解析其参考骨骼 Transform 并缓存为 <see cref="ActiveHitbox"/>。
         /// </summary>
         private void BuildHitboxes(BehaviorClip clip)
@@ -279,9 +277,6 @@ namespace BehaviorCore
                 HitboxDef definition = hitboxes[i];
                 Transform reference = ResolveReferenceTransform(definition.referenceBone);
                 _activeHitboxes.Add(new ActiveHitbox(definition, reference));
-
-                if (!_hitGroupTargets.ContainsKey(definition.hitGroupId))
-                    _hitGroupTargets.Add(definition.hitGroupId, new HashSet<int>());
             }
         }
 
@@ -419,61 +414,46 @@ namespace BehaviorCore
 
         /// <summary>
         /// 每帧遍历所有活跃 Hitbox，对每个处于激活时间窗的 Hitbox 进行物理查询（NonAlloc），
-        /// 去重后计算伤害、施加击退与命中 Buff，并将命中目标记录到对应 hitGroup 防止重复命中。
+        /// 将调用者和全部命中对象交给 HitExecuteSO 自行处理，不在解释器内施加玩法约束。
         /// </summary>
         private void UpdateHitboxes()
         {
-            if (Receiver == null || OwnerData == null || _overlapResults.Length == 0 || ShouldSuppressGameplayExecution())
+            if (_overlapResults.Length == 0 || ShouldSuppressGameplayExecution())
                 return;
 
-            for (int i = 0; i < _activeHitboxes.Count; i++)
+            for (int index = 0; index < _activeHitboxes.Count; index++)
             {
-                ActiveHitbox activeHitbox = _activeHitboxes[i];
-                if (!activeHitbox.IsActive(ElapsedTime))
+                ActiveHitbox activeHitbox = _activeHitboxes[index];
+                HitExecuteSO execute = activeHitbox.Definition.execute;
+                if (!activeHitbox.IsActive(ElapsedTime) || execute == null)
                     continue;
 
+                // 查询当前 Hitbox 覆盖到的全部碰撞体。
                 activeHitbox.GetWorldPose(transform, out Vector3 center, out Quaternion rotation, out Vector3 size);
-
                 int hitCount = QueryOverlap(activeHitbox.Definition, center, rotation, size);
                 if (hitCount <= 0)
                     continue;
 
-                HashSet<int> hitTargets = _hitGroupTargets[activeHitbox.Definition.hitGroupId];
+                // 构建调用者在首位的普通可写列表，不筛选、去重或判定目标状态。
+                HitContext context = _hitContext;
+                context.GameObjects.Clear();
+                context.GameObjects.Add(gameObject);
                 for (int resultIndex = 0; resultIndex < hitCount; resultIndex++)
                 {
                     Collider collider = _overlapResults[resultIndex];
-                    if (collider == null)
-                        continue;
+                    if (collider != null)
+                        context.GameObjects.Add(collider.gameObject);
+                }
 
-                    IBehaviorUnit targetData = ResolveStatusData(collider);
-                    if (targetData == null || targetData == OwnerData || targetData.IsDead || !targetData.IsTargetable)
-                        continue;
+                // 集中提取上下文后，完全交由配置资产决定具体玩法结果。
+                context.Extract();
+                execute.Execute(context);
 
-                    int targetInstanceId = targetData.RuntimeGameObject.GetInstanceID();
-                    if (hitTargets.Contains(targetInstanceId))
-                        continue;
-
-                    IDamageable damageable = targetData.RuntimeGameObject.GetComponentInParent<IDamageable>();
-                    if (damageable == null || !damageable.IsAlive)
-                        continue;
-
-                    float damage = Receiver.CalculateDamage(OwnerData, targetData,
-                        activeHitbox.Definition.damageMultiplier, activeHitbox.Definition.numericKey);
-                    Vector3 worldKnockback = transform.rotation * activeHitbox.Definition.knockbackForce;
-                    float beforeHealth = targetData.CurrentHealth;
-
-                    damageable.ReceiveDamage(damage, worldKnockback, activeHitbox.Definition.hitStunDuration, gameObject);
-                    hitTargets.Add(targetInstanceId);
-
-                    if (logHitResults)
-                    {
-                        Debug.Log(
-                            $"[{name}] 命中目标：{targetData.DebugName} | Hitbox={GetHitboxDisplayName(activeHitbox.Definition)} | Damage={damage:F1} | HP {beforeHealth:F1} -> {targetData.CurrentHealth:F1} | Dead={targetData.IsDead}",
-                            this);
-                    }
-
-                    if (activeHitbox.Definition.onHitBuff != null)
-                        Receiver.ApplyEffect(targetData.RuntimeGameObject, activeHitbox.Definition.onHitBuff, gameObject);
+                if (logHitResults)
+                {
+                    Debug.Log(
+                        $"[{name}] 执行 HitExecute：Hitbox={GetHitboxDisplayName(activeHitbox.Definition)} | Objects={context.GameObjects.Count - 1}",
+                        this);
                 }
             }
         }
@@ -672,35 +652,6 @@ namespace BehaviorCore
         }
 
         /// <summary>
-        /// 解析碰撞体所属单位的 IBehaviorUnit。通过 collider 实例 ID 缓存结果，
-        /// 同一碰撞体只查询一次组件，后续命中直接返回缓存引用。
-        /// </summary>
-        /// <param name="collider">Overlap 查询返回的碰撞体</param>
-        private IBehaviorUnit ResolveStatusData(Collider collider)
-        {
-            if (collider == null) return null;
-
-            int colliderId = collider.GetInstanceID();
-            if (_statusDataByColliderId.TryGetValue(colliderId, out IBehaviorUnit cachedStatusData))
-            {
-                if (cachedStatusData != null) return cachedStatusData;
-
-                _statusDataByColliderId.Remove(colliderId);
-            }
-
-            if (!UnitCombatResolver.TryResolvebehaviorUnit(collider, out IBehaviorUnit resolvedStatusData,
-                    out bool canCache))
-            {
-                return null;
-            }
-
-            if (resolvedStatusData != null && canCache)
-                _statusDataByColliderId[colliderId] = resolvedStatusData;
-
-            return resolvedStatusData;
-        }
-
-        /// <summary>
         /// 按 "/" 分隔的层级路径在 root 下查找子 Transform。若路径首段与 root 同名则自动跳过。
         /// 纯静态工具方法，不产生 GC（注意：Split 仅在缓存 miss 时调用）。
         /// </summary>
@@ -738,8 +689,6 @@ namespace BehaviorCore
             _nextEventIndex = 0;
             _currentSegmentIndex = 0;
 
-            foreach (KeyValuePair<int, HashSet<int>> pair in _hitGroupTargets)
-                pair.Value.Clear();
 
             PlaySegment(0);
         }

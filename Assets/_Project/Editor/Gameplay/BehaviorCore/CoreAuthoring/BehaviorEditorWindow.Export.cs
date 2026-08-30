@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using Core.Gear;
@@ -27,7 +27,6 @@ namespace BehaviorCore
             List<AnimationSegmentEntry> segmentEntries = new List<AnimationSegmentEntry>();
             List<BehaviorEvent> behaviorEvents = new List<BehaviorEvent>();
             List<HitboxDef> hitboxes = new List<HitboxDef>();
-            List<BehaviorTransitionDefinition> transitions = new List<BehaviorTransitionDefinition>();
             List<BehaviorAuthoringTrackSnapshot> authoringTrackSnapshots = new List<BehaviorAuthoringTrackSnapshot>();
             List<string> exportWarnings = new List<string>();
             PlayableDirector exportDirector = ResolvePreviewDirectorForOpen(sourceTimeline, previewDirector);
@@ -114,7 +113,7 @@ namespace BehaviorCore
                         continue;
                     }
 
-                    // Hitbox 轨道导出伤害判定定义。
+                    // Hitbox 轨道导出命中执行配置。
                     if (track is BehaviorTimelineHitboxTrack)
                     {
                         BehaviorTimelineHitboxClipAsset clipAsset = clip.asset as BehaviorTimelineHitboxClipAsset;
@@ -128,27 +127,12 @@ namespace BehaviorCore
                             track.name));
                         continue;
                     }
-
-                    if (track is BehaviorTimelineTransitionTrack)
-                    {
-                        BehaviorTimelineTransitionClipAsset clipAsset = clip.asset as BehaviorTimelineTransitionClipAsset;
-                        if (clipAsset == null)
-                            continue;
-
-                        transitions.Add(CloneTransitionDefinition(
-                            clipAsset.transitionData,
-                            (float)clip.start,
-                            (float)clip.duration,
-                            track.name));
-                        continue;
-                    }
                 }
             }
 
             segmentEntries.Sort(CompareAnimationSegmentEntries);
             behaviorEvents.Sort(CompareBehaviorEvents);
             hitboxes.Sort(CompareHitboxes);
-            transitions.Sort(CompareTransitions);
 
             AnimationSegment[] exportedSegments = new AnimationSegment[segmentEntries.Count];
             for (int i = 0; i < segmentEntries.Count; i++)
@@ -157,14 +141,12 @@ namespace BehaviorCore
             BehaviorTimelineMetaClipAsset exportedMeta = ResolveTimelineMeta(sourceTimeline, exportWarnings);
             BehaviorEvent[] exportedEvents = behaviorEvents.ToArray();
             HitboxDef[] exportedHitboxes = hitboxes.ToArray();
-            BehaviorTransitionDefinition[] exportedTransitions = transitions.ToArray();
             BehaviorAuthoringTrackSnapshot[] exportedAuthoringTracks = authoringTrackSnapshots.ToArray();
 
             UnityEditor.Undo.RegisterCompleteObjectUndo(target, "Export BehaviorClip");
             target.animationSegments = exportedSegments;
             target.events = exportedEvents;
             target.hitboxes = exportedHitboxes;
-            target.transitions = exportedTransitions;
             target.authoringTracks = exportedAuthoringTracks;
             target.totalDuration = Mathf.Max(0.01f, (float)Math.Max(maxEndTime, sourceTimeline.duration));
             target.wrapMode = exportedMeta != null ? exportedMeta.wrapMode : wrapMode;

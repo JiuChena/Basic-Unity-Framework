@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using Core.Gear;
@@ -278,30 +278,6 @@ namespace BehaviorCore
 
             return CompareNullableStrings(left.name, right.name);
         }
-
-        /// <summary>
-        /// 比较两个过渡定义：先比起点与轨道名，再比目标行为键。
-        /// </summary>
-        /// <param name="left">左侧过渡。</param>
-        /// <param name="right">右侧过渡。</param>
-        /// <returns>比较结果。</returns>
-        private static int CompareTransitions(BehaviorTransitionDefinition left, BehaviorTransitionDefinition right)
-        {
-            if (TryCompareTimedTrackItems(
-                    left,
-                    right,
-                    left != null ? left.startTime : 0f,
-                    right != null ? right.startTime : 0f,
-                    left?.authoringTrackName,
-                    right?.authoringTrackName,
-                    out int result))
-            {
-                return result;
-            }
-
-            return CompareNullableStrings(left.targetBehaviorKey, right.targetBehaviorKey);
-        }
-
         /// <summary>
         /// 比较两个引用是否相同或其一为空。
         /// </summary>
@@ -374,53 +350,19 @@ namespace BehaviorCore
                     : source.authoringTrackName;
                 cloned.name = source.name;
                 cloned.shape = source.shape;
-                cloned.hitGroupId = source.hitGroupId;
+
                 cloned.referenceBone = source.referenceBone;
                 cloned.positionOffset = source.positionOffset;
                 cloned.rotationOffset = source.rotationOffset;
                 cloned.scaleOffset = source.scaleOffset;
                 cloned.size = source.size;
-                cloned.numericKey = source.numericKey;
-                cloned.damageMultiplier = source.damageMultiplier;
-                cloned.hitStunDuration = source.hitStunDuration;
-                cloned.knockbackForce = source.knockbackForce;
-                cloned.onHitBuff = source.onHitBuff;
+                cloned.execute = source.execute;
             }
 
             cloned.startTime = Mathf.Max(0f, timelineStartTime);
             cloned.duration = Mathf.Max(0f, timelineDuration);
             return cloned;
         }
-
-        /// <summary>
-        /// 克隆过渡定义，并注入时间轴起止时间与轨道名。
-        /// </summary>
-        /// <param name="source">源过渡定义。</param>
-        /// <param name="timelineStartTime">时间轴起点。</param>
-        /// <param name="timelineDuration">时间轴时长。</param>
-        /// <param name="trackName">来源轨道名。</param>
-        /// <returns>克隆出的过渡定义。</returns>
-        private static BehaviorTransitionDefinition CloneTransitionDefinition(
-            BehaviorTransitionDefinition source,
-            float timelineStartTime,
-            float timelineDuration,
-            string trackName = null)
-        {
-            BehaviorTransitionDefinition cloned = new BehaviorTransitionDefinition();
-            if (source != null)
-            {
-                cloned.authoringTrackName = !string.IsNullOrWhiteSpace(trackName)
-                    ? trackName
-                    : source.authoringTrackName;
-                cloned.targetBehaviorKey = source.targetBehaviorKey;
-                cloned.crossFadeDuration = Mathf.Clamp01(source.crossFadeDuration);
-            }
-
-            cloned.startTime = Mathf.Max(0f, timelineStartTime);
-            cloned.endTime = Mathf.Max(cloned.startTime, timelineStartTime + Mathf.Max(0f, timelineDuration));
-            return cloned;
-        }
-
         /// <summary>
         /// 清理资产名中的非法文件名字符，空名回退到默认名。
         /// </summary>

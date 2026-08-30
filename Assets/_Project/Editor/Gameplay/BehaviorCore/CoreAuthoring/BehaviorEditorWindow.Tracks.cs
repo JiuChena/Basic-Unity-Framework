@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using Core.Gear;
@@ -171,7 +171,6 @@ namespace BehaviorCore
             return string.Equals(trackName, MetaTrackName, StringComparison.Ordinal) ||
                    string.Equals(trackName, EventTrackName, StringComparison.Ordinal) ||
                    string.Equals(trackName, HitboxTrackName, StringComparison.Ordinal) ||
-                   string.Equals(trackName, TransitionTrackName, StringComparison.Ordinal) ||
                    string.Equals(trackName, NativeAudioTrackName, StringComparison.Ordinal) ||
                    string.Equals(trackName, NativeVfxTrackName, StringComparison.Ordinal) ||
                    string.Equals(trackName, NativeActivationVfxTrackName, StringComparison.Ordinal) ||
@@ -206,8 +205,7 @@ namespace BehaviorCore
                    track is ActivationTrack ||
                    track is BehaviorTimelineMetaTrack ||
                    track is BehaviorTimelineEventTrack ||
-                   track is BehaviorTimelineHitboxTrack ||
-                   track is BehaviorTimelineTransitionTrack;
+                   track is BehaviorTimelineHitboxTrack;
         }
 
         /// <summary>
@@ -265,8 +263,7 @@ namespace BehaviorCore
                 BehaviorAuthoringTrackKind.VfxActivation => 4,
                 BehaviorAuthoringTrackKind.Event => 5,
                 BehaviorAuthoringTrackKind.Hitbox => 6,
-                BehaviorAuthoringTrackKind.Transition => 7,
-                _ => 8,
+                _ => 7,
             };
         }
 
@@ -301,10 +298,7 @@ namespace BehaviorCore
             if (track is BehaviorTimelineHitboxTrack)
                 return 6;
 
-            if (track is BehaviorTimelineTransitionTrack)
-                return 7;
-
-            return 8;
+            return 7;
         }
 
         /// <summary>

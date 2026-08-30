@@ -16,6 +16,5 @@ namespace BehaviorCore
         public AnimationSegment animationSegment;
         public BehaviorEvent behaviorEvent;
         public HitboxDef hitboxDef;
-        public BehaviorTransitionDefinition transitionDefinition;
     }
 }

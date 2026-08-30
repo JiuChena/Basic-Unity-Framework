@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using Core.Gear;
@@ -85,7 +85,6 @@ namespace BehaviorCore
                 ActivationTrack => BehaviorAuthoringTrackKind.VfxActivation,
                 BehaviorTimelineEventTrack => BehaviorAuthoringTrackKind.Event,
                 BehaviorTimelineHitboxTrack => BehaviorAuthoringTrackKind.Hitbox,
-                BehaviorTimelineTransitionTrack => BehaviorAuthoringTrackKind.Transition,
                 _ => null
             };
         }
@@ -268,29 +267,6 @@ namespace BehaviorCore
 
                 return results;
             }
-
-            // 过渡轨道：导出行为过渡定义。
-            if (track is BehaviorTimelineTransitionTrack)
-            {
-                foreach (TimelineClip clip in track.GetClips())
-                {
-                    if (clip?.asset is not BehaviorTimelineTransitionClipAsset transitionClipAsset)
-                        continue;
-
-                    results.Add(new BehaviorAuthoringClipSnapshot
-                    {
-                        displayName = clip.displayName,
-                        startTime = (float)clip.start,
-                        duration = (float)clip.duration,
-                        transitionDefinition = CloneTransitionDefinition(
-                            transitionClipAsset.transitionData,
-                            (float)clip.start,
-                            (float)clip.duration,
-                            track.name)
-                    });
-                }
-            }
-
             return results;
         }
 
@@ -1063,9 +1039,9 @@ namespace BehaviorCore
                     window.ImportAnimationSegmentsFromBehaviorClip(timelineAsset, behaviorClip, trackCache);
                     window.ImportEventsFromBehaviorClip(timelineAsset, behaviorClip, trackCache);
                     window.ImportHitboxesFromBehaviorClip(timelineAsset, behaviorClip, trackCache);
-                    window.ImportTransitionsFromBehaviorClip(timelineAsset, behaviorClip, trackCache);
                 }
 
+                // 导入完成后清理空的受管轨道。
                 RemoveEmptyManagedAuthoringTracks(timelineAsset);
             }
         }
@@ -1208,9 +1184,6 @@ namespace BehaviorCore
 
                 case BehaviorAuthoringTrackKind.Hitbox:
                     return ImportHitboxTrackSnapshot(timelineAsset, snapshot, trackCache);
-
-                case BehaviorAuthoringTrackKind.Transition:
-                    return ImportTransitionTrackSnapshot(timelineAsset, snapshot, trackCache);
             }
 
             return null;
@@ -1379,8 +1352,7 @@ namespace BehaviorCore
                     track is ActivationTrack ||
                     track is BehaviorTimelineMetaTrack ||
                     track is BehaviorTimelineEventTrack ||
-                    track is BehaviorTimelineHitboxTrack ||
-                    track is BehaviorTimelineTransitionTrack)
+                    track is BehaviorTimelineHitboxTrack)
                 {
                     ClearTrackClips(track);
                 }
@@ -2086,131 +2058,6 @@ namespace BehaviorCore
             CreateHitboxTimelineClip(hitboxTrack, displayName, startTime, duration, hitbox);
             return hitboxTrack;
         }
-
-        /// <summary>
-        /// 从行为数据导入过渡到过渡轨道。
-        /// </summary>
-        /// <param name="timelineAsset">目标 Timeline 资产。</param>
-        /// <param name="behaviorClip">数据来源行为片段。</param>
-        /// <param name="trackCache">轨道缓存。</param>
-        private void ImportTransitionsFromBehaviorClip(
-            TimelineAsset timelineAsset,
-            BehaviorClip behaviorClip,
-            ImportTrackCache trackCache)
-        {
-            if (timelineAsset == null || behaviorClip == null)
-                return;
-
-            BehaviorTransitionDefinition[] transitions =
-                behaviorClip.transitions ?? Array.Empty<BehaviorTransitionDefinition>();
-            ImportBehaviorClipEntriesToDynamicTracks(
-                transitions,
-                transition => transition != null,
-                (i, transition) =>
-                {
-                    float startTime = Mathf.Max(0f, transition.startTime);
-                    float duration = Mathf.Max(0.01f, transition.endTime - transition.startTime);
-                    return ImportTransitionToTrack(
-                        timelineAsset,
-                        null,
-                        trackCache,
-                        ResolveTrackNameOrDefault(transition.authoringTrackName, TransitionTrackName),
-                        string.IsNullOrWhiteSpace(transition.targetBehaviorKey) ? $"Transition {i}" : transition.targetBehaviorKey,
-                        startTime,
-                        duration,
-                        transition);
-                });
-        }
-
-        /// <summary>
-        /// 按过渡轨道快照导入过渡到单条轨道。
-        /// </summary>
-        /// <param name="timelineAsset">目标 Timeline 资产。</param>
-        /// <param name="snapshot">轨道快照。</param>
-        /// <param name="trackCache">轨道缓存。</param>
-        /// <returns>导入后的过渡轨道。</returns>
-        private BehaviorTimelineTransitionTrack ImportTransitionTrackSnapshot(
-            TimelineAsset timelineAsset,
-            BehaviorAuthoringTrackSnapshot snapshot,
-            ImportTrackCache trackCache)
-        {
-            return ImportSnapshotEntriesToSingleTrack<BehaviorTransitionDefinition, BehaviorTimelineTransitionTrack>(
-                timelineAsset,
-                snapshot,
-                trackCache,
-                clipSnapshot => clipSnapshot?.transitionDefinition,
-                transition => transition != null,
-                (transitionTrack, clipSnapshot, transition, i) =>
-                {
-                    ImportTransitionToTrack(
-                        timelineAsset,
-                        transitionTrack,
-                        trackCache,
-                        snapshot.trackName,
-                        ResolveImportedClipDisplayName(
-                            clipSnapshot,
-                            string.IsNullOrWhiteSpace(transition.targetBehaviorKey) ? $"Transition {i}" : transition.targetBehaviorKey),
-                        clipSnapshot.startTime,
-                        Mathf.Max(0.01f, clipSnapshot.duration),
-                        transition);
-                });
-        }
-
-        /// <summary>
-        /// 在过渡轨道上创建过渡时间轴片段。
-        /// </summary>
-        /// <param name="transitionTrack">目标过渡轨道。</param>
-        /// <param name="displayName">显示名。</param>
-        /// <param name="startTime">起点。</param>
-        /// <param name="duration">时长。</param>
-        /// <param name="transition">过渡数据。</param>
-        private static void CreateTransitionTimelineClip(
-            BehaviorTimelineTransitionTrack transitionTrack,
-            string displayName,
-            float startTime,
-            float duration,
-            BehaviorTransitionDefinition transition)
-        {
-            TimelineClip timelineClip = transitionTrack.CreateDefaultClip();
-            timelineClip.displayName = displayName;
-            timelineClip.start = startTime;
-            timelineClip.duration = Math.Max(0.01d, duration);
-
-            // 写入克隆的过渡数据。
-            if (timelineClip.asset is BehaviorTimelineTransitionClipAsset clipAsset)
-                clipAsset.transitionData = CloneTransitionDefinition(transition, startTime, duration);
-        }
-
-        /// <summary>
-        /// 将过渡导入到指定轨道，轨道缺失时创建。
-        /// </summary>
-        /// <param name="timelineAsset">目标 Timeline 资产。</param>
-        /// <param name="transitionTrack">目标过渡轨道。</param>
-        /// <param name="trackCache">轨道缓存。</param>
-        /// <param name="trackName">轨道名。</param>
-        /// <param name="displayName">显示名。</param>
-        /// <param name="startTime">起点。</param>
-        /// <param name="duration">时长。</param>
-        /// <param name="transition">过渡数据。</param>
-        /// <returns>目标过渡轨道。</returns>
-        private BehaviorTimelineTransitionTrack ImportTransitionToTrack(
-            TimelineAsset timelineAsset,
-            BehaviorTimelineTransitionTrack transitionTrack,
-            ImportTrackCache trackCache,
-            string trackName,
-            string displayName,
-            float startTime,
-            float duration,
-            BehaviorTransitionDefinition transition)
-        {
-            transitionTrack ??= trackCache.GetOrCreateExactTrack<BehaviorTimelineTransitionTrack>(timelineAsset, trackName);
-            if (transitionTrack == null)
-                return null;
-
-            CreateTransitionTimelineClip(transitionTrack, displayName, startTime, duration, transition);
-            return transitionTrack;
-        }
-
         /// <summary>
         /// 确保快照导入的轨道已准备：获取或创建轨道，首次使用时清空旧片段。
         /// </summary>

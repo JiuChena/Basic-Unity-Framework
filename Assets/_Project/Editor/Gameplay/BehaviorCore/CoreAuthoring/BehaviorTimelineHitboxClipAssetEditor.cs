@@ -78,10 +78,9 @@ namespace BehaviorCore
                     UnityEditor.MessageType.Info);
             }
 
-            // 基础字段：名称、形状、命中组。
+            // 基础字段：名称与形状。
             UnityEditor.EditorGUILayout.PropertyField(hitboxDataProperty.FindPropertyRelative("name"));
             DrawShapeField(hitboxDataProperty);
-            UnityEditor.EditorGUILayout.PropertyField(hitboxDataProperty.FindPropertyRelative("hitGroupId"));
 
             // 挂点绑定与形状专属尺寸。
             BehaviorTimelineEventClipAssetEditor.DrawTransformBindingFields(
@@ -89,14 +88,10 @@ namespace BehaviorCore
                 ref referenceBoneTarget);
             DrawShapeSpecificSizeFields(hitboxDataProperty);
 
-            // 伤害参数区。
+            // 命中执行配置。
             UnityEditor.EditorGUILayout.Space(4f);
-            UnityEditor.EditorGUILayout.LabelField("Damage", UnityEditor.EditorStyles.boldLabel);
-            UnityEditor.EditorGUILayout.PropertyField(hitboxDataProperty.FindPropertyRelative("numericKey"));
-            UnityEditor.EditorGUILayout.PropertyField(hitboxDataProperty.FindPropertyRelative("damageMultiplier"));
-            UnityEditor.EditorGUILayout.PropertyField(hitboxDataProperty.FindPropertyRelative("hitStunDuration"));
-            UnityEditor.EditorGUILayout.PropertyField(hitboxDataProperty.FindPropertyRelative("knockbackForce"));
-            UnityEditor.EditorGUILayout.PropertyField(hitboxDataProperty.FindPropertyRelative("onHitBuff"));
+            UnityEditor.EditorGUILayout.LabelField("HitExecute", UnityEditor.EditorStyles.boldLabel);
+            UnityEditor.EditorGUILayout.PropertyField(hitboxDataProperty.FindPropertyRelative("execute"));
 
             // 面板有变更时刷新 Scene 预览。
             bool uiChanged = UnityEditor.EditorGUI.EndChangeCheck();

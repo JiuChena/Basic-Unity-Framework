@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using Core.Gear;
@@ -27,8 +27,7 @@ namespace BehaviorCore
         private const string EventTrackName = "Behavior Events";
         // 自定义 Hitbox 轨道的固定名称。
         private const string HitboxTrackName = "Behavior Hitboxes";
-        // 自定义过渡轨道的固定名称。
-        private const string TransitionTrackName = "Behavior Transitions";
+
 
         // 作者期源 Timeline 资产引用。
         private TimelineAsset sourceTimeline;
@@ -87,7 +86,7 @@ namespace BehaviorCore
         {
             UnityEditor.EditorGUILayout.LabelField("Timeline -> BehaviorClip", UnityEditor.EditorStyles.boldLabel);
             UnityEditor.EditorGUILayout.HelpBox(
-                "动画、音频和特效预览优先走原生 Timeline 轨道；Hitbox、Transition 和玩法数据继续走自定义轨。导出时会统一编译为运行时使用的 BehaviorClip。",
+                "动画、音频和特效预览优先走原生 Timeline 轨道；Hitbox 和玩法数据继续走自定义轨。导出时会统一编译为运行时使用的 BehaviorClip。",
                 UnityEditor.MessageType.Info);
 
             sourceTimeline = (TimelineAsset)UnityEditor.EditorGUILayout.ObjectField(
@@ -268,14 +267,12 @@ namespace BehaviorCore
             EnsureTrack<ActivationTrack>(sourceTimeline, NativeActivationVfxTrackName, timelineTracks, out bool activationTrackChanged);
             EnsureTrack<BehaviorTimelineEventTrack>(sourceTimeline, EventTrackName, timelineTracks, out bool eventTrackChanged);
             EnsureTrack<BehaviorTimelineHitboxTrack>(sourceTimeline, HitboxTrackName, timelineTracks, out bool hitboxTrackChanged);
-            EnsureTrack<BehaviorTimelineTransitionTrack>(sourceTimeline, TransitionTrackName, timelineTracks, out bool transitionTrackChanged);
             changed |= animationTrackChanged ||
                        audioTrackChanged ||
                        controlTrackChanged ||
                        activationTrackChanged ||
                        eventTrackChanged ||
-                       hitboxTrackChanged ||
-                       transitionTrackChanged;
+                       hitboxTrackChanged;
 
             // 轨道有变化时保存资产。
             if (changed)

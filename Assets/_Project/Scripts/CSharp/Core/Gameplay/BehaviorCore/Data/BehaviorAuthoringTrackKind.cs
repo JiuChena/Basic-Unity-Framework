@@ -14,6 +14,5 @@ namespace BehaviorCore
         VfxActivation,
         Event,
         Hitbox,
-        Transition,
     }
 }

@@ -4,7 +4,7 @@ using UnityEngine;
 namespace BehaviorCore
 {
     /// <summary>
-    /// 行为内单个伤害判定区域的配置。
+    /// 行为内单个命中判定区域的配置。
     /// </summary>
     [Serializable]
     public class HitboxDef
@@ -26,9 +26,6 @@ namespace BehaviorCore
         [Tooltip("Hitbox 的几何形状")]
         public HitboxShape shape = HitboxShape.Box;
 
-        [Tooltip("同组 Hitbox 对同一目标只会造成一次命中")]
-        public int hitGroupId;
-
         [Tooltip("参照骨骼的层级路径，留空时使用世界空间，不挂到任何宿主骨骼下")]
         public string referenceBone;
 
@@ -44,21 +41,8 @@ namespace BehaviorCore
         [Tooltip("Hitbox 尺寸。Box 为长宽高，Sphere 使用 X 作为半径，Capsule 使用 X 为半径、Y 为高度")]
         public Vector3 size = Vector3.one;
 
-        [Tooltip("命中时引用的技能数值条目 key。配置后会优先按数值定义表解析")]
-        public string numericKey;
-
-        [Tooltip("命中时附加的伤害倍率。未配置 numericKey 时作为直接倍率使用")]
-        [Min(0f)]
-        public float damageMultiplier = 1f;
-
-        [Tooltip("命中造成的硬直时长，单位为秒")]
-        [Min(0f)]
-        public float hitStunDuration;
-
-        [Tooltip("命中时施加的击退力量，使用宿主本地空间方向")]
-        public Vector3 knockbackForce;
-
-        [Tooltip("命中时附加到目标上的效果资产")]
-        public BehaviorEffectAsset onHitBuff;
+        [Header("HitExecute")]
+        [Tooltip("命中检测完成后执行的配置资产；为空时仅执行范围检测，不产生玩法结果")]
+        public HitExecuteSO execute;
     }
 }
