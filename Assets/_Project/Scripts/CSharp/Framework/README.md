@@ -8,9 +8,9 @@
   - 基础设施与通用服务
   - 例如事件中心、对象池、音频、输入、HSM、二进制数据、基础交互
 
-- `BehaviorCore`
-  - 行为编辑器与行为解释器核心
-  - 包含行为数据结构、Timeline 作者期核心轨道、导出回填、运行时解释执行
+- `BehaviorEditor`
+  - 行为编辑器与行为执行器核心
+  - 包含行为数据结构、Timeline 作者期核心轨道、单向导出与运行时解释执行
 
 - `Gameplay`
   - 通用战斗玩法承载层
@@ -69,11 +69,11 @@
 ## 新项目迁移建议
 新 RPG 项目如果要整包复用当前基础框架，最少可直接迁移：
 - `Assets/Scripts/C#/Framework/CoreFramework`
-- `Assets/Scripts/C#/Framework/BehaviorCore`
+- `Assets/Scripts/C#/Framework/BehaviorEditor`
 - `Assets/Scripts/C#/Framework/Gameplay`
 - `Assets/Editor/Framework`
 
-如果目标只是单独拿走"行为编辑器 + 行为解释器 + 通用战斗承载链路"，则不要简单理解为"只复制 BehaviorCore 和 Gameplay 就够了"。
+如果目标只是单独拿走"行为编辑器 + 行为执行器 + 通用战斗承载链路"，则不要简单理解为"只复制 BehaviorEditor 和 Gameplay 就够了"。
 当前这条最小闭环仍然依赖 `CoreFramework` 中的这些子包：
 - `事件中心模块`
 - `对象池模块`
@@ -85,7 +85,7 @@
 - `VFXPool`
 
 这意味着：
-- `BehaviorCore + Gameplay` 现在已经可以视为"行为系统核心层"
+- `BehaviorEditor + Gameplay` 现在已经可以视为"行为系统核心层"
 - 但它还没有完全脱离 `CoreFramework`
 - 真正做成独立插件时，应继续把这些强依赖子包单独列为"行为系统必需基础包"，而不是在文档里模糊写成"可完全不带 CoreFramework"
 

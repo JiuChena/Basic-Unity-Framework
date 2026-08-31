@@ -1,4 +1,4 @@
-using BehaviorCore;
+using BehaviorEditor;
 
 /// <summary>
 /// 角色行为目录契约。

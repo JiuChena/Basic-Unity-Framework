@@ -1,4 +1,4 @@
-using BehaviorCore;
+using BehaviorEditor;
 using Core.Gear;
 using UnityEngine;
 using UnityEngine.Serialization;

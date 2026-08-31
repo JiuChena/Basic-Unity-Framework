@@ -9,19 +9,38 @@ namespace Core.Gear
     /// </summary>
     public class HSM
     {
+        // 状态类型到状态实例的注册表。
         private readonly Dictionary<Type, StateBase> _states = new Dictionary<Type, StateBase>();
+        // 当前处于激活状态的状态实例。
         private StateBase _current;
 
+        /// <summary>
+        /// 获取当前激活的状态；尚未切换过状态时返回 null。
+        /// </summary>
         public StateBase Current => _current;
-        public Func<InterruptPriority, bool> TransitionGuard { get; set; }
+        /// <summary>
+        /// 获取或设置状态切换的优先级拦截器；参数越大表示优先级越高。
+        /// </summary>
+        public Func<int, bool> TransitionGuard { get; set; }
 
+        /// <summary>
+        /// 注册一个可切换的状态实例。
+        /// </summary>
+        /// <param name="state">需要注册的状态；传入 null 时忽略。</param>
         public void AddState(StateBase state)
         {
             if (state == null) return;
             _states[state.GetType()] = state;
         }
 
-        public bool SwitchState<T>(InterruptPriority priority = InterruptPriority.None, bool bypassGuard = false) where T : StateBase
+        /// <summary>
+        /// 切换到指定状态类型，并将非负整数优先级交给切换拦截器判断。
+        /// </summary>
+        /// <typeparam name="T">目标状态类型。</typeparam>
+        /// <param name="priority">本次切换优先级；数值越大优先级越高。</param>
+        /// <param name="bypassGuard">是否跳过切换拦截器。</param>
+        /// <returns>实际完成状态切换时返回 true。</returns>
+        public bool SwitchState<T>(int priority = 0, bool bypassGuard = false) where T : StateBase
         {
             if (!_states.TryGetValue(typeof(T), out var next)) return false;
             if (_current == next) return false;
@@ -34,6 +53,9 @@ namespace Core.Gear
             return true;
         }
 
+        /// <summary>
+        /// 推进当前状态的一次逐帧更新；没有激活状态时不执行操作。
+        /// </summary>
         public void Tick()
         {
             _current?.OnUpdate();

@@ -36,7 +36,7 @@ namespace Framework.Gameplay.Abilities.Editor
             window._targetFolderPath = targetFolderPath;
             window._abilityName = string.Empty;
             window._focusAbilityName = true;
-            window.minSize = new Vector2(420f, 170f);
+            window.minSize = new Vector2(400f, 200f);
             window.ShowUtility();
         }
 

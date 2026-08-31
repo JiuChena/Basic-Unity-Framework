@@ -1,5 +1,5 @@
 using System.Collections.Generic;
-using BehaviorCore;
+using BehaviorEditor;
 using UnityEngine;
 
 /// <summary>
