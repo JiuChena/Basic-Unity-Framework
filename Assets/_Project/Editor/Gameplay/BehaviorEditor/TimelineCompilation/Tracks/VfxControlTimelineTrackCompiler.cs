@@ -16,18 +16,6 @@ namespace BehaviorEditor
         public System.Type TrackType => typeof(ControlTrack);
 
         /// <summary>
-        /// 确保默认特效控制轨道存在。
-        /// </summary>
-        /// <param name="context">当前作者期上下文。</param>
-        public void Ensure(BehaviorAuthoringContext context)
-        {
-            if (context?.Timeline == null)
-                return;
-
-            BehaviorEditorWindow.EnsureTrack<ControlTrack>(context.Timeline, "Behavior VFX", null, out _);
-        }
-
-        /// <summary>
         /// 导出控制轨道片段。
         /// </summary>
         /// <param name="track">待导出的控制轨道。</param>

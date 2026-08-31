@@ -12,22 +12,6 @@ namespace BehaviorEditor
     /// </summary>
     internal sealed partial class BehaviorEditorWindow : UnityEditor.EditorWindow
     {
-        // 原生动画轨道的固定名称。
-        private const string NativeAnimationTrackName = "Behavior Animation L0";
-        // 原生音频轨道的固定名称。
-        private const string NativeAudioTrackName = "Behavior Audio";
-        // 原生 VFX 轨道的固定名称。
-        private const string NativeVfxTrackName = "Behavior VFX";
-        // 原生激活特效轨道的固定名称。
-        private const string NativeActivationVfxTrackName = "Behavior Active VFX";
-        // 自定义 Meta 轨道的固定名称。
-        private const string MetaTrackName = "Behavior Meta";
-        // 自定义事件轨道的固定名称。
-        private const string EventTrackName = "Behavior Events";
-        // 自定义 Hitbox 轨道的固定名称。
-        private const string HitboxTrackName = "Behavior Hitboxes";
-
-
         // 作者期源 Timeline 资产引用。
         private TimelineAsset sourceTimeline;
         // 目标 BehaviorClip 资产引用；为 null 时在输出目录创建新资产。
@@ -40,8 +24,6 @@ namespace BehaviorEditor
         private WrapMode wrapMode = WrapMode.Once;
         // 回退用的播放速度倍率。
         private float speedMultiplier = 1f;
-        // 回退用的打断优先级。
-        private int priority = 2;
         // 作者期预览用的 PlayableDirector。
         private PlayableDirector previewDirector;
         // 作者期预览用的 Animator。
@@ -105,8 +87,6 @@ namespace BehaviorEditor
             wrapMode = (WrapMode)UnityEditor.EditorGUILayout.EnumPopup("Wrap Mode", wrapMode);
             speedMultiplier = Mathf.Max(0.01f,
                 UnityEditor.EditorGUILayout.FloatField("Speed Multiplier", speedMultiplier));
-            priority = Mathf.Max(0, UnityEditor.EditorGUILayout.IntField("Priority", priority));
-
             GUILayout.Space(8f);
             UnityEditor.EditorGUILayout.LabelField("Authoring", UnityEditor.EditorStyles.boldLabel);
             UnityEditor.EditorGUILayout.HelpBox(
@@ -199,14 +179,12 @@ namespace BehaviorEditor
             }
 
             BehaviorEditorContext.ReferenceRootObject = previewReferenceRoot;
-            PruneInvalidRootTrackReferences(sourceTimeline);
 
             previewDirector.playableAsset = sourceTimeline;
             previewDirector.playOnAwake = false;
             previewDirector.time = 0d;
             previewDirector.Stop();
 
-            EnsureAuthoringTracks();
             OpenTimelineForPreview();
         }
 
@@ -241,31 +219,5 @@ namespace BehaviorEditor
             return false;
         }
 
-        /// <summary>
-        /// 确保 Timeline 中存在全部需要的原生与自定义轨道，缺失时创建并刷新编辑器。
-        /// </summary>
-        private void EnsureAuthoringTracks()
-        {
-            if (sourceTimeline == null) return;
-
-            // 注册撤销并清理无效根轨道。
-            UnityEditor.Undo.RegisterCompleteObjectUndo(sourceTimeline, "Ensure Behavior Authoring Tracks");
-            bool changed = PruneInvalidRootTrackReferences(sourceTimeline);
-            BehaviorTrackCompilerCatalog.EnsureTracks(new BehaviorAuthoringContext(sourceTimeline));
-            changed = true;
-
-            // 轨道有变化时保存资产。
-            if (changed)
-            {
-                UnityEditor.EditorUtility.SetDirty(sourceTimeline);
-                UnityEditor.AssetDatabase.SaveAssets();
-            }
-
-            // 刷新编辑器并定位到 Timeline 资产。
-            Repaint();
-            UnityEditor.EditorGUIUtility.PingObject(sourceTimeline);
-            RefreshTimelineEditor(sourceTimeline, previewDirector);
-            Debug.Log($"已确保 Timeline 轨道存在：{sourceTimeline.name}", sourceTimeline);
-        }
     }
 }

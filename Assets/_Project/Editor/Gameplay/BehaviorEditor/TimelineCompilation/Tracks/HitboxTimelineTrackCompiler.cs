@@ -15,19 +15,6 @@ namespace BehaviorEditor
         public System.Type TrackType => typeof(BehaviorTimelineHitboxTrack);
 
         /// <summary>
-        /// 确保默认 Hitbox 轨道存在。
-        /// </summary>
-        /// <param name="context">当前作者期上下文。</param>
-        public void Ensure(BehaviorAuthoringContext context)
-        {
-            if (context?.Timeline == null)
-                return;
-
-            BehaviorEditorWindow.EnsureTrack<BehaviorTimelineHitboxTrack>(context.Timeline, "Behavior Hitboxes", null,
-                out _);
-        }
-
-        /// <summary>
         /// 导出全部 Hitbox 片段为带有时间窗的独立数据。
         /// </summary>
         /// <param name="track">待导出的 Hitbox 轨道。</param>

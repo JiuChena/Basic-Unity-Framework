@@ -16,18 +16,6 @@ namespace BehaviorEditor
         public System.Type TrackType => typeof(AudioTrack);
 
         /// <summary>
-        /// 确保默认音频轨道存在。
-        /// </summary>
-        /// <param name="context">当前作者期上下文。</param>
-        public void Ensure(BehaviorAuthoringContext context)
-        {
-            if (context?.Timeline == null)
-                return;
-
-            BehaviorEditorWindow.EnsureTrack<AudioTrack>(context.Timeline, "Behavior Audio", null, out _);
-        }
-
-        /// <summary>
         /// 导出原生音频片段为 PlayAudio 事件。
         /// </summary>
         /// <param name="track">待导出的音频轨道。</param>

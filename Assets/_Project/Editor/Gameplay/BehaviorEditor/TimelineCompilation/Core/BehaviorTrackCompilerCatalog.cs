@@ -18,17 +18,6 @@ namespace BehaviorEditor
         private static bool initialized;
 
         /// <summary>
-        /// 确保所有轨道编译器的默认作者期结构存在。
-        /// </summary>
-        /// <param name="context">当前作者期上下文。</param>
-        public static void EnsureTracks(BehaviorAuthoringContext context)
-        {
-            EnsureInitialized();
-            foreach (IBehaviorTimelineTrackCompiler compiler in compilersByTrackType.Values)
-                compiler.Ensure(context);
-        }
-
-        /// <summary>
         /// 尝试将一个 Timeline 轨道交给其匹配的编译器导出。
         /// </summary>
         /// <param name="track">需要导出的 Timeline 轨道。</param>

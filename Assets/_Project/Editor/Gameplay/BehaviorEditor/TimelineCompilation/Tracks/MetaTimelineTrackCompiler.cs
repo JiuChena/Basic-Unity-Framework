@@ -1,4 +1,3 @@
-using UnityEditor;
 using UnityEngine;
 using UnityEngine.Timeline;
 
@@ -15,35 +14,6 @@ namespace BehaviorEditor
         /// </summary>
         /// <returns>BehaviorTimelineMetaTrack 类型。</returns>
         public System.Type TrackType => typeof(BehaviorTimelineMetaTrack);
-
-        /// <summary>
-        /// 确保 Timeline 存在包含默认片段的 Meta 轨道。
-        /// </summary>
-        /// <param name="context">当前作者期上下文。</param>
-        public void Ensure(BehaviorAuthoringContext context)
-        {
-            if (context?.Timeline == null)
-                return;
-
-            BehaviorTimelineMetaTrack track = BehaviorEditorWindow.EnsureTrack<BehaviorTimelineMetaTrack>(
-                context.Timeline, "Behavior Meta", null, out _);
-            if (track == null)
-                return;
-
-            // 已有 Meta 片段时保留用户作者配置。
-            foreach (TimelineClip clip in track.GetClips())
-            {
-                if (clip?.asset is BehaviorTimelineMetaClipAsset)
-                    return;
-            }
-
-            // 空轨道首次创建时补齐可直接编辑的默认 Meta 片段。
-            TimelineClip defaultClip = track.CreateDefaultClip();
-            defaultClip.displayName = "Behavior Meta";
-            defaultClip.start = 0d;
-            defaultClip.duration = 0.1d;
-            EditorUtility.SetDirty(track);
-        }
 
         /// <summary>
         /// 导出首个 Meta 片段作为行为播放头配置。
@@ -71,7 +41,6 @@ namespace BehaviorEditor
 
                 meta.wrapMode = asset.wrapMode;
                 meta.speedMultiplier = Mathf.Max(0.01f, asset.speedMultiplier);
-                meta.priority = asset.priority;
                 assigned = true;
             }
         }

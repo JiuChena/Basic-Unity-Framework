@@ -15,19 +15,6 @@ namespace BehaviorEditor
         public System.Type TrackType => typeof(BehaviorTimelineEventTrack);
 
         /// <summary>
-        /// 确保默认自定义事件轨道存在。
-        /// </summary>
-        /// <param name="context">当前作者期上下文。</param>
-        public void Ensure(BehaviorAuthoringContext context)
-        {
-            if (context?.Timeline == null)
-                return;
-
-            BehaviorEditorWindow.EnsureTrack<BehaviorTimelineEventTrack>(context.Timeline, "Behavior Events", null,
-                out _);
-        }
-
-        /// <summary>
         /// 导出全部有效的自定义行为事件。
         /// </summary>
         /// <param name="track">待导出的事件轨道。</param>

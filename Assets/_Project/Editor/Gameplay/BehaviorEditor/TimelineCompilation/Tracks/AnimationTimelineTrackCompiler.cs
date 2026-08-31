@@ -16,18 +16,6 @@ namespace BehaviorEditor
         public System.Type TrackType => typeof(AnimationTrack);
 
         /// <summary>
-        /// 确保默认动画轨道存在。
-        /// </summary>
-        /// <param name="context">当前作者期上下文。</param>
-        public void Ensure(BehaviorAuthoringContext context)
-        {
-            if (context?.Timeline == null)
-                return;
-
-            BehaviorEditorWindow.EnsureTrack<AnimationTrack>(context.Timeline, "Behavior Animation L0", null, out _);
-        }
-
-        /// <summary>
         /// 导出原生动画片段。
         /// </summary>
         /// <param name="track">待导出的动画轨道。</param>

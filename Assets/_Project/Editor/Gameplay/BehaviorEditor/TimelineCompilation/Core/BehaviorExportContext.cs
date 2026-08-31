@@ -56,8 +56,7 @@ namespace BehaviorEditor
             trackDataByType.Add(typeof(BehaviorMetaData), new BehaviorMetaData
             {
                 wrapMode = FallbackMeta.wrapMode,
-                speedMultiplier = Mathf.Max(0.01f, FallbackMeta.speedMultiplier),
-                priority = FallbackMeta.priority
+                speedMultiplier = Mathf.Max(0.01f, FallbackMeta.speedMultiplier)
             });
         }
 
@@ -137,7 +136,6 @@ namespace BehaviorEditor
             {
                 meta.wrapMode = FallbackMeta.wrapMode;
                 meta.speedMultiplier = Mathf.Max(0.01f, FallbackMeta.speedMultiplier);
-                meta.priority = FallbackMeta.priority;
             }
 
             return meta;

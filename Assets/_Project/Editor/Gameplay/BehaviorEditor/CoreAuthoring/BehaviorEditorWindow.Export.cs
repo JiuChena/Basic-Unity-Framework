@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using Core.Gear;
 using UnityEngine;
 using UnityEngine.Playables;
 using UnityEngine.Timeline;
@@ -29,8 +28,7 @@ namespace BehaviorEditor
             BehaviorMetaData fallbackMeta = new BehaviorMetaData
             {
                 wrapMode = wrapMode,
-                speedMultiplier = Mathf.Max(0.01f, speedMultiplier),
-                priority = priority
+                speedMultiplier = Mathf.Max(0.01f, speedMultiplier)
             };
             BehaviorExportContext exportContext = new BehaviorExportContext(sourceTimeline, exportDirector,
                 exportReferenceRoot, fallbackMeta);

@@ -23,11 +23,6 @@ namespace BehaviorEditor
         [Min(0.01f)]
         public float speedMultiplier = 1f;
 
-        // 行为打断优先级。
-        [Tooltip("行为被其他行为打断时使用的优先级，数值越大越不可被低数值行为打断。")]
-        [Min(0)]
-        public int priority = 2;
-
         /// <summary>
         /// 创建包含 Meta 轨道默认调度顺序的数据。
         /// </summary>

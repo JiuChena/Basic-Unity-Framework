@@ -17,11 +17,6 @@ namespace BehaviorEditor
         [Min(0.01f)]
         public float speedMultiplier = 1f;
 
-        [Tooltip("行为打断优先级，数值越大越不可被低数值行为打断。")]
-        [Min(0)]
-        public int priority = 2;
-
-
         public ClipCaps clipCaps => ClipCaps.None;
 
         public override Playable CreatePlayable(PlayableGraph graph, GameObject owner)

@@ -12,9 +12,6 @@ namespace BehaviorEditor
     [MovedFrom(true, "BehaviorCore", null, "BehaviorInterpreter")]
     public class BehaviorExecutor : MonoBehaviour
     {
-        // 死亡行为继续执行所需的最低数值优先级。
-        private const int DeathBehaviorPriority = 6;
-
         [Header("Hitbox")]
         [SerializeField, Tooltip("行为命中检测使用的目标层过滤")]
         private LayerMask targetLayerMask = ~0;
@@ -311,16 +308,6 @@ namespace BehaviorEditor
         }
 
         /// <summary>
-        /// 判断当前行为是否可被指定优先级打断。当前无行为播放时始终返回 true。
-        /// </summary>
-        /// <param name="incoming">请求打断的优先级</param>
-        public bool CanBeInterruptedBy(int incoming)
-        {
-            if (CurrentClip == null) return true;
-            return CurrentMeta == null || incoming >= CurrentMeta.priority;
-        }
-
-        /// <summary>
         /// 从 BehaviorClip 提取编译后的事件列表，按时间升序排列，存入 <see cref="_sortedEvents"/>。
         /// Play 时调用一次，Tick 期间只读遍历。
         /// </summary>
@@ -501,8 +488,6 @@ namespace BehaviorEditor
                     break;
 
                 case BehaviorEventType.SpawnProjectile:
-                    if (ShouldSuppressGameplayExecution())
-                        break;
                     if (behaviorEvent.prefabRef != null && OwnerData != null)
                         Receiver.SpawnProjectile(behaviorEvent.prefabRef, position, rotation, OwnerData,
                             behaviorEvent.damageMultiplier, behaviorEvent.numericKey, _targetingScopeId);
@@ -510,15 +495,11 @@ namespace BehaviorEditor
 
                 case BehaviorEventType.ApplyBuff:
                 case BehaviorEventType.ApplySelfBuff:
-                    if (ShouldSuppressGameplayExecution())
-                        break;
                     if (behaviorEvent.buffRef != null)
                         Receiver.ApplyEffect(gameObject, behaviorEvent.buffRef, gameObject);
                     break;
 
                 case BehaviorEventType.ExecuteGameplayEffect:
-                    if (ShouldSuppressGameplayExecution())
-                        break;
                     if (behaviorEvent.gameplayEffectRef != null && OwnerData != null)
                         Receiver.ExecuteEffect(behaviorEvent.gameplayEffectRef, OwnerData, position, gameObject);
                     break;
@@ -543,7 +524,7 @@ namespace BehaviorEditor
         /// </summary>
         internal void UpdateHitboxes()
         {
-            if (_overlapResults.Length == 0 || ShouldSuppressGameplayExecution())
+            if (_overlapResults.Length == 0)
                 return;
 
             for (int index = 0; index < _activeHitboxes.Count; index++)
@@ -890,13 +871,6 @@ namespace BehaviorEditor
                 return 1;
 
             return currentScopeId + 1;
-        }
-
-        private bool ShouldSuppressGameplayExecution()
-        {
-            return OwnerData != null &&
-                   OwnerData.IsDead &&
-                   (CurrentMeta == null || CurrentMeta.priority < DeathBehaviorPriority);
         }
 
         /// <summary>

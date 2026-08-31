@@ -16,18 +16,6 @@ namespace BehaviorEditor
         public System.Type TrackType => typeof(ActivationTrack);
 
         /// <summary>
-        /// 确保默认激活轨道存在。
-        /// </summary>
-        /// <param name="context">当前作者期上下文。</param>
-        public void Ensure(BehaviorAuthoringContext context)
-        {
-            if (context?.Timeline == null)
-                return;
-
-            BehaviorEditorWindow.EnsureTrack<ActivationTrack>(context.Timeline, "Behavior Active VFX", null, out _);
-        }
-
-        /// <summary>
         /// 导出激活轨道片段。
         /// </summary>
         /// <param name="track">待导出的激活轨道。</param>

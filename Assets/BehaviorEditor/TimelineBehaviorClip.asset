@@ -1,0 +1,65 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4729dab1b065fe941aa6d4f9dd582add, type: 3}
+  m_Name: TimelineBehaviorClip
+  m_EditorClassIdentifier: 
+  trackData:
+  - rid: 5445524462400700416
+  - rid: 5445524462400700417
+  - rid: 5445524462400700418
+  - rid: 5445524462400700419
+  - rid: 5445524462400700420
+  references:
+    version: 2
+    RefIds:
+    - rid: 5445524462400700416
+      type: {class: BehaviorMetaData, ns: BehaviorEditor, asm: Assembly-CSharp}
+      data:
+        executionOrder: -100
+        duration: 5.6833334
+        wrapMode: 1
+        speedMultiplier: 1
+    - rid: 5445524462400700417
+      type: {class: TestTrackData, ns: BehaviorEditor, asm: Assembly-CSharp}
+      data:
+        executionOrder: 10
+        clips:
+        - startTime: 0.68333334
+          duration: 5
+          testMessage: Hello from TestTrack!
+          testValue: 100
+    - rid: 5445524462400700418
+      type: {class: AnimationTrackData, ns: BehaviorEditor, asm: Assembly-CSharp}
+      data:
+        executionOrder: 0
+        segments: []
+    - rid: 5445524462400700419
+      type: {class: EventTrackData, ns: BehaviorEditor, asm: Assembly-CSharp}
+      data:
+        executionOrder: 10
+        events: []
+    - rid: 5445524462400700420
+      type: {class: HitboxTrackData, ns: BehaviorEditor, asm: Assembly-CSharp}
+      data:
+        executionOrder: 20
+        hitboxes:
+        - authoringTrackName: Behavior Timeline Hitbox Track
+          name: 
+          startTime: 0.68333334
+          duration: 5
+          shape: 0
+          referenceBone: 
+          positionOffset: {x: 0, y: 0, z: 0}
+          rotationOffset: {x: 0, y: 0, z: 0}
+          scaleOffset: {x: 1, y: 1, z: 1}
+          size: {x: 1, y: 1, z: 1}
+          execute: {fileID: 0}
