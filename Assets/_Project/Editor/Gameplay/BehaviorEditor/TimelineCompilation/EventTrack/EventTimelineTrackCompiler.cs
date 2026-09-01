@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 using UnityEngine.Timeline;
 
@@ -38,7 +39,8 @@ namespace BehaviorEditor
                     continue;
                 }
 
-                context.AddEvent(new BehaviorEvent
+                EventTrackExportState exportState = context.GetOrCreateExportState<EventTrackExportState>();
+                exportState.Events.Add(new BehaviorEvent
                 {
                     authoringTrackName = eventTrack.name,
                     time = Mathf.Max(0f, (float)clip.start),
@@ -49,6 +51,43 @@ namespace BehaviorEditor
                     execute = asset.eventData.execute
                 });
             }
+        }
+    }
+
+    /// <summary>
+    /// 收集并提交单次导出中的定时行为事件。
+    /// </summary>
+    internal sealed class EventTrackExportState : IBehaviorTrackExportState
+    {
+        // 本次 Timeline 导出收集到的行为事件。
+        public readonly System.Collections.Generic.List<BehaviorEvent> Events =
+            new System.Collections.Generic.List<BehaviorEvent>();
+
+        /// <summary>
+        /// 稳定排序行为事件并写入事件轨道数据。
+        /// </summary>
+        /// <param name="context">当前导出上下文；不得为 null。</param>
+        public void Commit(BehaviorExportContext context)
+        {
+            // 保持同一触发时刻的作者顺序与命名诊断稳定。
+            Events.Sort((left, right) =>
+            {
+                if (ReferenceEquals(left, right)) return 0;
+                if (left == null) return 1;
+                if (right == null) return -1;
+
+                int result = left.time.CompareTo(right.time);
+                if (result != 0) return result;
+                result = string.Compare(left.authoringTrackName, right.authoringTrackName, StringComparison.Ordinal);
+                if (result != 0) return result;
+                result = string.Compare(left.referenceBone, right.referenceBone, StringComparison.Ordinal);
+                return result != 0 ? result : string.Compare(
+                    left.execute != null ? left.execute.name : string.Empty,
+                    right.execute != null ? right.execute.name : string.Empty,
+                    StringComparison.Ordinal);
+            });
+
+            context.GetOrCreateTrackData<EventTrackData>().events = Events.ToArray();
         }
     }
 }

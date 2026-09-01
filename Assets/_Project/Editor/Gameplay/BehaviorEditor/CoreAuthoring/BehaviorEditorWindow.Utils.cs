@@ -6,39 +6,6 @@ namespace BehaviorEditor
     internal sealed partial class BehaviorEditorWindow : UnityEditor.EditorWindow
     {
         /// <summary>
-        /// 克隆 Hitbox 定义，并注入时间轴起止时间与轨道名。
-        /// </summary>
-        /// <param name="source">源 Hitbox 定义；为 null 时创建默认定义。</param>
-        /// <param name="timelineStartTime">时间轴起点，单位为秒。</param>
-        /// <param name="timelineDuration">时间轴持续时间，单位为秒。</param>
-        /// <param name="trackName">来源轨道名；为空时保留源定义的名称。</param>
-        /// <returns>用于运行时导出的独立 Hitbox 定义。</returns>
-        internal static HitboxDef CloneHitboxDef(HitboxDef source, float timelineStartTime, float timelineDuration,
-            string trackName = null)
-        {
-            HitboxDef cloned = new HitboxDef();
-            if (source != null)
-            {
-                // 复制作者期定义，不回写 Timeline 片段资产。
-                cloned.authoringTrackName = !string.IsNullOrWhiteSpace(trackName)
-                    ? trackName
-                    : source.authoringTrackName;
-                cloned.name = source.name;
-                cloned.shape = source.shape;
-                cloned.referenceBone = source.referenceBone;
-                cloned.positionOffset = source.positionOffset;
-                cloned.rotationOffset = source.rotationOffset;
-                cloned.scaleOffset = source.scaleOffset;
-                cloned.size = source.size;
-                cloned.execute = source.execute;
-            }
-
-            cloned.startTime = Mathf.Max(0f, timelineStartTime);
-            cloned.duration = Mathf.Max(0f, timelineDuration);
-            return cloned;
-        }
-
-        /// <summary>
         /// 清理资产名中的非法文件名字符，空名回退到默认名。
         /// </summary>
         /// <param name="rawName">原始资产名。</param>

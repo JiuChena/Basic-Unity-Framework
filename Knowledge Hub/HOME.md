@@ -1,7 +1,7 @@
 ---
 tags: [home]
 created: 2026-07-25
-updated: 2026-08-28
+updated: 2026-09-01
 ---
 
 # Basic Unity Framework — 知识库
@@ -10,7 +10,7 @@ updated: 2026-08-28
 
 这是一个 Unity 3D 游戏基础框架项目，提供角色移动、输入处理、行为系统、战斗系统、任务系统等通用模块。框架采用分层架构，Gear 层提供通用基础能力，Expand Component 层提供可挂载组件。
 
-主要命名空间：`Framework.Core`（基础工具）、`Framework.Gameplay.Abilities`（能力系统）、`BehaviorCore`（行为系统）。移动、输入、浮动胶囊、跳跃和边缘保护等功能现在由独立能力 Runtime 及其纯 C# 模块组合，不再由 `UnitMover` 或 `DataProvider` 组件提供统一调度。
+主要命名空间：`Framework.Core`（基础工具）、`Framework.Gameplay.Abilities`（能力系统）、`BehaviorEditor`（行为时间线与运行时执行）。移动、输入、浮动胶囊、跳跃和边缘保护等功能现在由独立能力 Runtime 及其纯 C# 模块组合，不再由 `UnitMover` 或 `DataProvider` 组件提供统一调度。
 
 ## 快速导航
 
@@ -30,6 +30,8 @@ updated: 2026-08-28
 
 ## 最近变更
 
+- 2026-09-01：BehaviorEditor 事件轨删除 VFX/音频/投射物/Buff 等内置业务分类，改为 `BehaviorEventExecuteSO.Execute(BehaviorEventContext)` 的项目侧扩展点；删除原生音频、VFX 控制与激活轨的运行时事件导出，并按轨道收拢运行时、编辑器和编译器文件
+- 2026-08-31：BehaviorEditor 删除 `BehaviorClip` 到 Timeline 的反向回填、旧 SO 降级回填与作者期轨道快照；Timeline 现在是唯一作者源，结束编辑时单向导出运行时行为数据；轨道编译器自动发现，运行时由多态轨道数据创建执行器
 - 2026-08-28：输入能力配置改用 `InputActionReference` 直接选择动作；旧动作名称仅作为隐藏迁移回退，输入采集与 GAS 能力执行职责保持分离
 - 2026-08-28：新增 `Tool/GAS/Create New Ability Scripts` 能力脚本生成工具；修复模板逐字字符串引号导致的 Editor 编译错误，并自动注册、注销能力 RuntimeData
 - 2026-08-27：修复 `MovementAbility.asset` 对场景相机的非法 PPtr 引用；移动参考相机改为运行时缓存 `Camera.main`，浮动胶囊、跳跃和边缘保护配置继续保留在移动资产内部

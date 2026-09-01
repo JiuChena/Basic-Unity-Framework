@@ -10,8 +10,12 @@ namespace BehaviorEditor
     {
         // 当前轨道导出的动画片段数据。
         private readonly AnimationTrackData data;
-        // 当前播放的宿主依赖与环境配置。
+        // 当前播放的共享宿主上下文。
         private readonly BehaviorExecutionContext context;
+        // 动画轨道自行解析的 Animator 组件。
+        private readonly Animator animator;
+        // 动画轨道自行解析的片段播放适配器。
+        private readonly IBehaviorAnimationPlayer animationPlayer;
         // 当前播放中各片段的起始时间表。
         private float[] segmentStartTimes = Array.Empty<float>();
         // 当前已经播放的片段索引。
@@ -25,17 +29,21 @@ namespace BehaviorEditor
         /// </summary>
         /// <param name="data">当前动画轨道导出数据；不得为 null。</param>
         /// <param name="context">当前播放执行上下文；不得为 null。</param>
-        public AnimationTrackExecutor(AnimationTrackData data, BehaviorExecutionContext context)
+        /// <param name="animator">动画轨道使用的 Animator；允许为 null。</param>
+        /// <param name="animationPlayer">动画片段播放适配器；允许为 null。</param>
+        public AnimationTrackExecutor(AnimationTrackData data, BehaviorExecutionContext context, Animator animator,
+            IBehaviorAnimationPlayer animationPlayer)
         {
             this.data = data;
             this.context = context;
+            this.animator = animator;
+            this.animationPlayer = animationPlayer;
         }
 
         /// <summary>
         /// 构建本轨道的片段时间表并尝试播放首段动画。
         /// </summary>
-        /// <param name="firstSegmentCrossFadeOverride">首段过渡覆盖值；小于零时使用片段配置。</param>
-        public void Begin(float firstSegmentCrossFadeOverride)
+        public void Begin()
         {
             AnimationSegment[] segments = data.segments;
             currentSegmentIndex = 0;
@@ -56,7 +64,16 @@ namespace BehaviorEditor
                 if (segment?.clip != null) cursor = Mathf.Max(cursor, segmentStartTimes[index] + segment.clip.length);
             }
 
-            if (context.Animator != null) PlaySegment(0, firstSegmentCrossFadeOverride);
+            if (animator == null || animationPlayer == null || !animationPlayer.Initialize(animator))
+            {
+                if (data.logPlayback)
+                    Debug.LogWarning($"[{context.OwnerGameObject.name}] AnimationTrack 缺少 Animator 或 IBehaviorAnimationPlayer，已跳过动画播放。", context.OwnerGameObject);
+                return;
+            }
+
+            // 动画轨道自行应用行为播放速度并播放首段。
+            animator.speed = context.PlaybackSpeed;
+            PlaySegment(0);
         }
 
         /// <summary>
@@ -65,11 +82,11 @@ namespace BehaviorEditor
         /// <param name="elapsedTime">当前行为已播放时间，单位为秒。</param>
         public void Tick(float elapsedTime)
         {
-            if (context.Animator == null || segmentStartTimes.Length == 0) return;
+            if (animator == null || animationPlayer == null || segmentStartTimes.Length == 0) return;
             while (currentSegmentIndex + 1 < segmentStartTimes.Length && elapsedTime >= segmentStartTimes[currentSegmentIndex + 1])
             {
                 currentSegmentIndex++;
-                PlaySegment(currentSegmentIndex, -1f);
+                PlaySegment(currentSegmentIndex);
             }
         }
 
@@ -80,14 +97,14 @@ namespace BehaviorEditor
         {
             segmentStartTimes = Array.Empty<float>();
             currentSegmentIndex = 0;
+            if (animator != null) animator.speed = 1f;
         }
 
         /// <summary>
         /// 请求动画适配器播放指定片段。
         /// </summary>
         /// <param name="index">轨道片段索引。</param>
-        /// <param name="crossFadeDurationOverride">过渡覆盖值；小于零时使用片段配置。</param>
-        private void PlaySegment(int index, float crossFadeDurationOverride)
+        private void PlaySegment(int index)
         {
             AnimationSegment[] segments = data.segments;
             if (segments == null || index < 0 || index >= segments.Length) return;
@@ -95,14 +112,15 @@ namespace BehaviorEditor
             if (segment?.clip == null) return;
 
             // 由动画轨道适配器完成状态槽选择和 CrossFade。
-            if (context.AnimationPlayer != null && context.AnimationPlayer.TryPlaySegment(segment, index, crossFadeDurationOverride, out string stateName))
+            if (animationPlayer.TryPlaySegment(segment, index, -1f, out string stateName))
             {
-                if (context.LogBehaviorFlow)
-                    Debug.Log($"[{context.Executor.name}] 切换动画片段：Clip={segment.clip.name} | Layer={segment.layer} | Slot={index} | State={stateName}", context.Executor);
+                if (data.logPlayback)
+                    Debug.Log($"[{context.OwnerGameObject.name}] 切换动画片段：Clip={segment.clip.name} | Layer={segment.layer} | Slot={index} | State={stateName}", context.OwnerGameObject);
                 return;
             }
 
-            Debug.LogWarning($"BehaviorExecutor 无法播放动画片段 {segment.clip.name}。请确认动画播放器已初始化且存在 Layer {segment.layer} 的可用槽位 {index}。", context.Executor);
+            if (data.logPlayback)
+                Debug.LogWarning($"AnimationTrack 无法播放动画片段 {segment.clip.name}。请确认动画播放器已初始化且存在 Layer {segment.layer} 的可用槽位 {index}。", context.OwnerGameObject);
         }
     }
 }

@@ -97,6 +97,6 @@
 
 ## 行为系统接入边界
 
-`BehaviorEditor` 不依赖任何单位静态资产、角色配置表或项目侧资产信息接口。调用方直接向 `BehaviorExecutor` 提供行为宿主的 `Animator`、动画播放适配器和 Hitbox 层过滤，再调用 `Play(BehaviorClip)` 即可。
+`BehaviorEditor` 不依赖任何单位静态资产、角色配置表或项目侧资产信息接口。调用方只需要在行为宿主上挂载 `BehaviorExecutor`，各具体轨道自行解析所需组件和配置，再调用 `Play(BehaviorClip)` 即可。
 
 单位配置、数值、策略、状态机、VFX、音频和相机均由项目业务层自行组织；它们可以决定何时、以何种规则选择 `BehaviorClip`，但不进入 BehaviorEditor 的核心运行时依赖。

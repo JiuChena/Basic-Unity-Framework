@@ -13,6 +13,10 @@ namespace BehaviorEditor
         [Tooltip("按触发时间排序的运行时行为事件。")]
         public BehaviorEvent[] events = Array.Empty<BehaviorEvent>();
 
+        // 是否输出当前轨道的事件触发诊断日志。
+        [Tooltip("开启后输出当前轨道的事件触发日志。")]
+        public bool logEvents;
+
         /// <summary>
         /// 创建包含事件轨道默认调度顺序的数据。
         /// </summary>

@@ -37,8 +37,7 @@ namespace BehaviorEditor
         /// <summary>
         /// 建立本次播放的稳定事件时间表。
         /// </summary>
-        /// <param name="firstSegmentCrossFadeOverride">事件轨道不使用的动画过渡覆盖值。</param>
-        public void Begin(float firstSegmentCrossFadeOverride)
+        public void Begin()
         {
             BehaviorEvent[] sourceEvents = data.events;
             if (sourceEvents == null || sourceEvents.Length == 0)
@@ -112,7 +111,6 @@ namespace BehaviorEditor
             Quaternion rotation = useWorldSpace ? Quaternion.Euler(behaviorEvent.rotationOffset) : anchor.rotation * Quaternion.Euler(behaviorEvent.rotationOffset);
 
             // 填充复用上下文，具体业务由执行配置子类决定。
-            eventContext.Executor = context.Executor;
             eventContext.OwnerGameObject = context.OwnerGameObject;
             eventContext.OwnerTransform = context.OwnerTransform;
             eventContext.ReferenceTransform = reference;
@@ -124,8 +122,8 @@ namespace BehaviorEditor
             eventContext.ElapsedTime = elapsedTime;
             behaviorEvent.execute.Execute(eventContext);
 
-            if (context.LogBehaviorEvents)
-                Debug.Log($"[{context.Executor.name}] 触发事件：{behaviorEvent.execute.name} | Time={behaviorEvent.time:F2}s | Bone={(useWorldSpace ? "<World>" : behaviorEvent.referenceBone)}", context.Executor);
+            if (data.logEvents)
+                Debug.Log($"[{context.OwnerGameObject.name}] 触发事件：{behaviorEvent.execute.name} | Time={behaviorEvent.time:F2}s | Bone={(useWorldSpace ? "<World>" : behaviorEvent.referenceBone)}", context.OwnerGameObject);
         }
     }
 }

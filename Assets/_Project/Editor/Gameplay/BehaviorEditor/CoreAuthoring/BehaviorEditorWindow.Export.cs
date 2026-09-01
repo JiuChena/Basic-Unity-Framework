@@ -24,8 +24,7 @@ namespace BehaviorEditor
                 wrapMode = wrapMode,
                 speedMultiplier = Mathf.Max(0.01f, speedMultiplier)
             };
-            BehaviorExportContext exportContext = new BehaviorExportContext(sourceTimeline, exportDirector,
-                exportReferenceRoot, fallbackMeta);
+            BehaviorExportContext exportContext = new BehaviorExportContext(sourceTimeline, exportDirector, exportReferenceRoot, fallbackMeta);
 
             // 遍历全部轨道，按轨道实际类型自动分发对应编译器。
             foreach (TrackAsset track in EnumerateTimelineTracks(sourceTimeline))
@@ -47,13 +46,10 @@ namespace BehaviorEditor
             for (int i = 0; i < exportContext.Warnings.Count; i++)
                 Debug.LogWarning($"[Timeline Export] {exportContext.Warnings[i]}", sourceTimeline);
 
-            AnimationTrackData animationData = target.GetTrackData<AnimationTrackData>();
-            EventTrackData eventData = target.GetTrackData<EventTrackData>();
-            HitboxTrackData hitboxData = target.GetTrackData<HitboxTrackData>();
             BehaviorMetaData metaData = target.GetTrackData<BehaviorMetaData>();
             Debug.Log(
                 $"Timeline 已导出到 BehaviorClip：{target.name}\n" +
-                $"Segments={animationData?.segments?.Length ?? 0}, Events={eventData?.events?.Length ?? 0}, Hitboxes={hitboxData?.hitboxes?.Length ?? 0}, Duration={metaData?.duration ?? 0f:F2}s",
+                $"Tracks={target.trackData?.Count ?? 0}, Duration={metaData?.duration ?? 0f:F2}s",
                 target);
         }
 
@@ -90,7 +86,7 @@ namespace BehaviorEditor
         private Transform ResolveExportReferenceRoot()
         {
             if (previewReferenceRoot != null) return previewReferenceRoot.transform;
-            if (previewAnimator != null) return previewAnimator.transform;
+            if (previewReferenceRoot != null) return previewReferenceRoot.transform;
 
             PlayableDirector director = ResolvePreviewDirectorForOpen(sourceTimeline, previewDirector);
             return director != null ? director.transform : null;

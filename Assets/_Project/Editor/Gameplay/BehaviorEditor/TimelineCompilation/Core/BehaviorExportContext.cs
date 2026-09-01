@@ -17,14 +17,9 @@ namespace BehaviorEditor
         // 本次编译收集的可显示警告。
         private readonly List<string> warnings = new List<string>();
 
-        // 所有动画作者轨道汇总出的运行时动画段。
-        private readonly List<AnimationSegment> animationSegments = new List<AnimationSegment>();
-
-        // 所有事件语义作者轨道汇总出的运行时事件。
-        private readonly List<BehaviorEvent> behaviorEvents = new List<BehaviorEvent>();
-
-        // 所有 Hitbox 作者轨道汇总出的运行时命中定义。
-        private readonly List<HitboxDef> hitboxes = new List<HitboxDef>();
+        // 导出状态类型 → 具体轨道在本次编译中维护的临时收集状态。
+        private readonly Dictionary<Type, IBehaviorTrackExportState> exportStatesByType =
+            new Dictionary<Type, IBehaviorTrackExportState>();
 
         /// <summary>正在编译的 Timeline 资产。</summary>
         public TimelineAsset Timeline { get; }
@@ -76,13 +71,28 @@ namespace BehaviorEditor
         }
 
         /// <summary>
+        /// 获取或创建当前导出中指定轨道的临时收集状态。
+        /// </summary>
+        /// <typeparam name="TExportState">轨道私有导出状态类型。</typeparam>
+        /// <returns>当前导出的唯一临时状态实例。</returns>
+        public TExportState GetOrCreateExportState<TExportState>()
+            where TExportState : class, IBehaviorTrackExportState, new()
+        {
+            if (exportStatesByType.TryGetValue(typeof(TExportState), out IBehaviorTrackExportState existing))
+                return (TExportState)existing;
+
+            TExportState created = new TExportState();
+            exportStatesByType.Add(typeof(TExportState), created);
+            return created;
+        }
+
+        /// <summary>
         /// 设置本次导出的行为结束时间上界。
         /// </summary>
         /// <param name="endTime">候选结束时间，负数会被忽略。</param>
         public void ConsiderEndTime(double endTime)
         {
-            if (endTime > MaxEndTime)
-                MaxEndTime = endTime;
+            MaxEndTime = endTime > MaxEndTime ? endTime : MaxEndTime;
         }
 
         /// <summary>
@@ -93,36 +103,6 @@ namespace BehaviorEditor
         {
             if (!string.IsNullOrWhiteSpace(warning))
                 warnings.Add(warning);
-        }
-
-        /// <summary>
-        /// 追加一个动画段到本次编译的动画输出。
-        /// </summary>
-        /// <param name="segment">需要追加的动画段；为 null 时忽略。</param>
-        public void AddAnimationSegment(AnimationSegment segment)
-        {
-            if (segment != null)
-                animationSegments.Add(segment);
-        }
-
-        /// <summary>
-        /// 追加一个定时行为事件到本次编译的事件输出。
-        /// </summary>
-        /// <param name="behaviorEvent">需要追加的事件；为 null 时忽略。</param>
-        public void AddEvent(BehaviorEvent behaviorEvent)
-        {
-            if (behaviorEvent != null)
-                behaviorEvents.Add(behaviorEvent);
-        }
-
-        /// <summary>
-        /// 追加一个命中判定定义到本次编译的 Hitbox 输出。
-        /// </summary>
-        /// <param name="hitbox">需要追加的 Hitbox；为 null 时忽略。</param>
-        public void AddHitbox(HitboxDef hitbox)
-        {
-            if (hitbox != null)
-                hitboxes.Add(hitbox);
         }
 
         /// <summary>
@@ -153,83 +133,14 @@ namespace BehaviorEditor
             // 补齐未显式导出的 Meta，保证播放头始终有确定配置。
             BehaviorMetaData meta = GetMetaData();
 
-            // 将各作者入口汇总为共享运行时语义数据。
-            AnimationTrackData animation = GetOrCreateTrackData<AnimationTrackData>();
-            EventTrackData events = GetOrCreateTrackData<EventTrackData>();
-            HitboxTrackData hitboxData = GetOrCreateTrackData<HitboxTrackData>();
-            animationSegments.Sort(CompareAnimationSegments);
-            behaviorEvents.Sort(CompareBehaviorEvents);
-            hitboxes.Sort(CompareHitboxes);
-            animation.segments = animationSegments.ToArray();
-            events.events = behaviorEvents.ToArray();
-            hitboxData.hitboxes = hitboxes.ToArray();
+            // 各轨道自行收尾其临时数据并写入对应的多态轨道数据。
+            foreach (IBehaviorTrackExportState exportState in exportStatesByType.Values)
+                exportState.Commit(this);
             meta.duration = Mathf.Max(0.01f, (float)Math.Max(MaxEndTime, Timeline != null ? Timeline.duration : 0d));
 
             // 整体替换导出结果，避免作者期删除轨道后保留过期运行时数据。
             target.ReplaceTrackData(trackDataByType.Values);
 
-        }
-
-        /// <summary>
-        /// 按起始时间、轨道名称、层级与动画名稳定排序动画段。
-        /// </summary>
-        /// <param name="left">左侧动画段。</param>
-        /// <param name="right">右侧动画段。</param>
-        /// <returns>排序结果。</returns>
-        private static int CompareAnimationSegments(AnimationSegment left, AnimationSegment right)
-        {
-            if (ReferenceEquals(left, right)) return 0;
-            if (left == null) return 1;
-            if (right == null) return -1;
-
-            int result = left.startTime.CompareTo(right.startTime);
-            if (result != 0) return result;
-            result = string.Compare(left.authoringTrackName, right.authoringTrackName, StringComparison.Ordinal);
-            if (result != 0) return result;
-            result = left.layer.CompareTo(right.layer);
-            return result != 0 ? result : string.Compare(left.clip != null ? left.clip.name : string.Empty,
-                right.clip != null ? right.clip.name : string.Empty, StringComparison.Ordinal);
-        }
-
-        /// <summary>
-        /// 按触发时间、轨道名称、骨骼路径与执行配置名称稳定排序行为事件。
-        /// </summary>
-        /// <param name="left">左侧行为事件。</param>
-        /// <param name="right">右侧行为事件。</param>
-        /// <returns>排序结果。</returns>
-        private static int CompareBehaviorEvents(BehaviorEvent left, BehaviorEvent right)
-        {
-            if (ReferenceEquals(left, right)) return 0;
-            if (left == null) return 1;
-            if (right == null) return -1;
-
-            int result = left.time.CompareTo(right.time);
-            if (result != 0) return result;
-            result = string.Compare(left.authoringTrackName, right.authoringTrackName, StringComparison.Ordinal);
-            if (result != 0) return result;
-            result = string.Compare(left.referenceBone, right.referenceBone, StringComparison.Ordinal);
-            return result != 0 ? result : string.Compare(
-                left.execute != null ? left.execute.name : string.Empty,
-                right.execute != null ? right.execute.name : string.Empty,
-                StringComparison.Ordinal);
-        }
-
-        /// <summary>
-        /// 按生效时间、轨道名称和调试名称稳定排序 Hitbox。
-        /// </summary>
-        /// <param name="left">左侧 Hitbox。</param>
-        /// <param name="right">右侧 Hitbox。</param>
-        /// <returns>排序结果。</returns>
-        private static int CompareHitboxes(HitboxDef left, HitboxDef right)
-        {
-            if (ReferenceEquals(left, right)) return 0;
-            if (left == null) return 1;
-            if (right == null) return -1;
-
-            int result = left.startTime.CompareTo(right.startTime);
-            if (result != 0) return result;
-            result = string.Compare(left.authoringTrackName, right.authoringTrackName, StringComparison.Ordinal);
-            return result != 0 ? result : string.Compare(left.name, right.name, StringComparison.Ordinal);
         }
     }
 }

@@ -1,3 +1,4 @@
+using System;
 using UnityEngine.Timeline;
 
 namespace BehaviorEditor
@@ -31,9 +32,42 @@ namespace BehaviorEditor
                     continue;
 
                 context.ConsiderEndTime(clip.end);
-                context.AddHitbox(BehaviorEditorWindow.CloneHitboxDef(asset.hitboxData, (float)clip.start,
+                HitboxTrackExportState exportState = context.GetOrCreateExportState<HitboxTrackExportState>();
+                exportState.Hitboxes.Add(HitboxTrackExportUtility.CloneDefinition(asset.hitboxData, (float)clip.start,
                     (float)clip.duration, hitboxTrack.name));
             }
+        }
+    }
+
+    /// <summary>
+    /// 收集并提交单次导出中的 Hitbox 定义。
+    /// </summary>
+    internal sealed class HitboxTrackExportState : IBehaviorTrackExportState
+    {
+        // 本次 Timeline 导出收集到的命中区域定义。
+        public readonly System.Collections.Generic.List<HitboxDef> Hitboxes =
+            new System.Collections.Generic.List<HitboxDef>();
+
+        /// <summary>
+        /// 稳定排序 Hitbox 定义并写入命中轨道数据。
+        /// </summary>
+        /// <param name="context">当前导出上下文；不得为 null。</param>
+        public void Commit(BehaviorExportContext context)
+        {
+            // 按生效时间、作者轨道与定义名建立稳定物理查询顺序。
+            Hitboxes.Sort((left, right) =>
+            {
+                if (ReferenceEquals(left, right)) return 0;
+                if (left == null) return 1;
+                if (right == null) return -1;
+
+                int result = left.startTime.CompareTo(right.startTime);
+                if (result != 0) return result;
+                result = string.Compare(left.authoringTrackName, right.authoringTrackName, StringComparison.Ordinal);
+                return result != 0 ? result : string.Compare(left.name, right.name, StringComparison.Ordinal);
+            });
+
+            context.GetOrCreateTrackData<HitboxTrackData>().hitboxes = Hitboxes.ToArray();
         }
     }
 }

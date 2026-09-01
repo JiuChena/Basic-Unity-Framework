@@ -25,12 +25,10 @@ namespace BehaviorEditor
         /// <returns>找到并执行编译器时返回 true。</returns>
         public static bool TryExport(TrackAsset track, BehaviorExportContext context)
         {
-            if (track == null)
-                return false;
+            if (track == null) return false;
 
             EnsureInitialized();
-            return compilersByTrackType.TryGetValue(track.GetType(), out IBehaviorTimelineTrackCompiler compiler) &&
-                   ExportWithCompiler(compiler, track, context);
+            return compilersByTrackType.TryGetValue(track.GetType(), out IBehaviorTimelineTrackCompiler compiler) && ExportWithCompiler(compiler, track, context);
         }
 
         /// <summary>
@@ -40,11 +38,9 @@ namespace BehaviorEditor
         /// <param name="track">待导出的轨道。</param>
         /// <param name="context">当前导出上下文。</param>
         /// <returns>成功执行导出时返回 true。</returns>
-        private static bool ExportWithCompiler(IBehaviorTimelineTrackCompiler compiler, TrackAsset track,
-            BehaviorExportContext context)
+        private static bool ExportWithCompiler(IBehaviorTimelineTrackCompiler compiler, TrackAsset track, BehaviorExportContext context)
         {
-            if (compiler == null || context == null)
-                return false;
+            if (compiler == null || context == null) return false;
 
             compiler.Export(track, context);
             return true;
@@ -55,8 +51,7 @@ namespace BehaviorEditor
         /// </summary>
         private static void EnsureInitialized()
         {
-            if (initialized)
-                return;
+            if (initialized) return;
 
             // 仅在编辑器域重载后扫描一次，运行时和导出热路径不使用反射。
             compilersByTrackType.Clear();

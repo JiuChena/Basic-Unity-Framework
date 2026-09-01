@@ -7,8 +7,6 @@ namespace BehaviorEditor
     /// </summary>
     public sealed class BehaviorEventContext
     {
-        /// <summary>当前行为执行器组件。</summary>
-        public BehaviorExecutor Executor { get; internal set; }
         /// <summary>执行行为的宿主对象。</summary>
         public GameObject OwnerGameObject { get; internal set; }
         /// <summary>执行行为的宿主变换。</summary>

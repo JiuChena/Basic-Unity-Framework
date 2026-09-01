@@ -37,8 +37,7 @@ namespace BehaviorEditor
         /// <summary>
         /// 预解析 Hitbox 骨骼引用并创建本次播放的查询缓冲区。
         /// </summary>
-        /// <param name="firstSegmentCrossFadeOverride">Hitbox 轨道不使用的动画过渡覆盖值。</param>
-        public void Begin(float firstSegmentCrossFadeOverride)
+        public void Begin()
         {
             // 每次播放重新解析参考骨骼，避免沿用旧宿主或旧骨架引用。
             activeHitboxes.Clear();
@@ -53,8 +52,9 @@ namespace BehaviorEditor
                 }
             }
 
-            if (overlapResults.Length != context.MaxOverlapResults)
-                overlapResults = new Collider[context.MaxOverlapResults];
+            int resultCapacity = Mathf.Max(1, data.maxOverlapResults);
+            if (overlapResults.Length != resultCapacity)
+                overlapResults = new Collider[resultCapacity];
         }
 
         /// <summary>
@@ -85,10 +85,9 @@ namespace BehaviorEditor
                     if (collider != null) hitContext.GameObjects.Add(collider.gameObject);
                 }
 
-                hitContext.Extract();
                 execute.Execute(hitContext);
-                if (context.LogHitResults)
-                    Debug.Log($"[{context.Executor.name}] 执行 HitExecute：Hitbox={GetDisplayName(activeHitbox.Definition)} | Objects={hitContext.GameObjects.Count - 1}", context.Executor);
+                if (data.logHitResults)
+                    Debug.Log($"[{context.OwnerGameObject.name}] 执行 HitExecute：Hitbox={GetDisplayName(activeHitbox.Definition)} | Objects={hitContext.GameObjects.Count - 1}", context.OwnerGameObject);
             }
         }
 
@@ -99,7 +98,6 @@ namespace BehaviorEditor
         {
             activeHitboxes.Clear();
             hitContext.GameObjects.Clear();
-            hitContext.CharacterControllers.Clear();
         }
 
         /// <summary>
@@ -108,7 +106,7 @@ namespace BehaviorEditor
         /// <param name="elapsedTime">当前行为已播放时间，单位为秒。</param>
         public void DrawGizmos(float elapsedTime)
         {
-            if (context.OwnerTransform == null) return;
+            if (!data.drawGizmos || context.OwnerTransform == null) return;
             for (int index = 0; index < activeHitboxes.Count; index++)
             {
                 ActiveHitbox hitbox = activeHitboxes[index];
@@ -134,16 +132,16 @@ namespace BehaviorEditor
         private int QueryOverlap(HitboxDef definition, Vector3 center, Quaternion rotation, Vector3 size)
         {
             if (definition.shape == HitboxShape.Sphere)
-                return Physics.OverlapSphereNonAlloc(center, Mathf.Abs(size.x), overlapResults, context.TargetLayerMask);
+                return Physics.OverlapSphereNonAlloc(center, Mathf.Abs(size.x), overlapResults, data.targetLayerMask);
             if (definition.shape == HitboxShape.Capsule)
             {
                 float radius = Mathf.Abs(size.x);
                 float cylinderHeight = Mathf.Max(0f, Mathf.Abs(size.y) - radius * 2f);
                 Vector3 halfOffset = rotation * Vector3.up * (cylinderHeight * 0.5f);
-                return Physics.OverlapCapsuleNonAlloc(center + halfOffset, center - halfOffset, radius, overlapResults, context.TargetLayerMask);
+                return Physics.OverlapCapsuleNonAlloc(center + halfOffset, center - halfOffset, radius, overlapResults, data.targetLayerMask);
             }
 
-            return Physics.OverlapBoxNonAlloc(center, size * 0.5f, overlapResults, rotation, context.TargetLayerMask);
+            return Physics.OverlapBoxNonAlloc(center, size * 0.5f, overlapResults, rotation, data.targetLayerMask);
         }
 
         /// <summary>

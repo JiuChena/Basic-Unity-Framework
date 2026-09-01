@@ -19,7 +19,7 @@ namespace BehaviorEditor
         /// </summary>
         private void OnEnable()
         {
-            BehaviorEditorContext.RetainHitboxScenePreview();
+            HitboxAuthoringContext.RetainHitboxScenePreview();
         }
 
         /// <summary>
@@ -28,10 +28,10 @@ namespace BehaviorEditor
         private void OnDisable()
         {
             // 当前选中的 Hitbox 资产由本 Inspector 持有，停用时清空引用。
-            if (BehaviorEditorContext.SelectedHitboxClipAsset == target)
-                BehaviorEditorContext.SelectedHitboxClipAsset = null;
+            if (HitboxAuthoringContext.SelectedHitboxClipAsset == target)
+                HitboxAuthoringContext.SelectedHitboxClipAsset = null;
 
-            BehaviorEditorContext.ReleaseHitboxScenePreview();
+            HitboxAuthoringContext.ReleaseHitboxScenePreview();
             UnityEditor.SceneView.RepaintAll();
         }
 
@@ -41,7 +41,7 @@ namespace BehaviorEditor
         public override void OnInspectorGUI()
         {
             // 记录当前编辑的 Hitbox 资产供 Scene 预览读取。
-            BehaviorEditorContext.SelectedHitboxClipAsset = target as BehaviorTimelineHitboxClipAsset;
+            HitboxAuthoringContext.SelectedHitboxClipAsset = target as BehaviorTimelineHitboxClipAsset;
             serializedObject.Update();
             UnityEditor.EditorGUI.BeginChangeCheck();
 
@@ -63,10 +63,10 @@ namespace BehaviorEditor
             // 预览开关：控制 Scene 中是否绘制 Hitbox 线框。
             bool showPreview = UnityEditor.EditorGUILayout.ToggleLeft(
                 "Show Scene Hitbox Preview",
-                BehaviorEditorContext.ShowAuthoringHitboxGizmos);
-            if (showPreview != BehaviorEditorContext.ShowAuthoringHitboxGizmos)
+                HitboxAuthoringContext.ShowAuthoringHitboxGizmos);
+            if (showPreview != HitboxAuthoringContext.ShowAuthoringHitboxGizmos)
             {
-                BehaviorEditorContext.ShowAuthoringHitboxGizmos = showPreview;
+                HitboxAuthoringContext.ShowAuthoringHitboxGizmos = showPreview;
                 UnityEditor.SceneView.RepaintAll();
             }
 

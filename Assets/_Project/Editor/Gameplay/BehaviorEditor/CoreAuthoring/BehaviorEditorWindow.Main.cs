@@ -24,18 +24,12 @@ namespace BehaviorEditor
         private float speedMultiplier = 1f;
         // 作者期预览用的 PlayableDirector。
         private PlayableDirector previewDirector;
-        // 作者期预览用的 Animator。
-        private Animator previewAnimator;
         // 作者期指定的角色根节点（骨骼路径基准）。
         private GameObject previewReferenceRoot;
         // 结束作者期时是否需要移除自动创建的 Director。
         private bool removePreviewDirectorOnFinish;
-        // 结束作者期时是否需要移除自动创建的 Animator。
-        private bool removePreviewAnimatorOnFinish;
         // 是否自动指定了 Reference Root（非手动指定）。
         private bool autoAssignedReferenceRoot;
-        // 是否在 Scene 中绘制作者期 Hitbox 线框。
-        private bool showAuthoringHitboxGizmos = true;
         // 延迟刷新 Timeline 的挂起标记（编辑器重绘后执行）。
         private static bool pendingDelayedTimelineRefresh;
         // 延迟刷新使用的 Timeline 资产缓存。
@@ -43,9 +37,7 @@ namespace BehaviorEditor
         // 延迟刷新使用的 Director 缓存。
         private static PlayableDirector pendingDelayedTimelineDirector;
 
-        /// <summary>
-        /// 打开行为编辑器主窗口。
-        /// </summary>
+        /// <summary>打开行为编辑器主窗口。</summary>
         [UnityEditor.MenuItem("Tools/Behavior Editor/Timeline Exporter")]
         private static void Open()
         {
@@ -61,7 +53,7 @@ namespace BehaviorEditor
         {
             UnityEditor.EditorGUILayout.LabelField("Timeline -> BehaviorClip", UnityEditor.EditorStyles.boldLabel);
             UnityEditor.EditorGUILayout.HelpBox(
-                "动画预览使用原生 AnimationTrack；事件、Hitbox 和播放头使用自定义轨。导出时只编译已注册的轨道类型。",
+                "轨道由各自编译器独立导出；未注册的 Timeline 轨道会在导出时提示跳过。",
                 UnityEditor.MessageType.Info);
 
             sourceTimeline = (TimelineAsset)UnityEditor.EditorGUILayout.ObjectField(
@@ -86,19 +78,12 @@ namespace BehaviorEditor
             GUILayout.Space(8f);
             UnityEditor.EditorGUILayout.LabelField("Authoring", UnityEditor.EditorStyles.boldLabel);
             UnityEditor.EditorGUILayout.HelpBox(
-                "Reference Root 就是当前行为作者期使用的角色根节点，同时也是骨骼路径计算基准。开始编辑后会自动查找或补齐 PlayableDirector，并自动绑定 Animator。结束编辑时会导出 BehaviorClip，并清理本次作者期使用的 Director。",
+                "Reference Root 是当前行为作者期使用的角色根节点，也是骨骼路径计算基准。开始编辑后会准备 Timeline 会话；各轨道自行处理自己需要的预览绑定。",
                 UnityEditor.MessageType.None);
             previewReferenceRoot = (GameObject)UnityEditor.EditorGUILayout.ObjectField(
                 "Reference Root", previewReferenceRoot, typeof(GameObject), true);
             if (BehaviorEditorContext.ReferenceRootObject != previewReferenceRoot)
                 BehaviorEditorContext.ReferenceRootObject = previewReferenceRoot;
-            showAuthoringHitboxGizmos = BehaviorEditorContext.ShowAuthoringHitboxGizmos;
-            bool nextShowAuthoringHitboxGizmos = UnityEditor.EditorGUILayout.ToggleLeft(
-                "Show Authoring Hitbox Gizmos",
-                showAuthoringHitboxGizmos);
-            if (nextShowAuthoringHitboxGizmos != BehaviorEditorContext.ShowAuthoringHitboxGizmos)
-                BehaviorEditorContext.ShowAuthoringHitboxGizmos = nextShowAuthoringHitboxGizmos;
-            showAuthoringHitboxGizmos = BehaviorEditorContext.ShowAuthoringHitboxGizmos;
             GUILayout.Space(10f);
             bool blockAuthoringInPlayMode = UnityEditor.EditorApplication.isPlayingOrWillChangePlaymode;
             if (blockAuthoringInPlayMode)
@@ -119,23 +104,20 @@ namespace BehaviorEditor
         }
 
         /// <summary>
-        /// 启用时同步编辑器上下文并保留 Hitbox 预览注册。
+        /// 启用时同步各轨道可共享的作者期 Reference Root。
         /// </summary>
         private void OnEnable()
         {
             BehaviorEditorContext.ReferenceRootObject = previewReferenceRoot;
-            BehaviorEditorContext.ShowAuthoringHitboxGizmos = showAuthoringHitboxGizmos;
-            BehaviorEditorContext.RetainHitboxScenePreview();
         }
 
         /// <summary>
-        /// 停用时清理作者期会话并释放 Hitbox 预览注册。
+        /// 停用时清理作者期会话并清空共享作者期上下文。
         /// </summary>
         private void OnDisable()
         {
             CleanupAuthoringSession();
             BehaviorEditorContext.ReferenceRootObject = null;
-            BehaviorEditorContext.ReleaseHitboxScenePreview();
         }
 
         /// <summary>
@@ -166,8 +148,6 @@ namespace BehaviorEditor
             }
 
             previewDirector = EnsurePreviewDirector(target, out removePreviewDirectorOnFinish);
-            previewAnimator = EnsurePreviewAnimator(target, out removePreviewAnimatorOnFinish);
-
             if (previewReferenceRoot == null || autoAssignedReferenceRoot)
             {
                 previewReferenceRoot = target;
@@ -192,14 +172,8 @@ namespace BehaviorEditor
             if (sourceTimeline == null) return;
             if (!EnsureEditModeOperationAllowed("End Editing And Export")) return;
 
-            try
-            {
-                ExportToBehaviorClip();
-            }
-            finally
-            {
-                CleanupAuthoringSession();
-            }
+            try { ExportToBehaviorClip(); }
+            finally { CleanupAuthoringSession(); }
         }
 
         /// <summary>

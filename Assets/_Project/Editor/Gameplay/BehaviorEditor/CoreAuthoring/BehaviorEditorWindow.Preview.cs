@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using Core.Gear;
 using UnityEngine;
 using UnityEngine.Playables;
 using UnityEngine.Timeline;
@@ -31,13 +30,9 @@ namespace BehaviorEditor
             previewDirector = resolvedDirector;
             previewDirector.playableAsset = sourceTimeline;
 
-            // 绑定预览 Animator。
-            Animator resolvedAnimator = ResolvePreviewAnimator(previewDirector, previewAnimator);
-            if (resolvedAnimator != null)
-            {
-                previewAnimator = resolvedAnimator;
-                BindPreviewAnimator(previewDirector, sourceTimeline, resolvedAnimator);
-            }
+            // 由自动发现的轨道参与者准备各自需要的预览环境。
+            BehaviorAuthoringParticipantCatalog.BeginAuthoring(
+                new BehaviorAuthoringSessionContext(sourceTimeline, previewDirector, previewReferenceRoot));
 
             // 重置时间并重建求值。
             previewDirector.time = 0d;
@@ -64,21 +59,15 @@ namespace BehaviorEditor
                 if (removePreviewDirectorOnFinish) UnityEditor.Undo.DestroyObjectImmediate(previewDirector);
             }
 
-            // 销毁自动创建的 Animator。
-            if (removePreviewAnimatorOnFinish &&
-                previewAnimator != null &&
-                previewAnimator.gameObject != null)
-            {
-                UnityEditor.Undo.DestroyObjectImmediate(previewAnimator);
-            }
+            // 由各轨道参与者清理本次作者期临时资源。
+            BehaviorAuthoringParticipantCatalog.EndAuthoring(
+                new BehaviorAuthoringSessionContext(sourceTimeline, previewDirector, previewReferenceRoot));
 
             // 清空自动指定的 Reference Root 与预览缓存。
             if (autoAssignedReferenceRoot) previewReferenceRoot = null;
 
             previewDirector = null;
-            previewAnimator = null;
             removePreviewDirectorOnFinish = false;
-            removePreviewAnimatorOnFinish = false;
             autoAssignedReferenceRoot = false;
             BehaviorEditorContext.ReferenceRootObject = previewReferenceRoot;
 
@@ -268,75 +257,6 @@ namespace BehaviorEditor
             director.playOnAwake = false;
             createdByTool = true;
             return director;
-        }
-
-        /// <summary>
-        /// 确保目标对象上存在可用的 Animator，缺失时自动补齐。
-        /// </summary>
-        /// <param name="target">作者期目标对象。</param>
-        /// <param name="createdByTool">是否由工具自动创建了 Animator。</param>
-        /// <returns>可用的 Animator。</returns>
-        private static Animator EnsurePreviewAnimator(GameObject target, out bool createdByTool)
-        {
-            createdByTool = false;
-            if (target == null)
-                return null;
-
-            Animator animator = target.GetComponent<Animator>();
-            if (animator != null)
-                return animator;
-
-            animator = target.GetComponentInChildren<Animator>(true);
-            if (animator != null)
-                return animator;
-
-            animator = UnityEditor.Undo.AddComponent<Animator>(target);
-            createdByTool = true;
-            Debug.LogWarning($"角色对象 '{target.name}' 缺少 Animator，工具已自动补齐一个 Animator 组件。", target);
-            return animator;
-        }
-
-        /// <summary>
-        /// 解析预览使用的 Animator：优先缓存，其次 Director 同对象或子物体。
-        /// </summary>
-        /// <param name="director">当前预览 Director。</param>
-        /// <param name="preferredAnimator">优先使用的缓存 Animator。</param>
-        /// <returns>解析出的 Animator；未找到时返回 null。</returns>
-        private static Animator ResolvePreviewAnimator(PlayableDirector director, Animator preferredAnimator)
-        {
-            if (preferredAnimator != null)
-                return preferredAnimator;
-
-            if (director == null)
-                return null;
-
-            if (director.TryGetComponent(out Animator sameObjectAnimator))
-                return sameObjectAnimator;
-
-            return director.GetComponentInChildren<Animator>(true);
-        }
-
-        /// <summary>
-        /// 将预览 Animator 绑定到 Timeline 的全部动画轨道。
-        /// </summary>
-        /// <param name="director">当前预览 Director。</param>
-        /// <param name="timelineAsset">目标 Timeline 资产。</param>
-        /// <param name="animator">需要绑定的 Animator。</param>
-        private static void BindPreviewAnimator(PlayableDirector director, TimelineAsset timelineAsset, Animator animator)
-        {
-            if (director == null || timelineAsset == null || animator == null)
-                return;
-
-            foreach (TrackAsset track in EnumerateTimelineTracks(timelineAsset))
-            {
-                if (track is not AnimationTrack)
-                    continue;
-
-                if (director.GetGenericBinding(track) == animator)
-                    continue;
-
-                director.SetGenericBinding(track, animator);
-            }
         }
 
     }

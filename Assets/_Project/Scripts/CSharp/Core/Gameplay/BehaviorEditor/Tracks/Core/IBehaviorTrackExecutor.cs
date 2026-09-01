@@ -14,8 +14,7 @@ namespace BehaviorEditor
         /// <summary>
         /// 开始一次新的行为播放。
         /// </summary>
-        /// <param name="firstSegmentCrossFadeOverride">首段动画的过渡覆盖值；不适用时忽略。</param>
-        void Begin(float firstSegmentCrossFadeOverride);
+        void Begin();
 
         /// <summary>
         /// 推进当前行为的轨道时间。
