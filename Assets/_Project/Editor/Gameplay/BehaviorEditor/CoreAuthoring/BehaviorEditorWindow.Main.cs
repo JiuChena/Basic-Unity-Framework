@@ -1,6 +1,4 @@
 using System;
-using System.Collections.Generic;
-using System.IO;
 using UnityEngine;
 using UnityEngine.Playables;
 using UnityEngine.Timeline;
@@ -38,8 +36,6 @@ namespace BehaviorEditor
         private bool autoAssignedReferenceRoot;
         // 是否在 Scene 中绘制作者期 Hitbox 线框。
         private bool showAuthoringHitboxGizmos = true;
-        // 作者期预览中创建的全部音频源，用于结束时统一清理。
-        private readonly List<AudioSource> createdPreviewAudioSources = new List<AudioSource>();
         // 延迟刷新 Timeline 的挂起标记（编辑器重绘后执行）。
         private static bool pendingDelayedTimelineRefresh;
         // 延迟刷新使用的 Timeline 资产缓存。
@@ -65,7 +61,7 @@ namespace BehaviorEditor
         {
             UnityEditor.EditorGUILayout.LabelField("Timeline -> BehaviorClip", UnityEditor.EditorStyles.boldLabel);
             UnityEditor.EditorGUILayout.HelpBox(
-                "动画、音频和特效预览优先走原生 Timeline 轨道；Hitbox 和玩法数据继续走自定义轨。导出时会统一编译为运行时使用的 BehaviorClip。",
+                "动画预览使用原生 AnimationTrack；事件、Hitbox 和播放头使用自定义轨。导出时只编译已注册的轨道类型。",
                 UnityEditor.MessageType.Info);
 
             sourceTimeline = (TimelineAsset)UnityEditor.EditorGUILayout.ObjectField(

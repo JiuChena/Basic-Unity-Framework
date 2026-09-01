@@ -13,48 +13,38 @@ MonoBehaviour:
   m_Name: TimelineBehaviorClip
   m_EditorClassIdentifier: 
   trackData:
-  - rid: 5445524462400700416
-  - rid: 5445524462400700417
-  - rid: 5445524462400700418
-  - rid: 5445524462400700419
-  - rid: 5445524462400700420
+  - rid: 5445524462400700421
+  - rid: 5445524462400700422
+  - rid: 5445524462400700423
+  - rid: 5445524462400700424
   references:
     version: 2
     RefIds:
-    - rid: 5445524462400700416
+    - rid: 5445524462400700421
       type: {class: BehaviorMetaData, ns: BehaviorEditor, asm: Assembly-CSharp}
       data:
         executionOrder: -100
-        duration: 5.6833334
+        duration: 5.65
         wrapMode: 1
         speedMultiplier: 1
-    - rid: 5445524462400700417
-      type: {class: TestTrackData, ns: BehaviorEditor, asm: Assembly-CSharp}
-      data:
-        executionOrder: 10
-        clips:
-        - startTime: 0.68333334
-          duration: 5
-          testMessage: Hello from TestTrack!
-          testValue: 100
-    - rid: 5445524462400700418
+    - rid: 5445524462400700422
       type: {class: AnimationTrackData, ns: BehaviorEditor, asm: Assembly-CSharp}
       data:
         executionOrder: 0
         segments: []
-    - rid: 5445524462400700419
+    - rid: 5445524462400700423
       type: {class: EventTrackData, ns: BehaviorEditor, asm: Assembly-CSharp}
       data:
         executionOrder: 10
         events: []
-    - rid: 5445524462400700420
+    - rid: 5445524462400700424
       type: {class: HitboxTrackData, ns: BehaviorEditor, asm: Assembly-CSharp}
       data:
         executionOrder: 20
         hitboxes:
         - authoringTrackName: Behavior Timeline Hitbox Track
           name: 
-          startTime: 0.68333334
+          startTime: 0.65
           duration: 5
           shape: 0
           referenceBone: 

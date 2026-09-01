@@ -6,7 +6,7 @@ using UnityEngine;
 /// 负责生命周期、碰撞处理、命中特效和伤害结算；具体运动方式由子类实现。
 /// </summary>
 [DisallowMultipleComponent]
-public abstract class ProjectileBase : MonoBehaviour, IProjectileLaunchHandler, BehaviorEditor.IBehaviorProjectileContract
+public abstract class ProjectileBase : MonoBehaviour, IProjectileLaunchHandler
 {
     [Header("Lifecycle")]
     [SerializeField, Tooltip("投射物最大存活时间，超时自动回收。")]

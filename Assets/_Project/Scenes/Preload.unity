@@ -3033,6 +3033,7 @@ GameObject:
   - component: {fileID: 919132148873578783}
   - component: {fileID: 919132148873578782}
   - component: {fileID: 919132148873578784}
+  - component: {fileID: 919132148873578785}
   m_Layer: 0
   m_Name: CH0221
   m_TagString: Untagged
@@ -3115,6 +3116,26 @@ MonoBehaviour:
           m_CallState: 2
     - m_PersistentCalls:
         m_Calls: []
+--- !u!114 &919132148873578785
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 919132148873578781}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 224cef5410c231b4683b59a8f0ee44fa, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  targetLayerMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  maxOverlapResults: 16
+  drawDebugGizmos: 1
+  logBehaviorFlow: 0
+  logBehaviorEvents: 0
+  logHitResults: 0
 --- !u!137 &932004732537517241
 SkinnedMeshRenderer:
   m_ObjectHideFlags: 0

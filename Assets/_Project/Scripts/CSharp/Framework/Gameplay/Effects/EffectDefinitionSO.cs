@@ -1,9 +1,8 @@
 using System.Collections.Generic;
-using BehaviorEditor;
 using UnityEngine;
 
 /// <summary>
-/// 一次效果申请请求。行为层只负责发请求，不直接执行具体效果逻辑。
+/// 一次效果申请请求。
 /// </summary>
 public readonly struct EffectApplyRequest
 {
@@ -63,7 +62,7 @@ public readonly struct EffectBuildContext
 /// <summary>
 /// 效果执行基类。后续自定义回血、护盾、灼烧、减速等效果都应继承它。
 /// </summary>
-public abstract class EffectDefinitionSO : BehaviorEffectAsset
+public abstract class EffectDefinitionSO : ScriptableObject
 {
     public virtual string EffectKey => name;
     public virtual bool ShouldDisplayOnTarget => true;

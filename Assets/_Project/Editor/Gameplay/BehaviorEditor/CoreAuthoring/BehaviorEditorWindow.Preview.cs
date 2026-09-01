@@ -31,18 +31,12 @@ namespace BehaviorEditor
             previewDirector = resolvedDirector;
             previewDirector.playableAsset = sourceTimeline;
 
-            // 绑定预览 Animator 与音频源。
+            // 绑定预览 Animator。
             Animator resolvedAnimator = ResolvePreviewAnimator(previewDirector, previewAnimator);
             if (resolvedAnimator != null)
             {
                 previewAnimator = resolvedAnimator;
                 BindPreviewAnimator(previewDirector, sourceTimeline, resolvedAnimator);
-            }
-
-            AudioSource resolvedAudioSource = ResolvePreviewAudioSource(previewDirector);
-            if (resolvedAudioSource != null)
-            {
-                BindPreviewAudioSource(previewDirector, sourceTimeline, resolvedAudioSource);
             }
 
             // 重置时间并重建求值。
@@ -69,16 +63,6 @@ namespace BehaviorEditor
 
                 if (removePreviewDirectorOnFinish) UnityEditor.Undo.DestroyObjectImmediate(previewDirector);
             }
-
-            // 销毁本次创建的预览音频源。
-            for (int i = createdPreviewAudioSources.Count - 1; i >= 0; i--)
-            {
-                AudioSource createdPreviewAudioSource = createdPreviewAudioSources[i];
-                if (createdPreviewAudioSource == null) continue;
-
-                UnityEditor.Undo.DestroyObjectImmediate(createdPreviewAudioSource);
-            }
-            createdPreviewAudioSources.Clear();
 
             // 销毁自动创建的 Animator。
             if (removePreviewAnimatorOnFinish &&
@@ -333,22 +317,6 @@ namespace BehaviorEditor
         }
 
         /// <summary>
-        /// 解析预览使用的音频源：优先 Director 同对象或子物体。
-        /// </summary>
-        /// <param name="director">当前预览 Director。</param>
-        /// <returns>解析出的音频源；未找到时返回 null。</returns>
-        private static AudioSource ResolvePreviewAudioSource(PlayableDirector director)
-        {
-            if (director == null)
-                return null;
-
-            if (director.TryGetComponent(out AudioSource sameObjectAudioSource))
-                return sameObjectAudioSource;
-
-            return director.GetComponentInChildren<AudioSource>(true);
-        }
-
-        /// <summary>
         /// 将预览 Animator 绑定到 Timeline 的全部动画轨道。
         /// </summary>
         /// <param name="director">当前预览 Director。</param>
@@ -371,27 +339,5 @@ namespace BehaviorEditor
             }
         }
 
-        /// <summary>
-        /// 将预览音频源绑定到 Timeline 的全部音频轨道。
-        /// </summary>
-        /// <param name="director">当前预览 Director。</param>
-        /// <param name="timelineAsset">目标 Timeline 资产。</param>
-        /// <param name="audioSource">需要绑定的音频源。</param>
-        private static void BindPreviewAudioSource(PlayableDirector director, TimelineAsset timelineAsset, AudioSource audioSource)
-        {
-            if (director == null || timelineAsset == null || audioSource == null)
-                return;
-
-            foreach (TrackAsset track in EnumerateTimelineTracks(timelineAsset))
-            {
-                if (track is not AudioTrack)
-                    continue;
-
-                if (director.GetGenericBinding(track) == audioSource)
-                    continue;
-
-                director.SetGenericBinding(track, audioSource);
-            }
-        }
     }
 }

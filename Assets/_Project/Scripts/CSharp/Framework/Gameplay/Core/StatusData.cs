@@ -1,4 +1,3 @@
-using BehaviorEditor;
 using Core.Gear;
 using UnityEngine;
 using UnityEngine.Serialization;
@@ -10,8 +9,6 @@ using UnityEngine.Serialization;
 public interface IUnitCombatProxyProvider
 {
     StatusData ResolveCombatStatusData();
-    IBehaviorUnit ResolvebehaviorUnit();
-    IDamageable ResolveDamageable();
     UnitEffectController ResolveEffectController();
 }
 
@@ -48,39 +45,6 @@ public static class UnitCombatResolver
         return TryResolveStatusData(source, out StatusData statusData, out _) ? statusData : null;
     }
 
-    public static bool TryResolvebehaviorUnit(Component source, out IBehaviorUnit behaviorUnit, out bool canCache)
-    {
-        canCache = false;
-        behaviorUnit = null;
-        if (source == null)
-            return false;
-
-        if (TryResolveStatusData(source, out StatusData statusData, out canCache))
-        {
-            behaviorUnit = statusData;
-            return true;
-        }
-
-        IUnitCombatProxyProvider proxyProvider = source.GetComponentInParent<IUnitCombatProxyProvider>();
-        if (proxyProvider == null)
-            return false;
-
-        behaviorUnit = proxyProvider.ResolvebehaviorUnit();
-        return behaviorUnit != null;
-    }
-
-    public static IDamageable ResolveDamageable(Component source)
-    {
-        if (source == null)
-            return null;
-
-        if (TryResolveStatusData(source, out StatusData statusData, out _))
-            return statusData;
-
-        IUnitCombatProxyProvider proxyProvider = source.GetComponentInParent<IUnitCombatProxyProvider>();
-        return proxyProvider != null ? proxyProvider.ResolveDamageable() : null;
-    }
-
     public static UnitEffectController ResolveEffectController(Component source)
     {
         if (source == null)
@@ -101,7 +65,7 @@ public static class UnitCombatResolver
 }
 
 [DisallowMultipleComponent]
-public class StatusData : MonoBehaviour, IBehaviorUnit, IDamageable
+public class StatusData : MonoBehaviour
 {
     [Header("Targeting")]
     [SerializeField, Tooltip("为 true 时，该单位可以被索敌并作为有效受击目标；为 false 时会被所有攻击与索敌忽略。")]
@@ -233,12 +197,6 @@ public class StatusData : MonoBehaviour, IBehaviorUnit, IDamageable
     public float Penetration { get; private set; }
     public float DamageReductionPercent => Mathf.Clamp01(_damageReductionPercentModifier);
     public bool IsDead { get; private set; }
-
-    bool IDamageable.IsAlive => !IsDead;
-    int IBehaviorUnit.UnitId => UnitId;
-    GameObject IBehaviorUnit.RuntimeGameObject => gameObject;
-    Transform IBehaviorUnit.RuntimeTransform => transform;
-    string IBehaviorUnit.DebugName => name;
 
     private float _healthPercentModifier;
     private float _attackPercentModifier;

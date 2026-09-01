@@ -30,7 +30,6 @@
 新项目如果直接接框架层，优先依赖这些中性入口：
 
 - 单位静态定义：`IUnitDefinition`
-- 单位行为定义聚合口：`IUnitBehaviorDefinition`
 - 单位索敌提供器：`IUnitTargetingProvider`
 - 单位阵营：`UnitAlignment`
 - 通用单位索敌组件：`UnitTargetingModule`
@@ -96,25 +95,8 @@
 
 由项目侧负责接入单位配置、项目数值表、VFX、音频、相机和具体状态机规则。
 
-## 行为系统接入基线
+## 行为系统接入边界
 
-如果新项目要把行为编辑器和行为解释器接到自己的单位配置资产上，框架当前推荐的最小实现口是：
+`BehaviorEditor` 不依赖任何单位静态资产、角色配置表或项目侧资产信息接口。调用方直接向 `BehaviorExecutor` 提供行为宿主的 `Animator`、动画播放适配器和 Hitbox 层过滤，再调用 `Play(BehaviorClip)` 即可。
 
-- `IUnitBehaviorDefinition`
-
-它聚合了两类最基本能力：
-- `IUnitDefinition`
-- `ICharacterBehaviorCatalog`
-
-这意味着：
-- 框架并不要求新项目继续使用 `UnitAssetInformation`
-- 也不要求新项目继续使用 `IUnitRuntimeDefinition` 这个项目命名接口
-- 新项目只要自己的配置资产实现 `IUnitBehaviorDefinition`，就已经满足行为系统最小接入前提
-
-当前 `MiniatureGarden` 项目里的：
-- `IUnitRuntimeDefinition`
-
-只是项目扩展接口，它在框架通用定义之外，又额外挂了：
-- `IUnitStrategyDefinition`
-
-用于引用当前项目的条件源、切换策略、攻击解析器等策略资产。
+单位配置、数值、策略、状态机、VFX、音频和相机均由项目业务层自行组织；它们可以决定何时、以何种规则选择 `BehaviorClip`，但不进入 BehaviorEditor 的核心运行时依赖。

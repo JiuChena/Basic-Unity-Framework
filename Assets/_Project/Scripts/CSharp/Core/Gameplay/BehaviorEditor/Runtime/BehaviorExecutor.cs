@@ -7,115 +7,86 @@ using UnityEngine.Scripting.APIUpdating;
 namespace BehaviorEditor
 {
     /// <summary>
-    /// 行为运行时执行入口，负责组装并驱动行为轨道执行器。
+    /// 行为播放总调度器，负责推进全局时间轴并驱动轨道执行器。
     /// </summary>
     [MovedFrom(true, "BehaviorCore", null, "BehaviorInterpreter")]
     public class BehaviorExecutor : MonoBehaviour
     {
+        // Hitbox 物理查询的目标层过滤。
         [Header("Hitbox")]
         [SerializeField, Tooltip("行为命中检测使用的目标层过滤")]
         private LayerMask targetLayerMask = ~0;
 
+        // 单次 Hitbox 查询允许写入的最大碰撞体数量。
         [SerializeField, Tooltip("单次物理查询最多写入多少个碰撞体结果")]
         [Min(1)]
         private int maxOverlapResults = 16;
 
+        // 是否绘制 Hitbox 轨道提供的 Scene Gizmo。
         [SerializeField, Tooltip("开启后会在 Scene 视图中绘制当前行为的 Hitbox")]
         private bool drawDebugGizmos = true;
 
+        // 是否输出总播放流程与动画切段日志。
         [Space(8)]
         [Header("Debug")]
-        [SerializeField, Tooltip("开启后输出行为开始、切段、完成等流程日志")]
+        [SerializeField, Tooltip("开启后输出行为开始、动画切段、完成等流程日志")]
         private bool logBehaviorFlow;
 
-        [SerializeField, Tooltip("开启后输出行为事件触发日志，如特效、音频、投射物等")]
+        // 是否输出 EventTrack 事件触发日志。
+        [SerializeField, Tooltip("开启后输出行为事件触发日志")]
         private bool logBehaviorEvents;
 
+        // 是否输出 HitboxTrack 命中执行日志。
         [SerializeField, Tooltip("开启后输出 HitExecute 调用日志，包括 Hitbox 名称与检测对象数量")]
         private bool logHitResults;
 
-        /// <summary>绑定的 Animator 组件</summary>
-        public Animator Animator { get; private set; }
-        /// <summary>动画片段播放策略接口</summary>
-        public IBehaviorAnimationPlayer AnimationPlayer { get; private set; }
-        /// <summary>AnimationPlayer 在 AnimatorSegmentPlayer 时的强类型转换</summary>
-        public AnimatorSegmentPlayer AnimatorSegmentPlayer => AnimationPlayer as AnimatorSegmentPlayer;
-        /// <summary>绑定的 CharacterController 组件</summary>
-        public CharacterController Controller { get; private set; }
-        /// <summary>行为宿主自身的单位数据（攻击方）</summary>
-        public IBehaviorUnit OwnerData { get; private set; }
-        /// <summary>行为事件接收器，负责 VFX/音频/投射物/伤害计算的具体实现</summary>
-        public IBehaviorEventReceiver Receiver { get; private set; }
+        // 当前行为按执行顺序排列的轨道执行器。
+        private readonly List<IBehaviorTrackExecutor> trackExecutors = new List<IBehaviorTrackExecutor>();
 
-        /// <summary>当前正在播放的行为数据</summary>
+        /// <summary>绑定的 Animator 组件。</summary>
+        public Animator Animator { get; private set; }
+
+        /// <summary>动画轨道使用的片段播放适配器。</summary>
+        public IBehaviorAnimationPlayer AnimationPlayer { get; private set; }
+
+        /// <summary>当前正在播放的行为数据。</summary>
         public BehaviorClip CurrentClip { get; private set; }
-        /// <summary>当前行为的播放头数据</summary>
+
+        /// <summary>当前行为的全局播放配置。</summary>
         public BehaviorMetaData CurrentMeta { get; private set; }
-        /// <summary>当前行为已播放的经过时间（秒，含 speedMultiplier 缩放）</summary>
+
+        /// <summary>当前行为已播放的经过时间，单位为秒。</summary>
         public float ElapsedTime { get; private set; }
-        /// <summary>当前行为的归一化时间（0~1）</summary>
+
+        /// <summary>当前行为的归一化时间，范围为 0 到 1。</summary>
         public float NormalizedTime { get; private set; }
-        /// <summary>是否正在播放行为</summary>
+
+        /// <summary>当前是否正在播放行为。</summary>
         public bool IsPlaying { get; private set; }
 
-        /// <summary>行为播放完毕时触发（仅 WrapMode.Once 的 Clip）</summary>
+        /// <summary>行为以 <see cref="WrapMode.Once"/> 完成播放时触发。</summary>
         public event Action<BehaviorClip> OnCompleted;
 
-        /// <summary>当前行为的所有活跃 Hitbox（已解析骨骼引用）</summary>
-        private readonly List<ActiveHitbox> _activeHitboxes = new List<ActiveHitbox>();
-        /// <summary>骨骼路径 → Transform 缓存，避免重复 FindChildByPath</summary>
-        private readonly Dictionary<string, Transform> _boneCache = new Dictionary<string, Transform>(StringComparer.Ordinal);
-        /// <summary>SetObjectActive 目标物体路径 → Transform 缓存</summary>
-        private readonly Dictionary<string, Transform> _targetObjectCache = new Dictionary<string, Transform>(StringComparer.Ordinal);
-        /// <summary>已确认为无效的骨骼路径集合，避免重复 Find + 重复 Warning</summary>
-        private readonly HashSet<string> _missingBonePaths = new HashSet<string>(StringComparer.Ordinal);
-
-        /// <summary>当前行为通过 PlayAudio(loop=true) 启动的音频句柄列表，Stop 时统一回收</summary>
-        private readonly List<int> _loopingAudioHandles = new List<int>();
-        /// <summary>当前 HitBox 执行期间复用的可写上下文，避免每帧分配。</summary>
-        private readonly HitContext _hitContext = new HitContext();
-
-        /// <summary>当前行为按时间升序排列的事件数组，Tick 时只读遍历</summary>
-        private BehaviorEvent[] _sortedEvents = Array.Empty<BehaviorEvent>();
-        /// <summary>当前动画轨道导出的片段，用于按索引切换段。</summary>
-        private AnimationSegment[] _activeAnimationSegments = Array.Empty<AnimationSegment>();
-        /// <summary>当前行为各动画段的起始时间数组</summary>
-        private float[] _segmentStartTimes = Array.Empty<float>();
-        /// <summary>预分配的 PhysX Overlap 结果缓冲区，避免每帧分配</summary>
-        private Collider[] _overlapResults = Array.Empty<Collider>();
-        /// <summary>已执行事件在 _sortedEvents 中的索引，保证每个事件只执行一次</summary>
-        private int _nextEventIndex;
-        /// <summary>当前播放到的动画段索引</summary>
-        private int _currentSegmentIndex;
-        /// <summary>当前行为的索敌范围 ID，用于投射物区分不同次行为释放</summary>
-        private int _targetingScopeId;
-        // 当前行为按执行顺序排列的轨道执行器。
-        private readonly List<IBehaviorTrackExecutor> _trackExecutors = new List<IBehaviorTrackExecutor>();
+        #region Public
 
         /// <summary>
-        /// 注入运行时依赖。由项目侧运行时中控在初始化时调用，将 Animator、动画播放器、CharacterController、
-        /// 单位数据、事件接收器与命中层绑定到解释器。
+        /// 注入行为播放需要的场景依赖。
         /// </summary>
-        public void Configure(Animator animator, IBehaviorAnimationPlayer animationPlayer, CharacterController controller,
-            IBehaviorUnit ownerData, IBehaviorEventReceiver receiver, LayerMask hitboxLayerMask)
+        /// <param name="animator">行为宿主的 Animator；允许为 null。</param>
+        /// <param name="animationPlayer">动画片段播放适配器；允许为 null。</param>
+        /// <param name="hitboxLayerMask">Hitbox 物理查询的目标层。</param>
+        public void Configure(Animator animator, IBehaviorAnimationPlayer animationPlayer, LayerMask hitboxLayerMask)
         {
             Animator = animator;
             AnimationPlayer = animationPlayer;
-            Controller = controller;
-            OwnerData = ownerData;
-            Receiver = receiver;
             targetLayerMask = hitboxLayerMask;
-
-            if (_overlapResults.Length != maxOverlapResults)
-                _overlapResults = new Collider[maxOverlapResults];
         }
 
         /// <summary>
-        /// 播放指定的 BehaviorClip。若当前正在播放同一 Loop 行为则忽略重复请求；
-        /// 否则先停止当前行为，构建排序事件表、动画段表和 Hitbox 列表，然后播放第一段动画。
+        /// 播放指定行为；会先停止旧行为并创建本次播放专用的轨道执行器。
         /// </summary>
-        /// <param name="clip">待播放的行为数据</param>
-        /// <param name="firstSegmentCrossFadeOverride">首段动画的过渡时间覆盖值，-1 表示使用片段自身配置</param>
+        /// <param name="clip">待播放行为；为 null 时停止当前行为。</param>
+        /// <param name="firstSegmentCrossFadeOverride">首段动画过渡覆盖值；小于零时使用片段配置。</param>
         public void Play(BehaviorClip clip, float firstSegmentCrossFadeOverride = -1f)
         {
             if (clip == null)
@@ -127,6 +98,7 @@ namespace BehaviorEditor
             Profiler.BeginSample("BehaviorExecutor.Play");
             try
             {
+                // 验证全局播放配置，并跳过同一循环行为的重复请求。
                 BehaviorMetaData meta = clip.GetTrackData<BehaviorMetaData>();
                 if (meta == null)
                 {
@@ -134,34 +106,24 @@ namespace BehaviorEditor
                     return;
                 }
 
-                if (CurrentClip == clip && IsPlaying && meta.wrapMode == WrapMode.Loop)
-                    return;
+                if (CurrentClip == clip && IsPlaying && meta.wrapMode == WrapMode.Loop) return;
 
+                // 建立新的播放头、轨道执行器与动画速度。
                 Stop();
-
                 CurrentClip = clip;
                 CurrentMeta = meta;
                 ElapsedTime = 0f;
                 NormalizedTime = 0f;
                 IsPlaying = true;
-                _nextEventIndex = 0;
-                _currentSegmentIndex = 0;
-                _targetingScopeId = GetNextTargetingScopeId(_targetingScopeId);
-
                 BuildTrackExecutors(clip);
+                if (Animator != null) Animator.speed = CurrentMeta.speedMultiplier;
 
-                if (Animator != null)
-                    Animator.speed = CurrentMeta.speedMultiplier;
-
-                // 由各轨道执行器自行初始化其播放状态。
-                BeginTrackExecutors(firstSegmentCrossFadeOverride);
+                // 每条轨道自行初始化自己的缓存、索引与执行状态。
+                for (int index = 0; index < trackExecutors.Count; index++)
+                    trackExecutors[index].Begin(firstSegmentCrossFadeOverride);
 
                 if (logBehaviorFlow)
-                {
-                    Debug.Log(
-                        $"[{name}] 开始行为：{clip.name} | Duration={CurrentMeta.duration:F2}s | Wrap={CurrentMeta.wrapMode} | Segments={clip.GetTrackData<AnimationTrackData>()?.segments?.Length ?? 0}",
-                        this);
-                }
+                    Debug.Log($"[{name}] 开始行为：{clip.name} | Duration={meta.duration:F2}s | Wrap={meta.wrapMode}", this);
             }
             finally
             {
@@ -170,25 +132,24 @@ namespace BehaviorEditor
         }
 
         /// <summary>
-        /// 每帧驱动行为时间轴推进。按顺序执行：动画段切换 → 归一化时间更新 → 到期事件触发 → Hitbox 命中检测。
-        /// 根据 WrapMode 处理 Loop（循环重置）、ClampForever（停在末尾）和 Once（播放完毕后自动 Stop）。
+        /// 推进全局时间轴并按顺序驱动本次播放的全部轨道。
         /// </summary>
-        /// <param name="deltaTime">本帧时间增量（未经 speedMultiplier 缩放）</param>
+        /// <param name="deltaTime">本帧未缩放时间增量，单位为秒。</param>
         public void Tick(float deltaTime)
         {
-            if (!IsPlaying || CurrentClip == null) return;
+            if (!IsPlaying || CurrentClip == null || CurrentMeta == null) return;
 
-            float scaledDeltaTime = deltaTime * Mathf.Max(0.01f, CurrentMeta.speedMultiplier);
-            ElapsedTime += scaledDeltaTime;
+            // 更新全局播放头并将经过时间交给各轨道。
+            ElapsedTime += deltaTime * Mathf.Max(0.01f, CurrentMeta.speedMultiplier);
+            float totalDuration = Mathf.Max(0.01f, CurrentMeta.duration);
+            NormalizedTime = Mathf.Clamp01(ElapsedTime / totalDuration);
+            for (int index = 0; index < trackExecutors.Count; index++)
+                trackExecutors[index].Tick(ElapsedTime);
 
-            UpdateNormalizedTime();
-            TickTrackExecutors();
-
+            // 仅由总调度器处理 Meta 定义的全局播放生命周期。
             if (CurrentMeta.wrapMode == WrapMode.Loop)
             {
-                float totalDuration = GetClipDuration(CurrentClip);
-                if (totalDuration > 0f && ElapsedTime >= totalDuration)
-                    RestartLoopingClip(totalDuration);
+                if (ElapsedTime >= totalDuration) RestartLoopingClip(totalDuration);
                 return;
             }
 
@@ -196,728 +157,113 @@ namespace BehaviorEditor
             {
                 if (NormalizedTime >= 1f)
                 {
-                    ElapsedTime = GetClipDuration(CurrentClip);
+                    ElapsedTime = totalDuration;
                     NormalizedTime = 1f;
                 }
 
                 return;
             }
 
-            if (NormalizedTime >= 1f)
-            {
-                BehaviorClip completed = CurrentClip;
-                if (logBehaviorFlow)
-                    Debug.Log($"[{name}] 行为完成：{completed.name}", this);
-                Stop();
-                OnCompleted?.Invoke(completed);
-            }
+            if (NormalizedTime < 1f) return;
+
+            // 保存完成对象后停止，再通知外部监听者。
+            BehaviorClip completed = CurrentClip;
+            if (logBehaviorFlow) Debug.Log($"[{name}] 行为完成：{completed.name}", this);
+            Stop();
+            OnCompleted?.Invoke(completed);
         }
 
         /// <summary>
-        /// 停止当前行为的播放。清理所有循环音频、Hitbox 命中记录、事件表和动画段表，
-        /// 将 Animator.speed 恢复为 1，状态重置为空闲。
+        /// 停止当前行为并要求所有轨道清理本次播放的临时状态。
         /// </summary>
         public void Stop()
         {
             Profiler.BeginSample("BehaviorExecutor.Stop");
-            if (logBehaviorFlow && IsPlaying && CurrentClip != null)
-                Debug.Log($"[{name}] 停止行为：{CurrentClip.name}", this);
+            try
+            {
+                if (logBehaviorFlow && IsPlaying && CurrentClip != null)
+                    Debug.Log($"[{name}] 停止行为：{CurrentClip.name}", this);
 
-            StopTrackExecutors();
-            CurrentClip = null;
-            CurrentMeta = null;
-            ElapsedTime = 0f;
-            NormalizedTime = 0f;
-            IsPlaying = false;
-            _nextEventIndex = 0;
-            _currentSegmentIndex = 0;
-            _activeHitboxes.Clear();
-            _activeAnimationSegments = Array.Empty<AnimationSegment>();
-            _segmentStartTimes = Array.Empty<float>();
-            _sortedEvents = Array.Empty<BehaviorEvent>();
+                // 轨道负责清理自身的列表、数组与索引。
+                for (int index = 0; index < trackExecutors.Count; index++)
+                    trackExecutors[index].Stop();
+                trackExecutors.Clear();
 
-            if (Animator != null)
-                Animator.speed = 1f;
-
-            Profiler.EndSample();
+                CurrentClip = null;
+                CurrentMeta = null;
+                ElapsedTime = 0f;
+                NormalizedTime = 0f;
+                IsPlaying = false;
+                if (Animator != null) Animator.speed = 1f;
+            }
+            finally
+            {
+                Profiler.EndSample();
+            }
         }
+
+        #endregion
+
+        #region Unity Messages
 
         /// <summary>
-        /// 根据多态轨道数据创建当前行为的全部执行器。
-        /// </summary>
-        /// <param name="clip">正在开始播放的行为数据。</param>
-        private void BuildTrackExecutors(BehaviorClip clip)
-        {
-            _trackExecutors.Clear();
-            if (clip == null)
-                return;
-
-            List<BehaviorTrackData> dataList = clip.trackData;
-            if (dataList == null)
-                return;
-
-            // 让每个数据类型自行创建执行器，外层不维护轨道类型分支。
-            BehaviorExecutionContext context = new BehaviorExecutionContext(this);
-            for (int i = 0; i < dataList.Count; i++)
-            {
-                BehaviorTrackData data = dataList[i];
-                IBehaviorTrackExecutor executor = data?.CreateExecutor(context);
-                if (executor != null)
-                    _trackExecutors.Add(executor);
-            }
-
-            _trackExecutors.Sort((left, right) => left.ExecutionOrder.CompareTo(right.ExecutionOrder));
-        }
-
-        /// <summary>
-        /// 依次开始当前行为的全部轨道执行器。
-        /// </summary>
-        /// <param name="firstSegmentCrossFadeOverride">首段动画过渡覆盖值。</param>
-        private void BeginTrackExecutors(float firstSegmentCrossFadeOverride)
-        {
-            for (int i = 0; i < _trackExecutors.Count; i++)
-                _trackExecutors[i].Begin(firstSegmentCrossFadeOverride);
-        }
-
-        /// <summary>
-        /// 按已排序顺序推进当前行为的全部轨道执行器。
-        /// </summary>
-        private void TickTrackExecutors()
-        {
-            for (int i = 0; i < _trackExecutors.Count; i++)
-                _trackExecutors[i].Tick(ElapsedTime);
-        }
-
-        /// <summary>
-        /// 停止并清空当前行为的全部轨道执行器。
-        /// </summary>
-        private void StopTrackExecutors()
-        {
-            for (int i = 0; i < _trackExecutors.Count; i++)
-                _trackExecutors[i].Stop();
-
-            _trackExecutors.Clear();
-        }
-
-        /// <summary>
-        /// 强制切换到指定 BehaviorClip，等价于直接调用 <see cref="Play"/>。
-        /// </summary>
-        public int PeekNextTargetingScopeId()
-        {
-            return GetNextTargetingScopeId(_targetingScopeId);
-        }
-
-        /// <summary>
-        /// 从 BehaviorClip 提取编译后的事件列表，按时间升序排列，存入 <see cref="_sortedEvents"/>。
-        /// Play 时调用一次，Tick 期间只读遍历。
-        /// </summary>
-        internal void BuildSortedEvents(BehaviorEvent[] sourceEvents)
-        {
-            if (sourceEvents == null || sourceEvents.Length == 0)
-            {
-                _sortedEvents = Array.Empty<BehaviorEvent>();
-                return;
-            }
-
-            // 克隆并规范化有效事件，避免运行时修改导出资产的共享数据。
-            List<BehaviorEvent> normalizedEvents = new List<BehaviorEvent>(sourceEvents.Length);
-            for (int i = 0; i < sourceEvents.Length; i++)
-            {
-                BehaviorEvent sourceEvent = sourceEvents[i];
-                if (sourceEvent == null)
-                    continue;
-
-                BehaviorEvent normalizedEvent = BehaviorEventResolver.CreateNormalizedClone(sourceEvent,
-                    sourceEvent.time, sourceEvent.authoringTrackName);
-                if (normalizedEvent != null)
-                    normalizedEvents.Add(normalizedEvent);
-            }
-
-            _sortedEvents = normalizedEvents.ToArray();
-            Array.Sort(_sortedEvents, (left, right) =>
-            {
-                if (ReferenceEquals(left, right)) return 0;
-                if (left == null) return 1;
-                if (right == null) return -1;
-                return left.time.CompareTo(right.time);
-            });
-        }
-
-        /// <summary>
-        /// 从 BehaviorClip 提取各动画段的起始时间数组，存入 <see cref="_segmentStartTimes"/>。
-        /// 用于 Tick 期间判断当前时间是否跨入下一段。
-        /// </summary>
-        internal void BuildSegments(AnimationSegment[] segments)
-        {
-            if (segments == null || segments.Length == 0)
-            {
-                _activeAnimationSegments = Array.Empty<AnimationSegment>();
-                _segmentStartTimes = Array.Empty<float>();
-                return;
-            }
-
-            // 预计算每段显式或自动衔接后的起始时间。
-            _activeAnimationSegments = segments;
-            _segmentStartTimes = new float[segments.Length];
-            float cursor = 0f;
-            for (int i = 0; i < segments.Length; i++)
-            {
-                AnimationSegment segment = segments[i];
-                float explicitStartTime = segment != null ? segment.startTime : -1f;
-                float startTime = explicitStartTime >= 0f ? explicitStartTime : cursor;
-                _segmentStartTimes[i] = Mathf.Max(0f, startTime);
-                if (segment?.clip != null)
-                    cursor = Mathf.Max(cursor, _segmentStartTimes[i] + segment.clip.length);
-            }
-        }
-
-        /// <summary>
-        /// 从 BehaviorClip 构建活跃 Hitbox 列表。清空上一行为的骨骼缓存与缺失路径记录，
-        /// 每个 HitboxDef 预先解析其参考骨骼 Transform 并缓存为 <see cref="ActiveHitbox"/>。
-        /// </summary>
-        internal void BuildHitboxes(HitboxDef[] hitboxes)
-        {
-            _activeHitboxes.Clear();
-            _boneCache.Clear();
-            _missingBonePaths.Clear();
-
-            hitboxes ??= Array.Empty<HitboxDef>();
-            for (int i = 0; i < hitboxes.Length; i++)
-            {
-                HitboxDef definition = hitboxes[i];
-                if (definition == null)
-                    continue;
-                Transform reference = ResolveReferenceTransform(definition.referenceBone);
-                _activeHitboxes.Add(new ActiveHitbox(definition, reference));
-            }
-        }
-
-        /// <summary>
-        /// 每帧检查当前时间是否越过了下一个动画段的起始时间，若越过则切到对应段。
-        /// </summary>
-        internal void UpdateAnimationSegments()
-        {
-            if (Animator == null || CurrentClip == null || _segmentStartTimes.Length == 0) return;
-
-            while (_currentSegmentIndex + 1 < _segmentStartTimes.Length && ElapsedTime >= _segmentStartTimes[_currentSegmentIndex + 1])
-            {
-                _currentSegmentIndex++;
-                PlaySegment(_activeAnimationSegments, _currentSegmentIndex);
-            }
-        }
-
-        /// <summary>
-        /// 根据当前经过时间和行为总时长，更新归一化时间（0~1）。
-        /// </summary>
-        private void UpdateNormalizedTime()
-        {
-            float totalDuration = GetClipDuration(CurrentClip);
-            if (totalDuration <= 0f)
-            {
-                NormalizedTime = 1f;
-                return;
-            }
-
-            NormalizedTime = Mathf.Clamp01(ElapsedTime / totalDuration);
-        }
-
-        /// <summary>
-        /// 遍历排序事件表，触发所有时间 ≤ 当前经过时间但尚未执行的事件。
-        /// 采用递增索引 <see cref="_nextEventIndex"/> 保证每个事件只执行一次。
-        /// </summary>
-        internal void ExecuteDueEvents()
-        {
-            while (_nextEventIndex < _sortedEvents.Length && _sortedEvents[_nextEventIndex].time <= ElapsedTime)
-            {
-                ExecuteEvent(_sortedEvents[_nextEventIndex]);
-                _nextEventIndex++;
-            }
-        }
-
-        /// <summary>
-        /// 执行单个行为事件。根据事件类型分发到 Receiver 的对应方法：
-        /// VFX 生成、物体激活、音频播放、投射物生成、Buff 施加、GameplayEffect 执行、镜头震动。
-        /// 事件位置和旋转以 referenceBone 为锚点计算；留空时使用世界空间。
-        /// </summary>
-        private void ExecuteEvent(BehaviorEvent behaviorEvent)
-        {
-            if (Receiver == null)
-                return;
-
-            bool useWorldSpace = string.IsNullOrWhiteSpace(behaviorEvent.referenceBone);
-            Transform reference = useWorldSpace ? null : ResolveReferenceTransform(behaviorEvent.referenceBone);
-            Transform anchor = reference != null ? reference : transform;
-
-            Vector3 position = useWorldSpace
-                ? behaviorEvent.positionOffset
-                : anchor.TransformPoint(behaviorEvent.positionOffset);
-            Quaternion rotation = useWorldSpace
-                ? Quaternion.Euler(behaviorEvent.rotationOffset)
-                : anchor.rotation * Quaternion.Euler(behaviorEvent.rotationOffset);
-
-            BehaviorEventType effectiveType = BehaviorEventResolver.ResolveEffectiveType(behaviorEvent);
-            switch (effectiveType)
-            {
-                case BehaviorEventType.SpawnVFX:
-                    if (behaviorEvent.prefabRef != null && OwnerData != null)
-                    {
-                        float recycleTime = behaviorEvent.autoRecycleTime > 0f ? behaviorEvent.autoRecycleTime : 1f;
-                        Vector3 resolvedScaleOffset = ResolveSpawnVfxScaleOffset(behaviorEvent);
-                        Receiver.SpawnVFX(OwnerData.UnitId, behaviorEvent.prefabRef, position, rotation,
-                            resolvedScaleOffset, recycleTime);
-                    }
-                    break;
-
-                case BehaviorEventType.SetObjectActive:
-                    if (!string.IsNullOrWhiteSpace(behaviorEvent.targetObjectPath))
-                    {
-                        Transform targetTransform = ResolveTargetObjectTransformStrict(behaviorEvent.targetObjectPath);
-                        if (targetTransform != null)
-                            targetTransform.gameObject.SetActive(behaviorEvent.activeState);
-                    }
-                    break;
-
-                case BehaviorEventType.PlayAudio:
-                    if (behaviorEvent.audioRef != null)
-                    {
-                        int handle = Receiver.PlayAudio(behaviorEvent.audioRef, position,
-                            behaviorEvent.audioLoop, behaviorEvent.audioVolume);
-                        if (behaviorEvent.audioLoop && handle > 0)
-                            _loopingAudioHandles.Add(handle);
-                    }
-                    break;
-
-                case BehaviorEventType.SpawnProjectile:
-                    if (behaviorEvent.prefabRef != null && OwnerData != null)
-                        Receiver.SpawnProjectile(behaviorEvent.prefabRef, position, rotation, OwnerData,
-                            behaviorEvent.damageMultiplier, behaviorEvent.numericKey, _targetingScopeId);
-                    break;
-
-                case BehaviorEventType.ApplyBuff:
-                case BehaviorEventType.ApplySelfBuff:
-                    if (behaviorEvent.buffRef != null)
-                        Receiver.ApplyEffect(gameObject, behaviorEvent.buffRef, gameObject);
-                    break;
-
-                case BehaviorEventType.ExecuteGameplayEffect:
-                    if (behaviorEvent.gameplayEffectRef != null && OwnerData != null)
-                        Receiver.ExecuteEffect(behaviorEvent.gameplayEffectRef, OwnerData, position, gameObject);
-                    break;
-
-                case BehaviorEventType.CameraShake:
-                    Receiver.ShakeCamera(behaviorEvent.cameraShakeAmplitude,
-                        behaviorEvent.cameraShakeFrequency, behaviorEvent.cameraShakeDuration);
-                    break;
-            }
-
-            if (logBehaviorEvents)
-            {
-                Debug.Log(
-                    $"[{name}] 触发事件：{effectiveType} | Time={behaviorEvent.time:F2}s | Bone={(string.IsNullOrWhiteSpace(behaviorEvent.referenceBone) ? "<World>" : behaviorEvent.referenceBone)}",
-                    this);
-            }
-        }
-
-        /// <summary>
-        /// 每帧遍历所有活跃 Hitbox，对每个处于激活时间窗的 Hitbox 进行物理查询（NonAlloc），
-        /// 将调用者和全部命中对象交给 HitExecuteSO 自行处理，不在解释器内施加玩法约束。
-        /// </summary>
-        internal void UpdateHitboxes()
-        {
-            if (_overlapResults.Length == 0)
-                return;
-
-            for (int index = 0; index < _activeHitboxes.Count; index++)
-            {
-                ActiveHitbox activeHitbox = _activeHitboxes[index];
-                HitExecuteSO execute = activeHitbox.Definition.execute;
-                if (!activeHitbox.IsActive(ElapsedTime) || execute == null)
-                    continue;
-
-                // 查询当前 Hitbox 覆盖到的全部碰撞体。
-                activeHitbox.GetWorldPose(transform, out Vector3 center, out Quaternion rotation, out Vector3 size);
-                int hitCount = QueryOverlap(activeHitbox.Definition, center, rotation, size);
-                if (hitCount <= 0)
-                    continue;
-
-                // 构建调用者在首位的普通可写列表，不筛选、去重或判定目标状态。
-                HitContext context = _hitContext;
-                context.GameObjects.Clear();
-                context.GameObjects.Add(gameObject);
-                for (int resultIndex = 0; resultIndex < hitCount; resultIndex++)
-                {
-                    Collider collider = _overlapResults[resultIndex];
-                    if (collider != null)
-                        context.GameObjects.Add(collider.gameObject);
-                }
-
-                // 集中提取上下文后，完全交由配置资产决定具体玩法结果。
-                context.Extract();
-                execute.Execute(context);
-
-                if (logHitResults)
-                {
-                    Debug.Log(
-                        $"[{name}] 执行 HitExecute：Hitbox={GetHitboxDisplayName(activeHitbox.Definition)} | Objects={context.GameObjects.Count - 1}",
-                        this);
-                }
-            }
-        }
-
-        /// <summary>
-        /// 根据 Hitbox 形状（球/胶囊/盒）执行对应的 PhysX NonAlloc 查询，结果写入预分配的 <see cref="_overlapResults"/> 数组。
-        /// </summary>
-        /// <returns>命中的碰撞体数量</returns>
-        private int QueryOverlap(HitboxDef definition, Vector3 center, Quaternion rotation, Vector3 size)
-        {
-            switch (definition.shape)
-            {
-                case HitboxShape.Sphere:
-                    return Physics.OverlapSphereNonAlloc(center, Mathf.Abs(size.x), _overlapResults, targetLayerMask);
-
-                case HitboxShape.Capsule:
-                    float radius = Mathf.Abs(size.x);
-                    float cylinderHeight = Mathf.Max(0f, Mathf.Abs(size.y) - radius * 2f);
-                    Vector3 halfOffset = rotation * Vector3.up * (cylinderHeight * 0.5f);
-                    return Physics.OverlapCapsuleNonAlloc(center + halfOffset, center - halfOffset,
-                        radius, _overlapResults, targetLayerMask);
-
-                case HitboxShape.Box:
-                default:
-                    return Physics.OverlapBoxNonAlloc(center, size * 0.5f, _overlapResults, rotation, targetLayerMask);
-            }
-        }
-
-        /// <summary>
-        /// 按层级路径解析宿主根节点下的参考 Transform。命中时写入 <see cref="_boneCache"/> 缓存；
-        /// 未命中时记录到 <see cref="_missingBonePaths"/>（同路径只警告一次），并退回宿主根节点。
-        /// </summary>
-        /// <param name="path">以宿主根节点为起点的层级路径，如 "Root/Hips/Spine"</param>
-        private Transform ResolveReferenceTransform(string path)
-        {
-            if (string.IsNullOrWhiteSpace(path))
-                return null;
-
-            if (_boneCache.TryGetValue(path, out Transform cachedTransform))
-                return cachedTransform;
-
-            Transform found = FindChildByPath(transform, path);
-            if (found == null && TryNormalizeHostRelativePath(path, out string normalizedPath))
-            {
-                found = string.IsNullOrWhiteSpace(normalizedPath)
-                    ? transform
-                    : FindChildByPath(transform, normalizedPath);
-
-                if (found != null) _boneCache[normalizedPath] = found;
-            }
-
-            if (found == null)
-            {
-                if (_missingBonePaths.Add(path))
-                {
-                    string clipName = CurrentClip != null ? CurrentClip.name : "<无行为>";
-                    Debug.LogWarning(
-                        $"未找到骨骼路径：{path}，行为解释器将退回宿主根节点。\n" +
-                        $"  当前行为：{clipName}",
-                        this);
-                }
-
-                _boneCache[path] = transform;
-                return transform;
-            }
-
-            _boneCache[path] = found;
-            return found;
-        }
-
-        private static Vector3 ResolveSpawnVfxScaleOffset(BehaviorEvent behaviorEvent)
-        {
-            if (behaviorEvent == null)
-                return Vector3.one;
-
-            if (!IsLegacyControlTrackScaleSerializedAsAbsolute(behaviorEvent))
-                return behaviorEvent.scaleOffset;
-
-            return Vector3.one;
-        }
-
-        private static bool IsLegacyControlTrackScaleSerializedAsAbsolute(BehaviorEvent behaviorEvent)
-        {
-            if (behaviorEvent == null || behaviorEvent.prefabRef == null)
-                return false;
-
-            if (string.IsNullOrWhiteSpace(behaviorEvent.authoringTrackName) ||
-                behaviorEvent.authoringTrackName.IndexOf("Control Track", StringComparison.OrdinalIgnoreCase) < 0)
-            {
-                return false;
-            }
-
-            return ApproximatelyEqualVector3(behaviorEvent.scaleOffset, behaviorEvent.prefabRef.transform.localScale);
-        }
-
-        private static bool ApproximatelyEqualVector3(Vector3 a, Vector3 b, float epsilon = 0.0001f)
-        {
-            return Mathf.Abs(a.x - b.x) <= epsilon &&
-                   Mathf.Abs(a.y - b.y) <= epsilon &&
-                   Mathf.Abs(a.z - b.z) <= epsilon;
-        }
-
-        /// <summary>
-        /// 按层级路径解析 SetObjectActive 事件的目标物体 Transform。与 <see cref="ResolveReferenceTransform"/>
-        /// 不同的是未命中时返回 null 而非退回根节点，确保激活控制只作用于明确存在的物体。
-        /// </summary>
-        private Transform ResolveTargetObjectTransformStrict(string path)
-        {
-            if (string.IsNullOrWhiteSpace(path))
-                return null;
-
-            if (_targetObjectCache.TryGetValue(path, out Transform cachedTransform))
-                return cachedTransform;
-
-            Transform found = FindChildByPath(transform, path);
-            if (found == null && TryNormalizeHostRelativePath(path, out string normalizedPath))
-            {
-                found = string.IsNullOrWhiteSpace(normalizedPath)
-                    ? transform
-                    : FindChildByPath(transform, normalizedPath);
-
-                if (found != null)
-                    _targetObjectCache[normalizedPath] = found;
-            }
-
-            _targetObjectCache[path] = found;
-            if (found == null && _missingBonePaths.Add($"[Target]{path}"))
-            {
-                Debug.LogWarning($"未找到目标物体路径：{path}，SetObjectActive 事件已跳过。", this);
-            }
-
-            return found;
-        }
-
-        private bool TryNormalizeHostRelativePath(string path, out string normalizedPath)
-        {
-            normalizedPath = null;
-            if (string.IsNullOrWhiteSpace(path))
-                return false;
-
-            string trimmedPath = path.Trim();
-            int slashIndex = trimmedPath.IndexOf('/');
-            if (slashIndex < 0)
-            {
-                if (LooksLikeLegacyRootMarker(trimmedPath))
-                {
-                    normalizedPath = string.Empty;
-                    return true;
-                }
-
-                return false;
-            }
-
-            string firstSegment = trimmedPath.Substring(0, slashIndex);
-            if (HasDirectChildNamed(firstSegment))
-                return false;
-
-            normalizedPath = trimmedPath.Substring(slashIndex + 1).TrimStart('/');
-            return !string.IsNullOrWhiteSpace(normalizedPath) || LooksLikeLegacyRootMarker(firstSegment);
-        }
-
-        private bool HasDirectChildNamed(string childName)
-        {
-            if (string.IsNullOrWhiteSpace(childName))
-                return false;
-
-            for (int i = 0; i < transform.childCount; i++)
-            {
-                Transform child = transform.GetChild(i);
-                if (child != null && string.Equals(child.name, childName, StringComparison.Ordinal))
-                    return true;
-            }
-
-            return false;
-        }
-
-        private static bool LooksLikeLegacyRootMarker(string value)
-        {
-            if (string.IsNullOrWhiteSpace(value))
-                return false;
-
-            bool hasLetter = false;
-            bool hasDigit = false;
-            for (int i = 0; i < value.Length; i++)
-            {
-                char c = value[i];
-                if (char.IsLetter(c))
-                    hasLetter = true;
-                else if (char.IsDigit(c))
-                    hasDigit = true;
-                else if (c != '_' && c != '-')
-                    return false;
-            }
-
-            return hasLetter && hasDigit;
-        }
-
-        /// <summary>
-        /// 按 "/" 分隔的层级路径在 root 下查找子 Transform。若路径首段与 root 同名则自动跳过。
-        /// 纯静态工具方法，不产生 GC（注意：Split 仅在缓存 miss 时调用）。
-        /// </summary>
-        private static Transform FindChildByPath(Transform root, string path)
-        {
-            string[] parts = path.Split('/');
-            int startIndex = 0;
-            if (parts.Length > 0 && string.Equals(parts[0], root.name, StringComparison.Ordinal))
-                startIndex = 1;
-
-            Transform current = root;
-            for (int i = startIndex; i < parts.Length; i++)
-            {
-                if (string.IsNullOrWhiteSpace(parts[i]))
-                    continue;
-
-                current = current.Find(parts[i]);
-                if (current == null)
-                    return null;
-            }
-
-            return current;
-        }
-
-        /// <summary>
-        /// Loop 行为播放到末尾时重置所有状态：停止循环音频、将经过时间取模回卷、
-        /// 重置事件索引和动画段索引、清空命中记录，重新播放第一段。
-        /// </summary>
-        private void RestartLoopingClip(float totalDuration)
-        {
-            ElapsedTime = totalDuration > 0f ? ElapsedTime % totalDuration : 0f;
-            NormalizedTime = totalDuration > 0f ? Mathf.Clamp01(ElapsedTime / totalDuration) : 0f;
-            _nextEventIndex = 0;
-            _currentSegmentIndex = 0;
-
-
-            StopTrackExecutors();
-            BuildTrackExecutors(CurrentClip);
-            BeginTrackExecutors(-1f);
-        }
-
-        /// <summary>
-        /// 停止所有正在循环播放的音频。遍历 <see cref="_loopingAudioHandles"/> 逐一通知 Receiver 停止，然后清空列表。
-        /// </summary>
-        internal void StopLoopingAudios()
-        {
-            if (Receiver == null)
-            {
-                _loopingAudioHandles.Clear();
-                return;
-            }
-
-            for (int i = 0; i < _loopingAudioHandles.Count; i++) Receiver.StopAudio(_loopingAudioHandles[i]);
-
-            _loopingAudioHandles.Clear();
-        }
-
-        /// <summary>
-        /// 播放指定索引的动画段。通过 <see cref="IBehaviorAnimationPlayer"/> 尝试播放，
-        /// 成功时输出状态名和过渡时长供日志使用；失败时输出警告。
-        /// </summary>
-        /// <param name="index">动画段在 segments 数组中的索引</param>
-        /// <param name="crossFadeDurationOverride">过渡时长覆盖，-1 使用段自身配置</param>
-        internal void PlaySegment(AnimationSegment[] segments, int index, float crossFadeDurationOverride = -1f)
-        {
-            if (Animator == null || segments == null) return;
-
-            if (index < 0 || index >= segments.Length) return;
-
-            AnimationSegment segment = segments[index];
-            if (segment.clip == null) return;
-
-            if (AnimationPlayer != null && AnimationPlayer.TryPlaySegment(segment, index, crossFadeDurationOverride, out string stateName))
-            {
-                if (logBehaviorFlow)
-                {
-                    Debug.Log(
-                        $"[{name}] 切换动画片段：Clip={segment.clip.name} | Layer={segment.layer} | Slot={index} | State={stateName} | CrossFade={(crossFadeDurationOverride >= 0f ? crossFadeDurationOverride : segment.crossFadeDuration):P0}",
-                        this);
-                }
-
-                return;
-            }
-
-            if (Animator != null)
-            {
-                Debug.LogWarning(
-                    $"BehaviorExecutor 无法播放动画片段 {segment.clip.name}。请确认当前动画播放器已初始化，" +
-                    $"并且存在 Layer {segment.layer} 的可用槽位 {index}。",
-                    this);
-            }
-        }
-
-        /// <summary>
-        /// 计算 BehaviorClip 的时间轴总时长（最低 0.01 秒兜底）。
-        /// </summary>
-        private static float GetClipDuration(BehaviorClip clip)
-        {
-            if (clip == null) return 0f;
-            BehaviorMetaData meta = clip.GetTrackData<BehaviorMetaData>();
-            return meta != null ? Mathf.Max(0.01f, meta.duration) : 0f;
-        }
-
-        /// <summary>
-        /// 生成下一个索敌范围 ID。每次 Play 时递增，用于投射物区分不同次行为释放的索敌上下文。
-        /// 到达 int.MaxValue 时回卷到 1。
-        /// </summary>
-        private static int GetNextTargetingScopeId(int currentScopeId)
-        {
-            if (currentScopeId == int.MaxValue)
-                return 1;
-
-            return currentScopeId + 1;
-        }
-
-        /// <summary>
-        /// 获取 Hitbox 的显示名称，用于日志输出。未命名时返回 "&lt;UnnamedHitbox&gt;"。
-        /// </summary>
-        private static string GetHitboxDisplayName(HitboxDef definition)
-        {
-            if (definition == null)
-                return "<Null>";
-
-            return string.IsNullOrWhiteSpace(definition.name) ? "<UnnamedHitbox>" : definition.name;
-        }
-
-        /// <summary>
-        /// [Editor] 在 Scene 视图中绘制当前行为所有 Hitbox 的线框。红色=已激活，黄色=未激活。
-        /// 仅在选中该对象且 drawDebugGizmos 开启时生效。
+        /// 向声明了 Gizmo 绘制能力的轨道请求当前播放状态的调试图形。
         /// </summary>
         private void OnDrawGizmosSelected()
         {
             if (!drawDebugGizmos || CurrentClip == null) return;
 
-            for (int i = 0; i < _activeHitboxes.Count; i++)
+            // 总调度器不关心具体轨道类型，只调用可选绘制契约。
+            for (int index = 0; index < trackExecutors.Count; index++)
             {
-                ActiveHitbox hitbox = _activeHitboxes[i];
-                hitbox.GetWorldPose(transform, out Vector3 center, out Quaternion rotation, out Vector3 size);
-
-                bool active = hitbox.IsActive(ElapsedTime);
-                Gizmos.color = active ? Color.red : Color.yellow;
-                Matrix4x4 previous = Gizmos.matrix;
-                Gizmos.matrix = Matrix4x4.TRS(center, rotation, Vector3.one);
-
-                switch (hitbox.Definition.shape)
-                {
-                    case HitboxShape.Sphere:
-                        Gizmos.DrawWireSphere(Vector3.zero, size.x);
-                        break;
-                    case HitboxShape.Capsule:
-                        Gizmos.DrawWireCube(Vector3.zero, new Vector3(size.x * 2f, size.y, size.x * 2f));
-                        break;
-                    case HitboxShape.Box:
-                    default:
-                        Gizmos.DrawWireCube(Vector3.zero, size);
-                        break;
-                }
-
-                Gizmos.matrix = previous;
+                if (trackExecutors[index] is IBehaviorTrackGizmoDrawer gizmoDrawer)
+                    gizmoDrawer.DrawGizmos(ElapsedTime);
             }
         }
+
+        #endregion
+
+        #region Private
+
+        /// <summary>
+        /// 根据多态轨道数据创建并按执行顺序排序当前播放的执行器。
+        /// </summary>
+        /// <param name="clip">当前待播放的行为数据；允许为 null。</param>
+        private void BuildTrackExecutors(BehaviorClip clip)
+        {
+            trackExecutors.Clear();
+            if (clip?.trackData == null) return;
+
+            // 上下文只提供宿主依赖与运行环境，不暴露总调度器的轨道内部状态。
+            var context = new BehaviorExecutionContext(this, Animator, AnimationPlayer, targetLayerMask,
+                maxOverlapResults, logBehaviorFlow, logBehaviorEvents, logHitResults);
+            for (int index = 0; index < clip.trackData.Count; index++)
+            {
+                IBehaviorTrackExecutor trackExecutor = clip.trackData[index]?.CreateExecutor(context);
+                if (trackExecutor != null) trackExecutors.Add(trackExecutor);
+            }
+
+            trackExecutors.Sort((left, right) => left.ExecutionOrder.CompareTo(right.ExecutionOrder));
+        }
+
+        /// <summary>
+        /// 回卷全局时间并为下一次循环重建所有轨道的局部状态。
+        /// </summary>
+        /// <param name="totalDuration">当前行为有效总时长，必须大于零。</param>
+        private void RestartLoopingClip(float totalDuration)
+        {
+            // 先停止上一轮轨道，避免事件索引和命中区域进入下一循环。
+            ElapsedTime %= totalDuration;
+            NormalizedTime = Mathf.Clamp01(ElapsedTime / totalDuration);
+            for (int index = 0; index < trackExecutors.Count; index++)
+                trackExecutors[index].Stop();
+
+            // 创建新的轨道实例并在回卷时间点开始本轮播放。
+            BuildTrackExecutors(CurrentClip);
+            for (int index = 0; index < trackExecutors.Count; index++)
+                trackExecutors[index].Begin(-1f);
+        }
+
+        #endregion
     }
 }

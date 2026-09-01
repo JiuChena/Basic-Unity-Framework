@@ -192,7 +192,7 @@ namespace BehaviorEditor
         }
 
         /// <summary>
-        /// 按触发时间、轨道名称与有效事件类型稳定排序行为事件。
+        /// 按触发时间、轨道名称、骨骼路径与执行配置名称稳定排序行为事件。
         /// </summary>
         /// <param name="left">左侧行为事件。</param>
         /// <param name="right">右侧行为事件。</param>
@@ -206,8 +206,12 @@ namespace BehaviorEditor
             int result = left.time.CompareTo(right.time);
             if (result != 0) return result;
             result = string.Compare(left.authoringTrackName, right.authoringTrackName, StringComparison.Ordinal);
-            return result != 0 ? result : ((int)BehaviorEventResolver.ResolveEffectiveType(left))
-                .CompareTo((int)BehaviorEventResolver.ResolveEffectiveType(right));
+            if (result != 0) return result;
+            result = string.Compare(left.referenceBone, right.referenceBone, StringComparison.Ordinal);
+            return result != 0 ? result : string.Compare(
+                left.execute != null ? left.execute.name : string.Empty,
+                right.execute != null ? right.execute.name : string.Empty,
+                StringComparison.Ordinal);
         }
 
         /// <summary>
