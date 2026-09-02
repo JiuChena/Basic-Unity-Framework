@@ -71,10 +71,10 @@ namespace BehaviorEditor
             }
 
             // 缺少 Reference Root 时提示预览不可用。
-            if (BehaviorEditorContext.ReferenceRootTransform == null)
+            if (!BehaviorEditorContext.TryGetReferenceRootForInspectedTimeline(out _))
             {
                 UnityEditor.EditorGUILayout.HelpBox(
-                    "当前没有可用的 Reference Root，Scene 里的 Hitbox 预览不会显示。请先在 Behavior Editor Timeline 窗口中指定 Reference Root 并开始作者期编辑。",
+                    "当前 Timeline 没有可用的作者期 Reference Root，Scene 里的 Hitbox 预览不会显示。请在 Behavior Editor Timeline 窗口中指定 Reference Root，并开始编辑当前 Timeline。",
                     UnityEditor.MessageType.Info);
             }
 

@@ -25,7 +25,7 @@ namespace BehaviorEditor
             if (track is not BehaviorTimelineMetaTrack metaTrack || context == null)
                 return;
 
-            BehaviorMetaData meta = context.GetMetaData();
+            BehaviorPlaybackSettings settings = context.PlaybackSettings;
             bool assigned = false;
             foreach (TimelineClip clip in metaTrack.GetClips())
             {
@@ -39,8 +39,8 @@ namespace BehaviorEditor
                     continue;
                 }
 
-                meta.wrapMode = asset.wrapMode;
-                meta.speedMultiplier = Mathf.Max(0.01f, asset.speedMultiplier);
+                settings.wrapMode = asset.wrapMode;
+                settings.speedMultiplier = Mathf.Max(0.01f, asset.speedMultiplier);
                 assigned = true;
             }
         }

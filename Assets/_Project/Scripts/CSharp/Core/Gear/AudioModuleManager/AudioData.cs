@@ -2,7 +2,7 @@ using System;
 using MessagePack;
 
 /// <summary>
-/// 全局音频设置数据，用于 MessagePack 持久化存储。保持全局命名空间以兼容 BinaryDataManager 的序列化引用。
+/// 全局音频设置数据，用于 MessagePack 持久化存储。
 /// </summary>
 [Serializable]
 [MessagePackObject]

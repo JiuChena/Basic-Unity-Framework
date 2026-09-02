@@ -11,12 +11,12 @@ namespace Core.Gear
     /// </summary>
     internal sealed class MessagePackRuntime
     {
-        // 项目统一序列化选项：自定义 Resolver + Unity Resolver
+        // 项目统一序列化选项：Unity Resolver 并回退到 MessagePack 标准 Resolver。
         private readonly MessagePackSerializerOptions _options;
 
         public MessagePackRuntime()
         {
-            _options = MessagePackSerializerOptions.Standard.WithResolver(CompositeResolver.Create(ProjectSaveResolver.Instance, UnityResolver.InstanceWithStandardResolver));
+            _options = MessagePackSerializerOptions.Standard.WithResolver(UnityResolver.InstanceWithStandardResolver);
         }
 
         /// <summary>

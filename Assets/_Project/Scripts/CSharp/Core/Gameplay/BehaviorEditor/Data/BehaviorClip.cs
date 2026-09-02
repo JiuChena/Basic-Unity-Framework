@@ -25,6 +25,10 @@ namespace BehaviorEditor
         [SerializeReference]
         public List<BehaviorTrackData> trackData = new List<BehaviorTrackData>();
 
+        [Header("播放配置")]
+        [Tooltip("行为播放头使用的全局时长、包裹模式和速度配置。")]
+        public BehaviorPlaybackSettings playbackSettings = new BehaviorPlaybackSettings();
+
         /// <summary>
         /// 获取指定类型的运行时轨道数据。
         /// </summary>
@@ -85,7 +89,7 @@ namespace BehaviorEditor
         }
 
         /// <summary>
-        /// 校验行为是否具备可执行的 Meta 数据和有效的轨道条目。
+        /// 校验行为是否具备有效的播放配置和轨道条目。
         /// </summary>
         /// <param name="logWarnings">是否将发现的问题输出到 Unity Console。</param>
         /// <returns>不存在校验问题时返回 true。</returns>
@@ -114,10 +118,10 @@ namespace BehaviorEditor
 
             int initialCount = issues.Count;
             EnsureTrackDataLookup();
-            if (!trackDataLookup.TryGetValue(typeof(BehaviorMetaData), out BehaviorTrackData metaData))
-                issues.Add("缺少 BehaviorMetaData，无法确定行为时长、速度和包裹模式。");
-            else if (metaData is BehaviorMetaData meta && meta.duration <= 0f)
-                issues.Add("BehaviorMetaData.duration 必须大于 0。");
+            if (playbackSettings == null)
+                issues.Add("缺少 BehaviorPlaybackSettings，无法确定行为时长、速度和包裹模式。");
+            else if (playbackSettings.duration <= 0f)
+                issues.Add("BehaviorPlaybackSettings.duration 必须大于 0。");
 
             if (trackData == null || trackData.Count == 0)
                 issues.Add("trackData 为空，行为没有任何可执行轨道。");

@@ -24,6 +24,8 @@ namespace BehaviorEditor
         private float speedMultiplier = 1f;
         // 作者期预览用的 PlayableDirector。
         private PlayableDirector previewDirector;
+        // 当前作者期会话上下文，参与者实例状态仅在本次会话中存活。
+        private BehaviorAuthoringSessionContext authoringSessionContext;
         // 作者期指定的角色根节点（骨骼路径基准）。
         private GameObject previewReferenceRoot;
         // 结束作者期时是否需要移除自动创建的 Director。
@@ -68,7 +70,7 @@ namespace BehaviorEditor
             }
 
             GUILayout.Space(8f);
-            UnityEditor.EditorGUILayout.LabelField("Behavior Meta", UnityEditor.EditorStyles.boldLabel);
+            UnityEditor.EditorGUILayout.LabelField("Playback Settings", UnityEditor.EditorStyles.boldLabel);
             UnityEditor.EditorGUILayout.HelpBox(
                 "如果 Timeline 中存在 Behavior Meta 轨道并放置了片段，导出时会优先使用轨道里的配置。下面这些字段会作为回退默认值保留。",
                 UnityEditor.MessageType.None);
@@ -82,8 +84,6 @@ namespace BehaviorEditor
                 UnityEditor.MessageType.None);
             previewReferenceRoot = (GameObject)UnityEditor.EditorGUILayout.ObjectField(
                 "Reference Root", previewReferenceRoot, typeof(GameObject), true);
-            if (BehaviorEditorContext.ReferenceRootObject != previewReferenceRoot)
-                BehaviorEditorContext.ReferenceRootObject = previewReferenceRoot;
             GUILayout.Space(10f);
             bool blockAuthoringInPlayMode = UnityEditor.EditorApplication.isPlayingOrWillChangePlaymode;
             if (blockAuthoringInPlayMode)
@@ -104,20 +104,18 @@ namespace BehaviorEditor
         }
 
         /// <summary>
-        /// 启用时同步各轨道可共享的作者期 Reference Root。
+        /// 启用时不恢复已结束的作者期会话状态。
         /// </summary>
         private void OnEnable()
         {
-            BehaviorEditorContext.ReferenceRootObject = previewReferenceRoot;
         }
 
         /// <summary>
-        /// 停用时清理作者期会话并清空共享作者期上下文。
+        /// 停用时清理作者期会话。
         /// </summary>
         private void OnDisable()
         {
             CleanupAuthoringSession();
-            BehaviorEditorContext.ReferenceRootObject = null;
         }
 
         /// <summary>
@@ -138,14 +136,9 @@ namespace BehaviorEditor
                 return;
             }
 
-            //判定开始新的编辑时上一份旧的信息是否要从旧目标上移除一些组件
-            if (removePreviewDirectorOnFinish &&
-                previewDirector != null &&
-                previewDirector.gameObject != null &&
-                previewDirector.gameObject != target)
-            {
+            // 新会话开始前先完整清理旧会话，避免参与者状态被覆盖后无法回收。
+            if (authoringSessionContext != null)
                 CleanupAuthoringSession();
-            }
 
             previewDirector = EnsurePreviewDirector(target, out removePreviewDirectorOnFinish);
             if (previewReferenceRoot == null || autoAssignedReferenceRoot)
@@ -154,12 +147,16 @@ namespace BehaviorEditor
                 autoAssignedReferenceRoot = true;
             }
 
-            BehaviorEditorContext.ReferenceRootObject = previewReferenceRoot;
+            BehaviorEditorContext.SetActiveSession(sourceTimeline, previewReferenceRoot);
 
             previewDirector.playableAsset = sourceTimeline;
             previewDirector.playOnAwake = false;
             previewDirector.time = 0d;
             previewDirector.Stop();
+            authoringSessionContext = new BehaviorAuthoringSessionContext(
+                sourceTimeline,
+                previewDirector,
+                previewReferenceRoot);
 
             OpenTimelineForPreview();
         }

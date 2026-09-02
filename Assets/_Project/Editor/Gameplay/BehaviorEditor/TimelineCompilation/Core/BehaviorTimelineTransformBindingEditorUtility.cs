@@ -37,11 +37,10 @@ namespace BehaviorEditor
         private static void DrawReferenceBoneAuthoringTools(UnityEditor.SerializedProperty referenceBoneProperty,
             ref Transform referenceBoneTarget)
         {
-            Transform referenceRoot = BehaviorEditorContext.ReferenceRootTransform;
             if (referenceBoneProperty == null) return;
 
             // 未指定 Reference Root 时提示先到编辑器窗口指定。
-            if (referenceRoot == null)
+            if (!BehaviorEditorContext.TryGetReferenceRootForInspectedTimeline(out Transform referenceRoot))
             {
                 UnityEditor.EditorGUILayout.HelpBox(
                     "当前没有可用的 Reference Root。请先到 Behavior Editor Timeline 窗口里指定角色根节点，再回到片段属性栏读取骨骼路径。",
@@ -159,8 +158,8 @@ namespace BehaviorEditor
         private static void SyncReferenceBoneTarget(UnityEditor.SerializedProperty referenceBoneProperty,
             ref Transform referenceBoneTarget)
         {
-            Transform referenceRoot = BehaviorEditorContext.ReferenceRootTransform;
-            if (referenceBoneProperty == null || referenceRoot == null)
+            if (referenceBoneProperty == null ||
+                !BehaviorEditorContext.TryGetReferenceRootForInspectedTimeline(out Transform referenceRoot))
             {
                 referenceBoneTarget = null;
                 return;

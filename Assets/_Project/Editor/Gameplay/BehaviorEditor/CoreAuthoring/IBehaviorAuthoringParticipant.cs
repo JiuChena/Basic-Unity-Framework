@@ -9,6 +9,10 @@ namespace BehaviorEditor
     /// </summary>
     internal sealed class BehaviorAuthoringSessionContext
     {
+        // 当前作者期会话持有的参与者实例，实例状态只属于本次会话。
+        internal readonly System.Collections.Generic.List<IBehaviorAuthoringParticipant> Participants =
+            new System.Collections.Generic.List<IBehaviorAuthoringParticipant>();
+
         /// <summary>当前作者期使用的 Timeline 资产。</summary>
         public TimelineAsset Timeline { get; }
         /// <summary>当前作者期使用的 PlayableDirector。</summary>

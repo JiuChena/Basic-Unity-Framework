@@ -28,19 +28,11 @@ namespace BehaviorEditor
             if (track == null) return false;
 
             EnsureInitialized();
-            return compilersByTrackType.TryGetValue(track.GetType(), out IBehaviorTimelineTrackCompiler compiler) && ExportWithCompiler(compiler, track, context);
-        }
+            if (!compilersByTrackType.TryGetValue(track.GetType(), out IBehaviorTimelineTrackCompiler compiler))
+                return false;
 
-        /// <summary>
-        /// 调用已匹配编译器，隔离目录分发与具体导出实现。
-        /// </summary>
-        /// <param name="compiler">与轨道类型匹配的编译器。</param>
-        /// <param name="track">待导出的轨道。</param>
-        /// <param name="context">当前导出上下文。</param>
-        /// <returns>成功执行导出时返回 true。</returns>
-        private static bool ExportWithCompiler(IBehaviorTimelineTrackCompiler compiler, TrackAsset track, BehaviorExportContext context)
-        {
-            if (compiler == null || context == null) return false;
+            if (compiler == null || context == null)
+                return false;
 
             compiler.Export(track, context);
             return true;

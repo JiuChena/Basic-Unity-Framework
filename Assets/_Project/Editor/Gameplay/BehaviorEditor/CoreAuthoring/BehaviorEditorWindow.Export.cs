@@ -19,12 +19,16 @@ namespace BehaviorEditor
             // 创建导出环境，由自动发现的各轨道编译器独立写入自己的运行时数据。
             PlayableDirector exportDirector = ResolvePreviewDirectorForOpen(sourceTimeline, previewDirector);
             Transform exportReferenceRoot = ResolveExportReferenceRoot();
-            BehaviorMetaData fallbackMeta = new BehaviorMetaData
+            BehaviorPlaybackSettings fallbackSettings = new BehaviorPlaybackSettings
             {
                 wrapMode = wrapMode,
                 speedMultiplier = Mathf.Max(0.01f, speedMultiplier)
             };
-            BehaviorExportContext exportContext = new BehaviorExportContext(sourceTimeline, exportDirector, exportReferenceRoot, fallbackMeta);
+            BehaviorExportContext exportContext = new BehaviorExportContext(
+                sourceTimeline,
+                exportDirector,
+                exportReferenceRoot,
+                fallbackSettings);
 
             // 遍历全部轨道，按轨道实际类型自动分发对应编译器。
             foreach (TrackAsset track in EnumerateTimelineTracks(sourceTimeline))
@@ -46,10 +50,9 @@ namespace BehaviorEditor
             for (int i = 0; i < exportContext.Warnings.Count; i++)
                 Debug.LogWarning($"[Timeline Export] {exportContext.Warnings[i]}", sourceTimeline);
 
-            BehaviorMetaData metaData = target.GetTrackData<BehaviorMetaData>();
             Debug.Log(
                 $"Timeline 已导出到 BehaviorClip：{target.name}\n" +
-                $"Tracks={target.trackData?.Count ?? 0}, Duration={metaData?.duration ?? 0f:F2}s",
+                $"Tracks={target.trackData?.Count ?? 0}, Duration={target.playbackSettings?.duration ?? 0f:F2}s",
                 target);
         }
 
@@ -86,7 +89,13 @@ namespace BehaviorEditor
         private Transform ResolveExportReferenceRoot()
         {
             if (previewReferenceRoot != null) return previewReferenceRoot.transform;
-            if (previewReferenceRoot != null) return previewReferenceRoot.transform;
+
+            // 没有显式根节点时使用 Animator 所在对象解析骨骼路径。
+            if (previewDirector != null)
+            {
+                Animator animator = previewDirector.GetComponentInChildren<Animator>(true);
+                if (animator != null) return animator.transform;
+            }
 
             PlayableDirector director = ResolvePreviewDirectorForOpen(sourceTimeline, previewDirector);
             return director != null ? director.transform : null;

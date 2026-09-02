@@ -30,6 +30,7 @@ updated: 2026-09-01
 
 ## 最近变更
 
+- 2026-09-02：BehaviorEditor 将播放头参数从多态 `BehaviorMetaData` 轨道数据拆为 `BehaviorClip.playbackSettings`；作者期参与者改为会话级实例，结束会话先清理参与者再处理 Director，Hitbox Scene 预览仅使用当前 inspected Timeline 的活跃会话根节点
 - 2026-09-01：BehaviorEditor 事件轨删除 VFX/音频/投射物/Buff 等内置业务分类，改为 `BehaviorEventExecuteSO.Execute(BehaviorEventContext)` 的项目侧扩展点；删除原生音频、VFX 控制与激活轨的运行时事件导出，并按轨道收拢运行时、编辑器和编译器文件
 - 2026-08-31：BehaviorEditor 删除 `BehaviorClip` 到 Timeline 的反向回填、旧 SO 降级回填与作者期轨道快照；Timeline 现在是唯一作者源，结束编辑时单向导出运行时行为数据；轨道编译器自动发现，运行时由多态轨道数据创建执行器
 - 2026-08-28：输入能力配置改用 `InputActionReference` 直接选择动作；旧动作名称仅作为隐藏迁移回退，输入采集与 GAS 能力执行职责保持分离

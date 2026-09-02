@@ -22,8 +22,8 @@ namespace BehaviorEditor
         /// <summary>当前正在播放的行为数据。</summary>
         public BehaviorClip CurrentClip { get; private set; }
 
-        /// <summary>当前行为的全局播放配置。</summary>
-        public BehaviorMetaData CurrentMeta { get; private set; }
+        /// <summary>当前行为的播放配置。</summary>
+        public BehaviorPlaybackSettings CurrentPlaybackSettings { get; private set; }
 
         /// <summary>当前行为已播放的经过时间，单位为秒。</summary>
         public float ElapsedTime { get; private set; }
@@ -52,19 +52,19 @@ namespace BehaviorEditor
             }
 
             // 验证全局播放配置，并跳过同一循环行为的重复请求。
-            BehaviorMetaData meta = clip.GetTrackData<BehaviorMetaData>();
-            if (meta == null)
+            BehaviorPlaybackSettings playbackSettings = clip.playbackSettings;
+            if (playbackSettings == null)
             {
-                Debug.LogError($"BehaviorClip '{clip.name}' 缺少 BehaviorMetaData，无法播放。", clip);
+                Debug.LogError($"BehaviorClip '{clip.name}' 缺少 BehaviorPlaybackSettings，无法播放。", clip);
                 return;
             }
 
-            if (CurrentClip == clip && IsPlaying && meta.wrapMode == WrapMode.Loop) return;
+            if (CurrentClip == clip && IsPlaying && playbackSettings.wrapMode == WrapMode.Loop) return;
 
             // 建立新的播放头与轨道执行器。
             Stop();
             CurrentClip = clip;
-            CurrentMeta = meta;
+            CurrentPlaybackSettings = playbackSettings;
             ElapsedTime = 0f;
             NormalizedTime = 0f;
             IsPlaying = true;
@@ -73,7 +73,7 @@ namespace BehaviorEditor
             // 每条轨道自行初始化自己的缓存、索引与执行状态。
             for (int index = 0; index < trackExecutors.Count; index++) trackExecutors[index].Begin();
 
-            if (logBehaviorFlow) Debug.Log($"[{name}] 开始行为：{clip.name} | Duration={meta.duration:F2}s | Wrap={meta.wrapMode}", this);
+            if (logBehaviorFlow) Debug.Log($"[{name}] 开始行为：{clip.name} | Duration={playbackSettings.duration:F2}s | Wrap={playbackSettings.wrapMode}", this);
 
         }
 
@@ -83,22 +83,22 @@ namespace BehaviorEditor
         /// <param name="deltaTime">本帧未缩放时间增量，单位为秒。</param>
         public void Tick(float deltaTime)
         {
-            if (!IsPlaying || CurrentClip == null || CurrentMeta == null) return;
+            if (!IsPlaying || CurrentClip == null || CurrentPlaybackSettings == null) return;
 
             // 更新全局播放头并将经过时间交给各轨道。
-            ElapsedTime += deltaTime * Mathf.Max(0.01f, CurrentMeta.speedMultiplier);
-            float totalDuration = Mathf.Max(0.01f, CurrentMeta.duration);
+            ElapsedTime += deltaTime * Mathf.Max(0.01f, CurrentPlaybackSettings.speedMultiplier);
+            float totalDuration = Mathf.Max(0.01f, CurrentPlaybackSettings.duration);
             NormalizedTime = Mathf.Clamp01(ElapsedTime / totalDuration);
             for (int index = 0; index < trackExecutors.Count; index++) trackExecutors[index].Tick(ElapsedTime);
 
-            // 仅由总调度器处理 Meta 定义的全局播放生命周期。
-            if (CurrentMeta.wrapMode == WrapMode.Loop)
+            // 仅由总调度器处理播放配置定义的全局播放生命周期。
+            if (CurrentPlaybackSettings.wrapMode == WrapMode.Loop)
             {
                 if (ElapsedTime >= totalDuration) RestartLoopingClip(totalDuration);
                 return;
             }
 
-            if (CurrentMeta.wrapMode == WrapMode.ClampForever)
+            if (CurrentPlaybackSettings.wrapMode == WrapMode.ClampForever)
             {
                 if (NormalizedTime >= 1f)
                 {
@@ -132,7 +132,7 @@ namespace BehaviorEditor
             trackExecutors.Clear();
 
             CurrentClip = null;
-            CurrentMeta = null;
+            CurrentPlaybackSettings = null;
             ElapsedTime = 0f;
             NormalizedTime = 0f;
             IsPlaying = false;
@@ -171,7 +171,9 @@ namespace BehaviorEditor
             if (clip?.trackData == null) return;
 
             // 上下文只提供各轨道共享的宿主信息与播放速度。
-            var context = new BehaviorExecutionContext(gameObject, CurrentMeta != null ? CurrentMeta.speedMultiplier : 1f);
+            var context = new BehaviorExecutionContext(
+                gameObject,
+                CurrentPlaybackSettings != null ? CurrentPlaybackSettings.speedMultiplier : 1f);
             for (int index = 0; index < clip.trackData.Count; index++)
             {
                 IBehaviorTrackExecutor trackExecutor = clip.trackData[index]?.CreateExecutor(context);

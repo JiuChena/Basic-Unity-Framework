@@ -11,7 +11,7 @@ namespace BehaviorEditor
     /// </summary>
     internal sealed class BehaviorExportContext
     {
-        // 轨道数据类型 → 本次编译的唯一输出实例。
+        // 轨道数据类型 → 本次编译的唯一输出实例，不包含播放配置。
         private readonly Dictionary<Type, BehaviorTrackData> trackDataByType = new Dictionary<Type, BehaviorTrackData>();
 
         // 本次编译收集的可显示警告。
@@ -27,8 +27,8 @@ namespace BehaviorEditor
         public PlayableDirector Director { get; }
         /// <summary>骨骼与场景对象路径计算的参考根节点。</summary>
         public Transform ReferenceRoot { get; }
-        /// <summary>未提供 Meta 轨道时使用的默认播放配置。</summary>
-        public BehaviorMetaData FallbackMeta { get; }
+        /// <summary>当前导出的全局播放配置。</summary>
+        public BehaviorPlaybackSettings PlaybackSettings { get; }
         /// <summary>全部轨道片段中的最大结束时间。</summary>
         public double MaxEndTime { get; private set; }
         /// <summary>本次编译产生的诊断警告。</summary>
@@ -40,19 +40,20 @@ namespace BehaviorEditor
         /// <param name="timeline">待编译的 Timeline 资产。</param>
         /// <param name="director">预览与绑定查询使用的 Director，可为 null。</param>
         /// <param name="referenceRoot">骨骼路径基准，可为 null。</param>
-        /// <param name="fallbackMeta">缺少 Meta 轨道时的回退播放配置。</param>
+        /// <param name="fallbackSettings">缺少 Meta 轨道时的回退播放配置。</param>
         public BehaviorExportContext(TimelineAsset timeline, PlayableDirector director, Transform referenceRoot,
-            BehaviorMetaData fallbackMeta)
+            BehaviorPlaybackSettings fallbackSettings)
         {
             Timeline = timeline;
             Director = director;
             ReferenceRoot = referenceRoot;
-            FallbackMeta = fallbackMeta ?? new BehaviorMetaData();
-            trackDataByType.Add(typeof(BehaviorMetaData), new BehaviorMetaData
+            BehaviorPlaybackSettings fallback = fallbackSettings ?? new BehaviorPlaybackSettings();
+            PlaybackSettings = new BehaviorPlaybackSettings
             {
-                wrapMode = FallbackMeta.wrapMode,
-                speedMultiplier = Mathf.Max(0.01f, FallbackMeta.speedMultiplier)
-            });
+                duration = Mathf.Max(0.01f, fallback.duration),
+                wrapMode = fallback.wrapMode,
+                speedMultiplier = Mathf.Max(0.01f, fallback.speedMultiplier)
+            };
         }
 
         /// <summary>
@@ -106,22 +107,6 @@ namespace BehaviorEditor
         }
 
         /// <summary>
-        /// 获取当前轨道导出的 Meta 数据，首次调用时使用回退配置创建。
-        /// </summary>
-        /// <returns>本次编译唯一的 Meta 轨道数据。</returns>
-        public BehaviorMetaData GetMetaData()
-        {
-            BehaviorMetaData meta = GetOrCreateTrackData<BehaviorMetaData>();
-            if (meta.speedMultiplier <= 0f)
-            {
-                meta.wrapMode = FallbackMeta.wrapMode;
-                meta.speedMultiplier = Mathf.Max(0.01f, FallbackMeta.speedMultiplier);
-            }
-
-            return meta;
-        }
-
-        /// <summary>
         /// 将本次收集的多态轨道数据提交到目标 BehaviorClip。
         /// </summary>
         /// <param name="target">需要写入的目标行为资产。</param>
@@ -130,17 +115,16 @@ namespace BehaviorEditor
             if (target == null)
                 return;
 
-            // 补齐未显式导出的 Meta，保证播放头始终有确定配置。
-            BehaviorMetaData meta = GetMetaData();
-
             // 各轨道自行收尾其临时数据并写入对应的多态轨道数据。
             foreach (IBehaviorTrackExportState exportState in exportStatesByType.Values)
                 exportState.Commit(this);
-            meta.duration = Mathf.Max(0.01f, (float)Math.Max(MaxEndTime, Timeline != null ? Timeline.duration : 0d));
+            PlaybackSettings.duration = Mathf.Max(
+                0.01f,
+                (float)Math.Max(MaxEndTime, Timeline != null ? Timeline.duration : 0d));
 
             // 整体替换导出结果，避免作者期删除轨道后保留过期运行时数据。
             target.ReplaceTrackData(trackDataByType.Values);
-
+            target.playbackSettings = PlaybackSettings;
         }
     }
 }

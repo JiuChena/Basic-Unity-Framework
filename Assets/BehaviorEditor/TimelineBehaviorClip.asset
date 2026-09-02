@@ -13,20 +13,16 @@ MonoBehaviour:
   m_Name: TimelineBehaviorClip
   m_EditorClassIdentifier: 
   trackData:
-  - rid: 5445524462400700421
   - rid: 5445524462400700422
   - rid: 5445524462400700423
   - rid: 5445524462400700424
+  playbackSettings:
+    duration: 5.65
+    wrapMode: 1
+    speedMultiplier: 1
   references:
     version: 2
     RefIds:
-    - rid: 5445524462400700421
-      type: {class: BehaviorMetaData, ns: BehaviorEditor, asm: Assembly-CSharp}
-      data:
-        executionOrder: -100
-        duration: 5.65
-        wrapMode: 1
-        speedMultiplier: 1
     - rid: 5445524462400700422
       type: {class: AnimationTrackData, ns: BehaviorEditor, asm: Assembly-CSharp}
       data:

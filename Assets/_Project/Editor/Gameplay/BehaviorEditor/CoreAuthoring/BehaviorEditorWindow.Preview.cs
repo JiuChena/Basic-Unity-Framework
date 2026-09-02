@@ -31,8 +31,7 @@ namespace BehaviorEditor
             previewDirector.playableAsset = sourceTimeline;
 
             // 由自动发现的轨道参与者准备各自需要的预览环境。
-            BehaviorAuthoringParticipantCatalog.BeginAuthoring(
-                new BehaviorAuthoringSessionContext(sourceTimeline, previewDirector, previewReferenceRoot));
+            BehaviorAuthoringParticipantCatalog.BeginAuthoring(authoringSessionContext);
 
             // 重置时间并重建求值。
             previewDirector.time = 0d;
@@ -47,6 +46,17 @@ namespace BehaviorEditor
         /// </summary>
         private void CleanupAuthoringSession()
         {
+            TimelineAsset sessionTimeline = authoringSessionContext != null
+                ? authoringSessionContext.Timeline
+                : sourceTimeline;
+
+            // 先让轨道参与者撤销自身绑定与临时资源，确保 Director 仍然可用。
+            if (authoringSessionContext != null)
+            {
+                BehaviorAuthoringParticipantCatalog.EndAuthoring(authoringSessionContext);
+                authoringSessionContext = null;
+            }
+
             // 停止并解绑预览 Director。
             if (previewDirector != null)
             {
@@ -59,17 +69,13 @@ namespace BehaviorEditor
                 if (removePreviewDirectorOnFinish) UnityEditor.Undo.DestroyObjectImmediate(previewDirector);
             }
 
-            // 由各轨道参与者清理本次作者期临时资源。
-            BehaviorAuthoringParticipantCatalog.EndAuthoring(
-                new BehaviorAuthoringSessionContext(sourceTimeline, previewDirector, previewReferenceRoot));
-
             // 清空自动指定的 Reference Root 与预览缓存。
             if (autoAssignedReferenceRoot) previewReferenceRoot = null;
 
             previewDirector = null;
             removePreviewDirectorOnFinish = false;
             autoAssignedReferenceRoot = false;
-            BehaviorEditorContext.ReferenceRootObject = previewReferenceRoot;
+            BehaviorEditorContext.ClearActiveSession(sessionTimeline);
 
             if (sourceTimeline != null) RefreshTimelineEditor(sourceTimeline, null);
         }

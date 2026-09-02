@@ -95,8 +95,7 @@ namespace BehaviorEditor
             if (hitboxClipAsset == null || hitboxClipAsset.hitboxData == null)
                 return;
 
-            Transform referenceRoot = BehaviorEditorContext.ReferenceRootTransform;
-            if (referenceRoot == null)
+            if (!BehaviorEditorContext.TryGetReferenceRootForInspectedTimeline(out Transform referenceRoot))
                 return;
 
             DrawHitboxPreview(hitboxClipAsset.hitboxData, referenceRoot);
