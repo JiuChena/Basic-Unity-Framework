@@ -89,13 +89,7 @@ namespace BehaviorEditor
         private Transform ResolveExportReferenceRoot()
         {
             if (previewReferenceRoot != null) return previewReferenceRoot.transform;
-
-            // 没有显式根节点时使用 Animator 所在对象解析骨骼路径。
-            if (previewDirector != null)
-            {
-                Animator animator = previewDirector.GetComponentInChildren<Animator>(true);
-                if (animator != null) return animator.transform;
-            }
+            if (previewReferenceRoot != null) return previewReferenceRoot.transform;
 
             PlayableDirector director = ResolvePreviewDirectorForOpen(sourceTimeline, previewDirector);
             return director != null ? director.transform : null;
