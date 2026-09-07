@@ -1,20 +1,18 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.Scripting.APIUpdating;
 
 namespace BehaviorEditor
 {
     /// <summary>
     /// 行为播放总调度器，负责推进全局时间轴并驱动轨道执行器。
     /// </summary>
-    [MovedFrom(true, "BehaviorCore", null, "BehaviorInterpreter")]
-    public class BehaviorExecutor : MonoBehaviour
+    public sealed class BehaviorExecutor
     {
+        // 行为播放宿主对象，用于轨道解析和日志关联。
+        private readonly GameObject ownerGameObject;
         // 是否输出行为播放头的开始、停止、完成与循环日志。
-        [Header("调试")]
-        [SerializeField, Tooltip("开启后输出行为开始、停止、完成和循环等播放头流程日志。")]
-        private bool logBehaviorFlow;
+        private readonly bool logBehaviorFlow;
 
         // 当前行为按执行顺序排列的轨道执行器。
         private readonly List<IBehaviorTrackExecutor> trackExecutors = new List<IBehaviorTrackExecutor>();
@@ -36,6 +34,17 @@ namespace BehaviorEditor
 
         /// <summary>行为以 <see cref="WrapMode.Once"/> 完成播放时触发。</summary>
         public event Action<BehaviorClip> OnCompleted;
+
+        /// <summary>
+        /// 创建一个绑定到指定宿主对象的行为播放执行器。
+        /// </summary>
+        /// <param name="ownerGameObject">行为轨道执行宿主对象；允许为 null。</param>
+        /// <param name="logBehaviorFlow">是否输出播放头流程日志。</param>
+        public BehaviorExecutor(GameObject ownerGameObject, bool logBehaviorFlow = false)
+        {
+            this.ownerGameObject = ownerGameObject;
+            this.logBehaviorFlow = logBehaviorFlow;
+        }
 
         #region Public
 
@@ -73,7 +82,8 @@ namespace BehaviorEditor
             // 每条轨道自行初始化自己的缓存、索引与执行状态。
             for (int index = 0; index < trackExecutors.Count; index++) trackExecutors[index].Begin();
 
-            if (logBehaviorFlow) Debug.Log($"[{name}] 开始行为：{clip.name} | Duration={playbackSettings.duration:F2}s | Wrap={playbackSettings.wrapMode}", this);
+            if (logBehaviorFlow)
+                Debug.Log($"[{(ownerGameObject != null ? ownerGameObject.name : nameof(BehaviorExecutor))}] 开始行为：{clip.name} | Duration={playbackSettings.duration:F2}s | Wrap={playbackSettings.wrapMode}", ownerGameObject);
 
         }
 
@@ -113,7 +123,8 @@ namespace BehaviorEditor
 
             // 保存完成对象后停止，再通知外部监听者。
             BehaviorClip completed = CurrentClip;
-            if (logBehaviorFlow) Debug.Log($"[{name}] 行为完成：{completed.name}", this);
+            if (logBehaviorFlow)
+                Debug.Log($"[{(ownerGameObject != null ? ownerGameObject.name : nameof(BehaviorExecutor))}] 行为完成：{completed.name}", ownerGameObject);
             Stop();
             OnCompleted?.Invoke(completed);
         }
@@ -124,7 +135,7 @@ namespace BehaviorEditor
         public void Stop()
         {
             if (logBehaviorFlow && IsPlaying && CurrentClip != null)
-                Debug.Log($"[{name}] 停止行为：{CurrentClip.name}", this);
+                Debug.Log($"[{(ownerGameObject != null ? ownerGameObject.name : nameof(BehaviorExecutor))}] 停止行为：{CurrentClip.name}", ownerGameObject);
 
             // 轨道负责清理自身的列表、数组与索引。
             for (int index = 0; index < trackExecutors.Count; index++)
@@ -145,7 +156,7 @@ namespace BehaviorEditor
         /// <summary>
         /// 向声明了 Gizmo 绘制能力的轨道请求当前播放状态的调试图形。
         /// </summary>
-        private void OnDrawGizmosSelected()
+        public void DrawGizmos()
         {
             if (CurrentClip == null) return;
 
@@ -172,7 +183,7 @@ namespace BehaviorEditor
 
             // 上下文只提供各轨道共享的宿主信息与播放速度。
             var context = new BehaviorExecutionContext(
-                gameObject,
+                ownerGameObject,
                 CurrentPlaybackSettings != null ? CurrentPlaybackSettings.speedMultiplier : 1f);
             for (int index = 0; index < clip.trackData.Count; index++)
             {

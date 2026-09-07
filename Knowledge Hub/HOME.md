@@ -1,7 +1,7 @@
 ---
 tags: [home]
 created: 2026-07-25
-updated: 2026-09-01
+updated: 2026-09-07
 ---
 
 # Basic Unity Framework — 知识库
@@ -27,9 +27,12 @@ updated: 2026-09-01
 - [[decisions/UnitMover 层级职责重构决策]] — UnitMover 策略层级职责与生命周期决策
 - [[decisions/DataProvider 架构审查决策]] — DataProvider 架构审查确认项（E/U/P 项）
 - [[decisions/数据驱动能力系统实施计划审查与修订]] — 能力系统破坏式迁移与能力 SO 实施规则
+- [[decisions/HSM 中断容器解耦重构方案]] — HSM 状态持久化、中断规则注入与优先级仲裁方案
 
 ## 最近变更
 
+- 2026-09-07：完成 HSM 破坏式重构；状态实例按实体持久化，状态图在初始化阶段注入目标状态静态 `CanEnter`，`HSM.Update()` 完整仲裁并按最高优先级唯一切换
+- 2026-09-04：新增 Behavior Editor 新轨道脚本生成器；路径使用 EditorPrefs 本地留存，按轨道名生成独立目录及五份最小轨道脚本，编译器通过特性自动接入
 - 2026-09-02：BehaviorEditor 将播放头参数从多态 `BehaviorMetaData` 轨道数据拆为 `BehaviorClip.playbackSettings`；作者期参与者改为会话级实例，结束会话先清理参与者再处理 Director，Hitbox Scene 预览仅使用当前 inspected Timeline 的活跃会话根节点
 - 2026-09-01：BehaviorEditor 事件轨删除 VFX/音频/投射物/Buff 等内置业务分类，改为 `BehaviorEventExecuteSO.Execute(BehaviorEventContext)` 的项目侧扩展点；删除原生音频、VFX 控制与激活轨的运行时事件导出，并按轨道收拢运行时、编辑器和编译器文件
 - 2026-08-31：BehaviorEditor 删除 `BehaviorClip` 到 Timeline 的反向回填、旧 SO 降级回填与作者期轨道快照；Timeline 现在是唯一作者源，结束编辑时单向导出运行时行为数据；轨道编译器自动发现，运行时由多态轨道数据创建执行器
