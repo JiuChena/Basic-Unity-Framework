@@ -17,23 +17,23 @@ namespace Core.Gear
         /// 向当前状态加入一条转换边。
         /// </summary>
         /// <param name="targetState">条件成立后进入的目标状态。</param>
-        /// <param name="canEnter">目标状态声明的静态进入条件。</param>
+        /// <param name="canEnter">目标状态实例声明的进入条件。</param>
         /// <param name="priority">转换优先级，数值越大越优先。</param>
         /// <exception cref="InvalidOperationException">容器已封口或重复注入同一边时抛出。</exception>
-        internal void Add(StateBase<TContext> targetState, Func<TContext, bool> canEnter, int priority)
+        internal void Add(StateBase<TContext> targetState, Func<bool> canEnter, int priority)
         {
             // 运行期不允许变更转换结构。
             if (_isSealed) throw new InvalidOperationException("状态中断容器已封口，不能继续注入转换边。");
             if (targetState == null) throw new ArgumentNullException(nameof(targetState));
             if (canEnter == null) throw new ArgumentNullException(nameof(canEnter));
-            if (canEnter.Target != null)
-                throw new InvalidOperationException("状态进入条件必须使用静态方法，不能捕获状态或外部实例。");
+            if (!ReferenceEquals(canEnter.Target, targetState))
+                throw new InvalidOperationException("状态进入条件必须使用目标状态实例的方法。");
 
             // 拒绝同一来源上的重复边，避免重复判断和隐式优先级冲突。
             for (int index = 0; index < _bindings.Count; index++)
             {
                 StateTransitionBinding<TContext> binding = _bindings[index];
-                if (binding.TargetState != targetState || binding.CanEnter.Method != canEnter.Method || binding.Priority != priority)
+                if (binding.TargetState != targetState || binding.CanEnter != canEnter || binding.Priority != priority)
                     continue;
 
                 throw new InvalidOperationException("同一状态不能重复注入相同的目标状态、进入条件和优先级。");
@@ -56,7 +56,7 @@ namespace Core.Gear
             for (int index = 0; index < _bindings.Count; index++)
             {
                 StateTransitionBinding<TContext> binding = _bindings[index];
-                if (!binding.CanEnter(context)) continue;
+                if (!binding.CanEnter()) continue;
                 if (request.IsValid && binding.Priority <= request.Priority) continue;
 
                 request = new StateTransitionRequest<TContext>(

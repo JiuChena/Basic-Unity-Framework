@@ -39,6 +39,12 @@ namespace Core.Gear
         }
 
         /// <summary>
+        /// 判断当前实体上下文是否允许进入该状态；仅由已构建 HSM 的中断容器调用。
+        /// </summary>
+        /// <returns>当前状态可以成为 HSM 下一状态时返回 true。</returns>
+        public abstract bool Interrupt();
+
+        /// <summary>
         /// 在所有状态和中断边注册完成后调用一次，用于缓存长期依赖。
         /// </summary>
         public virtual void OnInitialize() { }

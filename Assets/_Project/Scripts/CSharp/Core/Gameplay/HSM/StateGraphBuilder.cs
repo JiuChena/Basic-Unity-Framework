@@ -55,10 +55,10 @@ namespace Core.Gear
         /// 为当前来源状态注入一条指向目标状态的转换边。
         /// </summary>
         /// <param name="targetState">条件成立后进入的已注册目标状态。</param>
-        /// <param name="canEnter">目标状态声明的静态、无副作用进入条件。</param>
+        /// <param name="canEnter">目标状态实例声明的无副作用进入条件。</param>
         /// <param name="priority">转换优先级，数值越大越优先。</param>
         /// <returns>当前组装器，便于继续为同一来源状态添加边。</returns>
-        public StateGraphBuilder<TContext> To(StateBase<TContext> targetState, Func<TContext, bool> canEnter, int priority)
+        public StateGraphBuilder<TContext> To(StateBase<TContext> targetState, Func<bool> canEnter, int priority)
         {
             // 验证当前边的来源和目标均属于当前实体。
             ThrowIfBuilt();
