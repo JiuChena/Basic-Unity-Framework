@@ -1,7 +1,7 @@
 ---
 tags: [HSM, StateMachine, Architecture, Decision, Gameplay]
 created: 2026-09-07
-updated: 2026-09-07
+updated: 2026-09-08
 status: implemented
 ---
 
@@ -9,16 +9,16 @@ status: implemented
 
 ## 1. 决策摘要
 
-HSM 是绑定单个实体上下文的纯 C# 状态机。它只负责持有状态实例、执行状态生命周期和仲裁当前状态的转换边，不负责输入、动画、死亡、攻击或其他业务判断。
+BetterHSM 是绑定单个实体上下文的纯 C# 状态机。它只负责持有状态实例、执行状态生命周期和仲裁当前状态的转换边，不负责输入、动画、死亡、攻击或其他业务判断。
 
-状态实例在实体创建时注册并持久化，状态切换只切换已有实例。每个状态持有一个局部中断容器；状态图组装器在初始化阶段把目标状态的静态 `CanEnter` 方法、优先级和目标实例注入来源状态的容器。每次 `Update()` 完整执行当前状态的全部条件，选择优先级最大的边，最多切换一次。
+状态实例在实体创建时注册并持久化，状态切换只切换已有实例。每个状态持有一个局部中断容器；状态图组装器在初始化阶段通过唯一的 `To(targetState, interrupt, priority)` API，把目标状态、任意 `Func<bool>` 中断方法和优先级注入来源状态的容器。每次 `Update()` 完整执行当前状态的全部条件，选择优先级最大的边，最多切换一次。
 
 ```text
-状态类：实现自身进入、更新、退出和清理行为，并提供静态 CanEnter
+状态类：实现自身进入、更新、退出和清理行为，并重写 Interrupt
 状态图组装器：集中声明实体状态节点和有向转换边
-中断容器：完整评估当前状态的所有 CanEnter 并选出胜者
-HSM：统一执行 OnExit -> 切换已有实例 -> OnEnter
-实体拥有者：在 Update() 中驱动 HSM.Update()
+中断容器：完整评估当前状态的全部 `Func<bool>` 中断并选出胜者
+BetterHSM：统一执行 OnExit -> 切换已有实例 -> OnEnter
+实体拥有者：在 Update() 中驱动 BetterHSM.Update()
 ```
 
 这不是全局事件系统的替代品。中断容器只属于一个实体的一个状态，不广播，也不允许条件方法直接切换状态。
@@ -30,13 +30,13 @@ HSM：统一执行 OnExit -> 切换已有实例 -> OnEnter
 以下对象不得跨实体共享：
 
 ```text
-HSM<TContext>
+BetterHSM<TContext>
 StateBase<TContext> 实例
 StateInterruptContainer<TContext>
 状态内部计时器、缓存、订阅和临时数据
 ```
 
-状态类本身、不可变配置和静态 `CanEnter` 方法可以复用；每个实体必须创建自己的状态实例。
+状态类本身和不可变配置可以复用；每个实体必须创建自己的状态实例，普通转换边绑定该实体状态实例的 `Interrupt()` 方法。
 
 ### 2.2 状态实例持久化，进入时重置本轮数据
 
@@ -52,11 +52,11 @@ OnDispose：释放长期订阅和资源，只执行一次
 
 状态不能持有其他状态引用，也不能从状态内部调用其他状态的生命周期方法。
 
-### 2.3 进入条件必须静态且无副作用
+### 2.3 进入条件必须由状态基类约束且无副作用
 
-每条边持有目标状态的静态 `CanEnter(TContext)`。该方法只读取实体上下文，不得消费输入、清除请求、播放表现、查找组件、加载资源或直接切换状态。因为同一帧必须完整判断所有边，任何副作用都会导致低优先级条件影响高优先级结果。
+`StateBase<TContext>` 以抽象实例方法 `Interrupt()` 强制每个具体状态提供可复用的进入条件。状态图统一使用 `To(targetState, interrupt, priority)` 注入中断边；`interrupt` 可以是目标状态的 `Interrupt()`、外部实例方法、静态方法或闭包，HSM 不区分其来源，也不验证其来源。所有中断方法都只读取已经缓存的数据，不得消费输入、清除请求、播放表现、查找组件、加载资源或直接切换状态。因为同一帧必须完整判断所有边，任何副作用都会导致低优先级条件影响高优先级结果。
 
-目标状态在 `OnEnter()` 中消费属于自己的输入或一次性请求。这样不需要额外创建 `IStateInterrupt`、`OnAccepted` 或一状态一中断类。
+目标状态在 `OnEnter()` 中消费属于自己的输入或一次性请求。中断方法只负责判断，不能在判断阶段产生副作用；这样不需要额外创建 `IStateInterrupt` 或 `OnAccepted`。
 
 ### 2.4 优先级属于转换边
 
@@ -66,12 +66,12 @@ OnDispose：释放长期订阅和资源，只执行一次
 
 ### 2.5 每次更新最多切换一次
 
-`HSM.Update()` 先完整仲裁当前状态。没有命中时调用当前状态 `OnUpdate()`；命中时调用当前状态 `OnExit()`，切换到已经注册的目标实例，再调用目标 `OnEnter()`，本次更新结束，不继续评估新状态，也不调用新状态的 `OnUpdate()`。
+`BetterHSM.Update()` 先完整仲裁当前状态。没有命中时调用当前状态 `OnUpdate()`；命中时调用当前状态 `OnExit()`，切换到已经注册的目标实例，再调用目标 `OnEnter()`，本次更新结束，不继续评估新状态，也不调用新状态的 `OnUpdate()`。
 
 ## 3. 文件职责
 
 ```text
-Assets/_Project/Scripts/CSharp/Core/Gameplay/HSM/
+Assets/_Project/Scripts/CSharp/Core/Gameplay/BetterHSM/
 ├── HSM.cs
 ├── StateBase.cs
 ├── StateInterruptContainer.cs
@@ -82,10 +82,10 @@ Assets/_Project/Scripts/CSharp/Core/Gameplay/HSM/
 
 | 类型 | 责任 | 不承担 |
 |---|---|---|
-| `HSM<TContext>` | 状态注册、初始化封口、当前状态、更新仲裁、生命周期切换、销毁 | 具体业务条件和组件查找 |
+| `BetterHSM<TContext>` | 状态注册、初始化封口、当前状态、更新仲裁、生命周期切换、销毁 | 具体业务条件和组件查找 |
 | `StateBase<TContext>` | 保存实体上下文、持有自身容器、提供生命周期 | 保存其他状态引用、直接转换 |
 | `StateInterruptContainer<TContext>` | 保存转换边、完整评估、优先级仲裁 | 生命周期调用和业务副作用 |
-| `StateTransitionBinding<TContext>` | 保存目标实例、静态条件、优先级和注册顺序 | 执行业务逻辑 |
+| `StateTransitionBinding<TContext>` | 保存目标实例、状态或外部中断方法、优先级和注册顺序 | 执行业务逻辑 |
 | `StateTransitionRequest<TContext>` | 保存一帧仲裁结果 | 判断条件或切换状态 |
 | `StateGraphBuilder<TContext>` | 初始化阶段注册节点、注入边、校验并封口 | 每帧调度和业务逻辑 |
 
@@ -102,12 +102,13 @@ Assets/_Project/Scripts/CSharp/Framework/Gameplay/<Domain>/States/
 
 ## 4. 当前公共 API
 
-状态使用基类统一生命周期，不使用 `OnTick(float deltaTime)`。HSM 由实体的 `Update()` 驱动；具体状态需要时间时，从实体上下文提供的时间源读取。
+状态使用基类统一生命周期和抽象 `Interrupt()`，不使用 `OnTick(float deltaTime)`。HSM 由实体的 `Update()` 驱动；具体状态需要时间时，从实体上下文提供的时间源读取。
 
 ```csharp
 public abstract class StateBase<TContext>
 {
     protected TContext Context { get; }
+    public abstract bool Interrupt();
     public virtual void OnInitialize() { }
     public virtual void OnEnter() { }
     public virtual void OnUpdate() { }
@@ -119,7 +120,7 @@ public abstract class StateBase<TContext>
 图组装的最小调用方式：
 
 ```csharp
-HSM<CharacterStateContext> hsm = new HSM<CharacterStateContext>(context);
+BetterHSM<CharacterStateContext> hsm = new BetterHSM<CharacterStateContext>(context);
 IdleState idle = new IdleState();
 MoveState move = new MoveState();
 AttackState attack = new AttackState();
@@ -127,11 +128,11 @@ AttackState attack = new AttackState();
 StateGraphBuilder<CharacterStateContext> graph = hsm.BeginBuild();
 graph.AddState(idle).AddState(move).AddState(attack);
 graph.From(idle)
-    .To(move, MoveState.CanEnter, priority: 10)
-    .To(attack, AttackState.CanEnter, priority: 20);
+    .To(move, move.Interrupt, priority: 10)
+    .To(attack, attack.Interrupt, priority: 20);
 graph.From(move)
-    .To(idle, IdleState.CanEnter, priority: 10)
-    .To(attack, AttackState.CanEnter, priority: 20);
+    .To(idle, idle.Interrupt, priority: 10)
+    .To(attack, attack.Interrupt, priority: 20);
 graph.Build(idle);
 ```
 
@@ -140,7 +141,7 @@ graph.Build(idle);
 ```csharp
 private void Update()
 {
-    _hsm.Update();
+    _betterHsm.Update();
 }
 ```
 
@@ -151,7 +152,7 @@ private void Update()
 ```csharp
 public sealed class AttackState : StateBase<CharacterStateContext>
 {
-    public static bool CanEnter(CharacterStateContext context)
+    public override bool Interrupt()
     {
         return context.Input.IsPressed(CharacterInputButton.Attack);
     }
@@ -177,7 +178,29 @@ public sealed class AttackState : StateBase<CharacterStateContext>
 }
 ```
 
-`CanEnter` 的责任是表达“什么情况下可以进入我”，而不是表达“我从哪个状态来”。同一个目标状态的静态条件可以被多条来源边复用，是否允许这条边存在由状态图决定。
+`Interrupt()` 的责任是表达目标状态的通用进入条件，而不是表达“我从哪个状态来”。特殊角色条件不应硬塞进状态类，可以直接把外部提供的 `Func<bool>` 传入同一个 `To` 方法。例如：
+
+```csharp
+public sealed class CharacterInterrupts
+{
+    private readonly CharacterStateContext context;
+
+    public CharacterInterrupts(CharacterStateContext context)
+    {
+        this.context = context;
+    }
+
+    public bool ShouldForceHurt()
+    {
+        return context.Damage.HasPendingCriticalHit;
+    }
+}
+
+CharacterInterrupts interrupts = new CharacterInterrupts(context);
+graph.From(idle)
+    .To(move, move.Interrupt, priority: 10)
+    .To(hurt, interrupts.ShouldForceHurt, priority: 100);
+```
 
 ## 6. 初始化和更新流程
 
@@ -185,10 +208,10 @@ public sealed class AttackState : StateBase<CharacterStateContext>
 
 ```text
 1. 实体拥有者准备自己的 TContext
-2. 创建实体专属 HSM<TContext>
+2. 创建实体专属 BetterHSM<TContext>
 3. 创建该实体的全部 StateBase<TContext> 实例
 4. StateGraphBuilder 注册所有状态节点
-5. From/To 注入目标状态、CanEnter 和优先级
+5. From/To 注入目标状态、任意 `Func<bool>` 中断方法和优先级
 6. Build 校验初始状态、初始化全部状态并封口容器
 7. 进入初始状态 OnEnter
 ```
@@ -200,9 +223,9 @@ public sealed class AttackState : StateBase<CharacterStateContext>
 ```text
 实体 MonoBehaviour.Update()
     ↓
-HSM.Update()
+BetterHSM.Update()
     ↓
-当前状态容器按注入顺序完整调用所有 CanEnter(Context)
+当前状态容器按注入顺序完整调用所有状态 Interrupt() 和外部中断方法
     ↓
 选出 Priority 最大的命中边
     ↓
@@ -230,7 +253,7 @@ TargetState.OnEnter()
 - 同一状态类型在一个 HSM 中重复注册。
 - 状态实例已经绑定其他 HSM。
 - 来源或目标状态不属于当前 HSM。
-- `CanEnter` 为空或不是静态方法。
+- `To` 的目标状态为空，或中断方法为空。
 - 来源状态等于目标状态。
 - 同一来源重复注入完全相同的目标、条件和优先级边。
 - `Build` 或 `Seal` 后继续改变状态图。
@@ -254,7 +277,7 @@ HSM 不负责：
 ## 9. 性能要求
 
 - 状态实例和转换边只在初始化时创建，`Update()` 不改变结构。
-- `CanEnter` 只读取已经缓存的数据，不执行 `GetComponent`、场景查找、资源加载或日志输出。
+- `Interrupt()` 和外部中断方法只读取已经缓存的数据，不执行 `GetComponent`、场景查找、资源加载或日志输出。
 - 容器使用顺序 `for` 扫描，禁止热路径排序、LINQ、闭包和临时列表。
 - 单个状态出边数量保持可审查；边数量明显膨胀时重新拆分状态或使用分层状态机。
 - 调试信息只记录最终胜出的转换，不逐帧输出全部失败条件。
@@ -264,12 +287,37 @@ HSM 不负责：
 本方案已经落地到：
 
 ```text
-Assets/_Project/Scripts/CSharp/Core/Gameplay/HSM/HSM.cs
-Assets/_Project/Scripts/CSharp/Core/Gameplay/HSM/StateBase.cs
-Assets/_Project/Scripts/CSharp/Core/Gameplay/HSM/StateInterruptContainer.cs
-Assets/_Project/Scripts/CSharp/Core/Gameplay/HSM/StateTransitionBinding.cs
-Assets/_Project/Scripts/CSharp/Core/Gameplay/HSM/StateTransitionRequest.cs
-Assets/_Project/Scripts/CSharp/Core/Gameplay/HSM/StateGraphBuilder.cs
+Assets/_Project/Scripts/CSharp/Core/Gameplay/BetterHSM/BetterHSM.cs
+Assets/_Project/Scripts/CSharp/Core/Gameplay/BetterHSM/StateBase.cs
+Assets/_Project/Scripts/CSharp/Core/Gameplay/BetterHSM/StateInterruptContainer.cs
+Assets/_Project/Scripts/CSharp/Core/Gameplay/BetterHSM/StateTransitionBinding.cs
+Assets/_Project/Scripts/CSharp/Core/Gameplay/BetterHSM/StateTransitionRequest.cs
+Assets/_Project/Scripts/CSharp/Core/Gameplay/BetterHSM/StateGraphBuilder.cs
 ```
 
 旧的非泛型 `HSM`、旧的 `StateBase` 构造注入方式、`Tick()` 和 `OnTick(float deltaTime)` 链路已移除。当前搜索范围内没有项目代码调用旧 HSM，因此未增加兼容层。
+
+## 11. 可挂载示范
+
+示范脚本位于：
+
+```text
+Assets/_Project/Scripts/CSharp/Test/HSM/HSMUsageExample.cs
+```
+
+将 `HSMUsageExample` 挂载到任意 GameObject 后运行：按住 `W` 进入 `Move`，按下 `Space` 进入 `Attack`，松开 `W` 回到 `Idle`。示范脚本只负责展示接入方式，不属于 HSM 核心，也不代表项目最终输入或移动实现。
+
+示范的组装顺序是：
+
+```text
+1. 创建实体上下文
+2. 创建实体专属 BetterHSM
+3. 创建该实体专属的状态实例
+4. BeginBuild 后 AddState 注册节点
+5. From/To 将目标状态、任意中断方法和优先级注入来源状态容器
+6. Build 后进入初始状态
+7. 在实体 MonoBehaviour.Update() 中调用 BetterHSM.Update()
+8. 在 OnDestroy() 中调用 BetterHSM.Dispose()
+```
+
+新角色不应复用示范状态实例；应在自己的状态机组装类中重新创建状态实例和上下文。状态的 `Interrupt()` 和外部中断方法只读上下文，输入消费、表现开始和本轮数据重置放在目标状态的 `OnEnter` 中。

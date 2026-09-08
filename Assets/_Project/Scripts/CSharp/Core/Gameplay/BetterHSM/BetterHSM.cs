@@ -6,7 +6,7 @@ namespace Core.Gear
     /// <summary>
     /// 为单个实体持有状态实例并执行中断仲裁的纯 C# 状态机。
     /// </summary>
-    public sealed class HSM<TContext> : IDisposable
+    public sealed class BetterHSM<TContext> : IDisposable
     {
         // 状态运行时读取的实体专属上下文。
         private readonly TContext _context;
@@ -25,7 +25,7 @@ namespace Core.Gear
         /// 创建绑定一个实体上下文的状态机。
         /// </summary>
         /// <param name="context">该实体专属的运行时上下文。</param>
-        public HSM(TContext context)
+        public BetterHSM(TContext context)
         {
             _context = context;
         }
@@ -66,7 +66,7 @@ namespace Core.Gear
             if (_currentState == null) return;
 
             // 先完整仲裁当前状态的所有边，避免条件书写顺序决定结果。
-            if (!_currentState.Interrupts.TryEvaluate(_context, out StateTransitionRequest<TContext> request))
+            if (!_currentState.Interrupts.TryEvaluate(out StateTransitionRequest<TContext> request))
             {
                 _currentState.OnUpdate();
                 return;
@@ -160,7 +160,7 @@ namespace Core.Gear
         /// <exception cref="ObjectDisposedException">状态机已经销毁时抛出。</exception>
         private void ThrowIfDisposed()
         {
-            if (_isDisposed) throw new ObjectDisposedException(nameof(HSM<TContext>));
+            if (_isDisposed) throw new ObjectDisposedException(nameof(BetterHSM<TContext>));
         }
     }
 }

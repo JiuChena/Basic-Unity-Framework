@@ -10,17 +10,17 @@ namespace Core.Gear
         // 当前正在声明出边的来源状态。
         private StateBase<TContext> _sourceState;
         // 本次组装所属的实体状态机。
-        private readonly HSM<TContext> _hsm;
+        private readonly BetterHSM<TContext> _betterHsm;
         // 组装器是否已经完成构建。
         private bool _isBuilt;
 
         /// <summary>
         /// 创建归属指定状态机的图组装器。
         /// </summary>
-        /// <param name="hsm">当前实体的状态机实例。</param>
-        internal StateGraphBuilder(HSM<TContext> hsm)
+        /// <param name="betterHsm">当前实体的状态机实例。</param>
+        internal StateGraphBuilder(BetterHSM<TContext> betterHsm)
         {
-            _hsm = hsm;
+            _betterHsm = betterHsm;
         }
 
         /// <summary>
@@ -32,7 +32,7 @@ namespace Core.Gear
         {
             // 构建完成后禁止继续改变状态节点。
             ThrowIfBuilt();
-            _hsm.RegisterState(state);
+            _betterHsm.RegisterState(state);
             return this;
         }
 
@@ -45,29 +45,34 @@ namespace Core.Gear
         {
             // 只允许已注册的当前实体状态作为来源。
             ThrowIfBuilt();
-            if (!_hsm.ContainsState(sourceState)) throw new InvalidOperationException("转换来源状态必须已注册到当前 HSM。");
+            if (!_betterHsm.ContainsState(sourceState)) throw new InvalidOperationException("转换来源状态必须已注册到当前 HSM。");
 
             _sourceState = sourceState;
             return this;
         }
 
         /// <summary>
-        /// 为当前来源状态注入一条指向目标状态的转换边。
+        /// 为当前来源状态注入一条使用任意无参布尔方法的转换边。
         /// </summary>
         /// <param name="targetState">条件成立后进入的已注册目标状态。</param>
-        /// <param name="canEnter">目标状态实例声明的无副作用进入条件。</param>
+        /// <param name="interrupt">每次仲裁时执行的无副作用中断条件；可以来自目标状态、外部实例、静态方法或闭包。</param>
         /// <param name="priority">转换优先级，数值越大越优先。</param>
         /// <returns>当前组装器，便于继续为同一来源状态添加边。</returns>
-        public StateGraphBuilder<TContext> To(StateBase<TContext> targetState, Func<bool> canEnter, int priority)
+        public StateGraphBuilder<TContext> To(
+            StateBase<TContext> targetState,
+            Func<bool> interrupt,
+            int priority)
         {
-            // 验证当前边的来源和目标均属于当前实体。
+            // 验证当前边的来源、目标和中断条件。
             ThrowIfBuilt();
             if (_sourceState == null) throw new InvalidOperationException("调用 To 前必须先通过 From 指定来源状态。");
-            if (!_hsm.ContainsState(targetState)) throw new InvalidOperationException("转换目标状态必须已注册到当前 HSM。");
+            if (!_betterHsm.ContainsState(targetState)) throw new InvalidOperationException("转换目标状态必须已注册到当前 HSM。");
             if (ReferenceEquals(_sourceState, targetState))
                 throw new InvalidOperationException("默认不允许状态转换到自身；需要重入时应明确设计专用状态流程。");
+            if (interrupt == null) throw new ArgumentNullException(nameof(interrupt));
 
-            _sourceState.Interrupts.Add(targetState, canEnter, priority);
+            // 将方法来源无关的中断条件直接保存为当前来源状态的一条转换边。
+            _sourceState.Interrupts.Add(targetState, interrupt, priority);
             return this;
         }
 
@@ -79,7 +84,7 @@ namespace Core.Gear
         {
             // 将构建封口委托给状态机执行统一初始化。
             ThrowIfBuilt();
-            _hsm.Build(initialState);
+            _betterHsm.Build(initialState);
             _isBuilt = true;
         }
 

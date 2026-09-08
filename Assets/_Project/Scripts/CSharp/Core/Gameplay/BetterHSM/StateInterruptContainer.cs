@@ -4,7 +4,7 @@ using System.Collections.Generic;
 namespace Core.Gear
 {
     /// <summary>
-    /// 保存单个来源状态的转换边，并在每帧以稳定规则仲裁唯一胜者。
+    /// 保存单个来源状态的状态条件和外部条件，并在每帧仲裁唯一胜者。
     /// </summary>
     internal sealed class StateInterruptContainer<TContext>
     {
@@ -17,38 +17,34 @@ namespace Core.Gear
         /// 向当前状态加入一条转换边。
         /// </summary>
         /// <param name="targetState">条件成立后进入的目标状态。</param>
-        /// <param name="canEnter">目标状态实例声明的进入条件。</param>
+        /// <param name="interrupt">状态自身或外部提供的无副作用中断方法。</param>
         /// <param name="priority">转换优先级，数值越大越优先。</param>
         /// <exception cref="InvalidOperationException">容器已封口或重复注入同一边时抛出。</exception>
-        internal void Add(StateBase<TContext> targetState, Func<bool> canEnter, int priority)
+        internal void Add(StateBase<TContext> targetState, Func<bool> interrupt, int priority)
         {
             // 运行期不允许变更转换结构。
             if (_isSealed) throw new InvalidOperationException("状态中断容器已封口，不能继续注入转换边。");
             if (targetState == null) throw new ArgumentNullException(nameof(targetState));
-            if (canEnter == null) throw new ArgumentNullException(nameof(canEnter));
-            if (!ReferenceEquals(canEnter.Target, targetState))
-                throw new InvalidOperationException("状态进入条件必须使用目标状态实例的方法。");
-
+            if (interrupt == null) throw new ArgumentNullException(nameof(interrupt));
             // 拒绝同一来源上的重复边，避免重复判断和隐式优先级冲突。
             for (int index = 0; index < _bindings.Count; index++)
             {
                 StateTransitionBinding<TContext> binding = _bindings[index];
-                if (binding.TargetState != targetState || binding.CanEnter != canEnter || binding.Priority != priority)
+                if (binding.TargetState != targetState || binding.Interrupt != interrupt || binding.Priority != priority)
                     continue;
 
                 throw new InvalidOperationException("同一状态不能重复注入相同的目标状态、进入条件和优先级。");
             }
 
-            _bindings.Add(new StateTransitionBinding<TContext>(targetState, canEnter, priority, _bindings.Count));
+            _bindings.Add(new StateTransitionBinding<TContext>(targetState, interrupt, priority, _bindings.Count));
         }
 
         /// <summary>
         /// 完整评估全部转换边并返回优先级最高的有效请求。
         /// </summary>
-        /// <param name="context">当前实体的运行时上下文。</param>
         /// <param name="request">仲裁胜出的转换请求；没有命中时为默认值。</param>
         /// <returns>存在有效转换请求时返回 true。</returns>
-        internal bool TryEvaluate(TContext context, out StateTransitionRequest<TContext> request)
+        internal bool TryEvaluate(out StateTransitionRequest<TContext> request)
         {
             request = default;
 
@@ -56,7 +52,7 @@ namespace Core.Gear
             for (int index = 0; index < _bindings.Count; index++)
             {
                 StateTransitionBinding<TContext> binding = _bindings[index];
-                if (!binding.CanEnter()) continue;
+                if (!binding.Interrupt()) continue;
                 if (request.IsValid && binding.Priority <= request.Priority) continue;
 
                 request = new StateTransitionRequest<TContext>(
