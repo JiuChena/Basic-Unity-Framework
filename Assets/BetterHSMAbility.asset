@@ -13,4 +13,4 @@ MonoBehaviour:
   m_Name: BetterHSMAbility
   m_EditorClassIdentifier: 
   _entityCategory: 0
-  _registrationId: 0
+  _registrationId: 1
