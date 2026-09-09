@@ -1,62 +1,73 @@
 ---
-tags: [home]
-created: 2026-07-25
-updated: 2026-09-08
+tags: [framework, index, onboarding]
+created: 2026-09-09
+updated: 2026-09-09
 ---
 
-# Basic Unity Framework — 知识库
+# Basic Unity Framework 知识库
 
-## 项目概述
+## 项目定位
 
-这是一个 Unity 3D 游戏基础框架项目，提供角色移动、输入处理、行为系统、战斗系统、任务系统等通用模块。框架采用分层架构，Gear 层提供通用基础能力，Expand Component 层提供可挂载组件。
+这是一个以 Unity 2022.3 LTS 为运行环境的基础框架仓库。框架目标不是提供一套强制的完整游戏玩法，而是提供可组合的基础能力：资源、对象池、音频、事件、定时、UI、输入、能力生命周期、状态机与 Timeline 行为编排。
 
-主要命名空间：`Framework.Core`（基础工具）、`Framework.Gameplay.Abilities`（能力系统）、`BehaviorEditor`（行为时间线与运行时执行）。移动、输入、浮动胶囊、跳跃和边缘保护等功能现在由独立能力 Runtime 及其纯 C# 模块组合，不再由 `UnitMover` 或 `DataProvider` 组件提供统一调度。
+设计上的核心原则如下：
 
-## 快速导航
+1. **核心基础设施与业务玩法分离。** `Core/Gear` 解决跨项目可复用的基础问题；角色、技能、战斗数值与具体玩法不应写进 Gear。
+2. **GAS 是实体能力的唯一 MonoBehaviour 入口。** 具体能力运行时是纯 C# 对象，由 `GameplayAbilitySystem` 按 SO 配置列表创建和驱动。
+3. **Ability 之间通过拥有者上下文共享数据。** 不将旧式 Provider、移动器或输入驱动器作为所有玩法的中心依赖。
+4. **BetterHSM 只负责状态与转换仲裁。** 每个实体各自创建状态实例和状态图；状态判断不直接依赖 Unity 输入组件。
+5. **BehaviorEditor 核心只调度轨道。** 每种 Timeline 轨道独立完成作者资源、导出与运行时执行，不在核心中添加轨道类型分支。
+6. **资源生命周期必须明确。** Addressables 使用 Lease/Scope；对象池与其依赖资源绑定；不在热路径随意加载、实例化或销毁。
 
-- [[modules/项目架构总览]] — 完整项目结构与模块清单
-- [[modules/DataProvider技能]] — DataProvider 架构与开发约束
-- [[modules/UnitMover 边缘防跌落方案]] — 边缘检测与熔断回退
-- [[modules/UnitMover 重构方向]] — UnitMover 重构架构方向
-- [[modules/GTS 头发高光贴图]] — CH0221 Hair Spec 编码验证与头发高光探索记录
-- [[references/跳跃手感优化]] — 跳跃手感技术参考
-- [[_conventions/命名规范]] — 命名与编码约定
-- [[_conventions/框架设计原则]] — 框架级设计决策记录
-- [[decisions/输入系统重构决策]] — 架构决策记录
-- [[decisions/UnitMover 审查决策 2026-08-01]] — UnitMover 审查讨论决策（漏洞/架构/算法确认项）
-- [[decisions/UnitMover 层级职责重构决策]] — UnitMover 策略层级职责与生命周期决策
-- [[decisions/DataProvider 架构审查决策]] — DataProvider 架构审查确认项（E/U/P 项）
-- [[decisions/数据驱动能力系统实施计划审查与修订]] — 能力系统破坏式迁移与能力 SO 实施规则
-- [[decisions/HSM 中断容器解耦重构方案]] — HSM 状态持久化、中断规则注入与优先级仲裁方案
-- [[decisions/BetterHSM 与 GAS 顶层分类集成方案]] — BetterHSM 能力的 SO 选择、分类方案目录与运行时持有边界
+## 从这里开始
 
-## 最近变更
+| 目标 | 先读 |
+| --- | --- |
+| 理解整体层级、依赖方向和目录 | [[架构总览]] |
+| 理解场景启动与每帧运行顺序 | [[运行流程]] |
+| 在角色上使用 GAS、输入或 BHSM | [[GAS 与 BetterHSM]] |
+| 创建新的 Ability 三件套 | [[新建 Ability 模板]] |
+| 编写状态、注册状态图与读取输入 | [[BetterHSM 状态图模板]] |
+| 新增 BehaviorEditor Timeline 轨道 | [[BehaviorEditor 轨道模板]] |
+| 使用资源、对象池、音频、网络消息等基础模块 | [[Gear 基础模块]] |
+| 使用 Timeline 行为导出与运行时播放 | [[BehaviorEditor]] |
+| 使用交互组件 | [[交互模块]] |
+| 交接给新 Agent 前的检查清单 | [[接手与开发约定]] |
 
-- 2026-09-08：建立 BetterHSM 的 GAS 顶层分类接入骨架；SO 选择 `Character`、`Enemy` 或 `NPC` 及其二级注册方案 ID，具体状态图由静态目录中的显式工厂创建并交给能力 Runtime 唯一驱动
-- 2026-09-07：完成 HSM 破坏式重构；状态实例按实体持久化，状态图通过唯一的 `To(target, interrupt, priority)` 注入任意中断方法，`BetterHSM.Update()` 完整仲裁并按最高优先级唯一切换
-- 2026-09-04：新增 Behavior Editor 新轨道脚本生成器；路径使用 EditorPrefs 本地留存，按轨道名生成独立目录及五份最小轨道脚本，编译器通过特性自动接入
-- 2026-09-02：BehaviorEditor 将播放头参数从多态 `BehaviorMetaData` 轨道数据拆为 `BehaviorClip.playbackSettings`；作者期参与者改为会话级实例，结束会话先清理参与者再处理 Director，Hitbox Scene 预览仅使用当前 inspected Timeline 的活跃会话根节点
-- 2026-09-01：BehaviorEditor 事件轨删除 VFX/音频/投射物/Buff 等内置业务分类，改为 `BehaviorEventExecuteSO.Execute(BehaviorEventContext)` 的项目侧扩展点；删除原生音频、VFX 控制与激活轨的运行时事件导出，并按轨道收拢运行时、编辑器和编译器文件
-- 2026-08-31：BehaviorEditor 删除 `BehaviorClip` 到 Timeline 的反向回填、旧 SO 降级回填与作者期轨道快照；Timeline 现在是唯一作者源，结束编辑时单向导出运行时行为数据；轨道编译器自动发现，运行时由多态轨道数据创建执行器
-- 2026-08-28：输入能力配置改用 `InputActionReference` 直接选择动作；旧动作名称仅作为隐藏迁移回退，输入采集与 GAS 能力执行职责保持分离
-- 2026-08-28：新增 `Tool/GAS/Create New Ability Scripts` 能力脚本生成工具；修复模板逐字字符串引号导致的 Editor 编译错误，并自动注册、注销能力 RuntimeData
-- 2026-08-27：修复 `MovementAbility.asset` 对场景相机的非法 PPtr 引用；移动参考相机改为运行时缓存 `Camera.main`，浮动胶囊、跳跃和边缘保护配置继续保留在移动资产内部
-- 2026-08-26：收紧能力系统边界；`AbilityComponent` 不再接管物理组件，`MovementAbilityRuntime` 自行组合浮动胶囊、接地、悬浮、跳跃和边缘保护模块
-- 2026-08-25：完成能力系统第一轮破坏式迁移；删除 UnitMover/DataProvider 调度外壳，新增输入监听和移动能力 Runtime
-- 2026-08-16：确认 CH0221_Hair_Spec 的 RGB 为近单位方向编码；当前恢复并使用 S 方案各向异性切线场作为高光基线，方案 3 环境反射方向试验已撤回
-- 2026-08-04：UnitMover 移除 UnitMovementRuntime/Profile/命令来源注册表；策略直持模块，默认策略改为 NormalGroundMovementStrategy，Inspector 自动绘制策略字段，待 Unity 场景验证
-- 2026-08-02：UnitMover A/B/C/D 确认项已实施，待 Unity 场景验证；DataProvider 审查归理为 P1/P3 待实施，E2/E3 不立项，U2 改为字段改名迁移规则
-- 2026-08-01：UnitMover 审查决策记录（A1-A6/B1-B7/C1-C5 逐条讨论定稿，代码未改）
-- 2026-07-29：UnitMover 重构：模块化架构（Core/Motor/Physics/Profiles）、浮动胶囊脚底 BoxCollider
-- 2026-07-27：DataProvider 模块重构：Blackboard 可继承、DataSourceHandler、Delta 属性
-- 最近提交：`403a866` UnitMover 重构——边缘防跌落、策略选择、跳跃手感
+## 代码根目录
 
-## 关键目录
+| 目录 | 内容 |
+| --- | --- |
+| `Assets/Scripts/CSharp/Core/Gear/` | 资源、对象池、音频、事件、计时、UI、存档、网络消息等基础设施。 |
+| `Assets/Scripts/CSharp/Core/Gameplay/GAS/` | Gameplay Ability System：实体能力容器、能力定义、运行时上下文、输入与 BHSM 接入。 |
+| `Assets/Scripts/CSharp/Core/Gameplay/BetterHSM/` | 纯 C# 状态机本体和状态图构建 API。 |
+| `Assets/Scripts/CSharp/Core/Gameplay/BehaviorEditor/` | 行为 Clip 数据、运行时执行器和轨道运行时实现。 |
+| `Assets/Scripts/CSharp/Core/Gameplay/Interaction/` | 通用范围交互与 UI 选项组件。 |
+| `Assets/Editor/Gameplay/` | GAS、BehaviorEditor 的编辑器工具与 Timeline 导出器。 |
+| `Assets/Editor/Shader/` | 卡通 Shader 的专属编辑器工具。 |
+| `Assets/Settings/` | 输入、能力和 URP 的项目配置资产。 |
 
-| 目录 | 说明 |
-|------|------|
-| `Assets/Scripts/C#/Framework/Gear/` | 基础工具（EventSystem, ObjectPool, AudioManager...） |
-| `Assets/_Project/Scripts/CSharp/Core/Gameplay/GAS/` | 能力系统核心、能力 Runtime 和运行时数据 |
-| `Assets/_Project/Editor/Gameplay/GAS/` | 能力脚本生成器和能力编辑器工具 |
-| `Assets/Editor/Framework/` | 框架编辑器工具 |
-| `Knowledge Hub/` | 本知识库 |
+## 当前启动资产
+
+- 构建场景：`Assets/Scenes/Preload.unity`。
+- 预加载组件：`Assets/Scripts/CSharp/Core/Preloader.cs`。
+- 输入动作资产：`Assets/Settings/Input Settings/Player.inputactions`。
+- 输入能力配置示例：`Assets/Settings/Ability Configurations/InputListenerAbility.asset`。
+
+## 当前不属于框架的内容
+
+以下内容已在本轮重构中删除或明确不再作为框架入口，后续不得为了兼容旧实现重新接入：
+
+- `DataProvider` 体系。
+- `UnitMover` 聚合器体系。
+- 将移动、跳跃、浮动胶囊体、边缘保护等玩法揉进同一个移动组件的做法。
+- CH0221 的 BetterHSM 测试状态图与测试枚举项。
+
+未来若需要移动、跳跃、浮动胶囊体或边缘保护，应将它们实现为独立的 Gameplay Ability 或可由 Ability Runtime 持有的纯 C# 功能模块，而不是恢复旧框架。
+
+## 文档维护规则
+
+1. 改动公共 API、生命周期、目录或运行流程时，同步更新对应模块笔记。
+2. 新增 Ability、状态图注册方案、轨道类型或 Gear 模块时，至少补充一份使用说明或模板链接。
+3. 文档描述当前代码行为；计划、猜测和已删除旧方案必须显式标注，不能伪装成现状。
+4. 新 Agent 开始实现前先读 `HOME.md`、相关模块文档和实际源码；知识库用于建立方向，源码是最终事实来源。
