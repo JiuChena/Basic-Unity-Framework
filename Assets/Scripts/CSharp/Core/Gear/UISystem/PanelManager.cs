@@ -127,7 +127,7 @@ namespace Core.Gear
                 };
 
                 // 延迟销毁以留出退出动画时间；延迟为 0 时立即销毁。
-                if (panel.CloseDelay > 0f) Timer.Instance.AddTimerEvent(panel.CloseDelay, destroyAndRelease);
+                if (panel.CloseDelay > 0f) Timer.Instance.AddUnscaledTimerEvent(panel.CloseDelay, destroyAndRelease);
                 else destroyAndRelease();
             }
 

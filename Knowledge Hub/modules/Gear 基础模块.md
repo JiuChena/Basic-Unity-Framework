@@ -112,7 +112,8 @@ public void Dispose()
 
 | 模块 | 适用情况 |
 | --- | --- |
-| `Timer.Instance` | 全局延迟或重复回调；使用 `AddTimerEvent` 创建，保证 interval 与次数有效。 |
+| `Timer.Instance.AddTimerEvent` | 受时间缩放影响的全局延迟或重复回调；使用 `Time.deltaTime` 推进。 |
+| `Timer.Instance.AddUnscaledTimerEvent` | 不受时间缩放影响的全局延迟或重复回调；使用 `Time.unscaledDeltaTime` 推进，适合 UI 关闭动画等暂停期间仍需完成的流程。 |
 | `GOTimer` | 某个 GameObject 存活期间的到点行为；回池前调用 `Clear` 清理任务。 |
 | `PublicMono.Instance` | 需要全局每帧回调但不值得新建一个专用 MonoBehaviour 时，使用 `AddListener` / 对应移除 API。 |
 
@@ -127,6 +128,8 @@ PanelManager.Instance.OpenPanel<MyPanel>("InventoryPanel", UILayer.Mid);
 PanelManager.Instance.ClosePanel("InventoryPanel");
 ```
 
+UI 预制体中的 `Animator` 如果需要不受暂停影响，应在 Inspector 中将 `Update Mode` 设置为 `Unscaled Time`。UISystem 不运行时扫描、缓存或手动调用 `Animator.Update`。
+
 `PanelBase` 约定：
 
 | 回调 | 用途 |
@@ -135,7 +138,7 @@ PanelManager.Instance.ClosePanel("InventoryPanel");
 | `ComponentInit()` | Start 阶段查找组件。 |
 | `OnUpdate()` | 按需逐帧刷新。 |
 | `DisplayPanel()` | 打开时表现。 |
-| `HidePanel()` | 关闭时播放退出表现；真正销毁由 PanelManager + Timer 处理。 |
+| `HidePanel()` | 关闭时播放退出表现；真正销毁由 PanelManager + 非缩放 Timer 延迟处理。 |
 | `OnEscapePressed()` | 默认关闭自身，子类可改为返回或弹确认。 |
 
 面板的 `ResourceScope` 由 PanelManager 注入。面板加载的附属 Addressable 资源必须挂到这个 Scope，销毁时自动释放。
