@@ -30,7 +30,7 @@ namespace BehaviorEditor
         /// <summary>
         /// 资源右键菜单入口：在当前选中文件夹下创建自包含的 Behavior AnimatorController。
         /// </summary>
-        [MenuItem("Assets/Create/Framework/Behavior Editor/Authoring/Animator Controller", priority = 305)]
+        [MenuItem("Assets/Create/Framework/BehaviorEditor/Authoring/Animator Controller", priority = 305)]
         private static void CreateControllerFromAssetsMenu()
         {
             // 解析目标目录并生成唯一资产路径。
